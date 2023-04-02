@@ -1,0 +1,119 @@
+   (see $SAMPIDX for sample documentation index).
+
+$SAMP03  - the CHKAPF00 exec.  Using xref to detect some problems in this large exec.
+-------------------------------------------------------------------------------------
+
+ General comments on using the xref for debugging purposes.
+ ----------------------------------------------------------
+   note:  see $SAMP02 for general debugging comments.
+
+ CHKAPF00 xref debugging.
+ ------------------------
+
+   View output created by the xref job when it tried to create a XREF for an exec named: "CHKAPF00".
+   ------------------------------------------------------------------------------------------------
+          SFRH66.PUBLIC.SAMPLE.REXXXREF.TREX(CHKAPF00)  (prefix code) followed by original exec
+        + SFRH66.PUBLIC.SAMPLE.REXXXREF.XREF(CHKAPF00)  the rexx scan, followed by xref
+
+      Note:  scanned exec's in the hlq.REXXXREF.TREX(member) library can almost be considered
+           "backup copies" of an exec at the time the xref job ran.
+
+   What I found in the XREF for CHKAPF00:
+   --------------------------------------
+
+
+   (portion of xref code)
+   (--------------------)
+
+Variable (set w/rexx)   current_rountine                                   Assigned : 1912
+Variable (NEVER USED)   current_rountine                                   No Reference -Variable set but never referenced and/or used in cmd
+
+Variable (set w/rexx)   current_routine                                    Assigned : 55 114 201 233 256 287 304 316 345 358 371 386 401 436 489
+                        ...                                                           528 567 579 631 681 714 731 743 769 820 849 865 880 909 920
+                        ...                                                           938 1009 1036 1064 1088 1109 1177 1224 1279 1429 1475 1508
+                        ...                                                           1539 1632 1651 1795 1804 1828 1887 1953 1964 1976 1988 2001
+                        ...                                                           2015 2031 2055 2082 2095 2108 2122 2136 2151 2187 2196 2220
+                        ...                                                           2247 2259 2272 2285 2298 2314 2347 2374 2386 2399 2412 2425
+                        ...                                                           2448 2461 2477
+Variable (used in/rexx) current_routine                                    Reference: 819 937 2014 2450 2460 2472 2476
+
+....................................................
+
+Variable (NEVER SET)    MEMBER                                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) MEMBER                                             Expose Ref: 763
+
+Variable (set w/rexx)   member_name                                        Assigned : 64
+Variable (used in/rexx) member_name                                        Reference: 1657 1844 1845 1878
+
+Variable (NEVER SET)    NAME                                               Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) NAME                                               Expose Ref: 763
+
+....................................................
+
+Variable (set w/rexx)   remainder                                          Assigned : 117 203 236 258 289 347 360 373 388 403 439 491 530 852 870
+                        ...                                                           942 1011 1039 1066 1087 1637 1733 1735 1742 1744
+Variable (used in/rexx) remainder                                          Reference: 1735 1737 1744 1746
+
+Variable (set w/rexx)   reminder                                           Assigned : 1112 1180 1227 1282 1432
+Variable (NEVER USED)   reminder                                           No Reference -Variable set but never referenced and/or used in cmd
+
+....................................................
+
+Variable (set w/rexx)   rexxtools_available                                Assigned : 1897 1902 2065 2070 2230 2235 2357 2362
+Variable (used in/rexx) rexxtools_available                                Reference: 127 187 763 826 1480 1491 1511 1522 2157 2168 2320 2331
+
+Variable (NEVER SET)    REXXTOOL_AVAILABLE                                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) REXXTOOL_AVAILABLE                                 Reference: 348 361
+
+....................................................
+
+Label (internal label)  TRAP_ERROR_RTN                                     Defined  : 1963 ///Dup. IGNORED LABEL def's: 2094 2258 2385
+
+Label (internal label)  TRAP_FAILURE_RTN                                   Defined  : 1975 ///Dup. IGNORED LABEL def's: 2107 2271 2398
+
+Label (internal label)  TRAP_HALT_RTN                                      Defined  : 1987 ///Dup. IGNORED LABEL def's: 2121 2284 2411
+
+Label (internal label)  TRAP_NOVALUE_RTN                                   Defined  : 2000 ///Dup. IGNORED LABEL def's: 2135 2297 2424
+
+
+
+   (end sample of xref code)
+   (-----------------------)
+
+
+              ---------------------------------------
+         ===> problem detected (by scanning the xref) <---
+              ---------------------------------------
+              a mispelled variable
+                  variable "current_rountine" was set at 1912 (never referenced)
+                                         ==> BUT this was mispelled, Should have been "current_routine"
+
+                                                 Note:  "current_routine" has many assignments + references
+                                                   See exec at line 1912 (and current_routine assignements at 55, 144)
+
+                  variable "MEMBER"           was referenced at 763 (but never set)    BUT was referenced in a PROCEDURE EXPOSE stmt
+                  variable "NAME"             was referenced at 763 (but never set)    BUT was referenced in a PROCEDURE EXPOSE stmt
+                                                 When I looked at code, I found line 763 had a label: procedure expose list-of-variables
+                                                 ... and among that expose list were two variables:  "member" follow by "name"
+
+                                         ==> BUT WHAT was actually intended was for variable "member_name" to be exposed instead on line 763
+                                                 NOT  "member" and "name"
+                                                 And you can see "member_name" being assigned and referenced in the xref.
+
+                  variable "reminder"         was set at a number of places (never referenced)
+                                                 BUT this was mispelled, Should have been "remainder"
+                                         ==>
+                                                 Note:  this is a "who cares" issue.  Because it ended up being used as a
+                                                   "throw away" variable (as remainder was too, in most cases).
+
+                  variable "REXXTOOL_AVAILABLE"  was referenced a few times, but never assigned a value.
+                                         ==>     But it was mispelled, it should have been "rexxtools_available".
+
+              duplicate label definitions (many, but I'll mention these).
+                  TRAP_ERROR_RTN
+                  TRAP_FAILURE_RTN
+                  TRAP_HALT_RTN
+                  TRAP_NOVALUE_RTN
+                                         ==>  All show multiple label definition lines.
+                                         ==>  Although REXX allows this, only the first label defined will be used when a "call", "signal"
+                                            or "function call" is made.  The other (duplicate) labels might as well be "comments".

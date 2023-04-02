@@ -1,0 +1,16 @@
+Library/Member (functional) documentation are in these *.REXXREF.DOC members:
+   $REXXLIB for library/pds:  hlq.REXXLIB
+   $JCLIB   for library/pds:  hlq.JCL
+
+Rexx (technical) documentation are in these *.REXXXREF.DOC members
+   $TECHIDX index to contents of the $TECH## members
+   $TECH##  has individual subject matter (see $techidx)
+
+XREF documentation (how to use the xref effectively) are in these *.REXXXREF.DOC members:
+   $XREFIDX index to contents of the $XREF## members
+   $XREF##  had individual subject matter (see $XREFIDX)
+
+Sample documentation are in these *.REXXXREF.DOC members:
+   $SAMPIDX index to contents of the $SAMP## members
+   $SAMP##  has individual subject matter (see $sampidx)
+

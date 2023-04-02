@@ -1,0 +1,30 @@
+ rexx xreference utility
+Subject:  rexx xreference utility
+From:     "richard.humphris" <richard.humphris@netnitco.net>
+Date:     12/21/2021, 3:54 PM
+To:       <sbgolob@cbttape.org>
+
+Hi Sam,
+
+Here is my rexx xreference utility.
+
+The XMI dataset restores an initial PDS used to "install" the
+utility.
+
+Once that is received, you'll find documentation, other XMI
+members, and a $EXPAND job to extract the actual PDS's that
+people will want to use for the xref utility.
+
+Note:   in addition to the utility itself, I've run the utility
+on some rexx execs in the sample pds(s).   Those execs were
+either written by me or Roger Suhr (a co-worker) and/or some rexx
+execs that came from the CBT tape itself.
+
+When all the pds's are there, the jcl to run against a random
+rexx exec is in hlq.JCL
+
+See how you like it.
+
+Thanks,
+Rich Humphris
+

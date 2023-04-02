@@ -1,0 +1,48 @@
+   (see $SAMPIDX for sample documentation index).
+
+$SAMP03  - the MEMLIST  exec.  Using xref to detect some problems in this large exec.
+-------------------------------------------------------------------------------------
+
+ General comments on using the xref for debugging purposes.
+ ----------------------------------------------------------
+   note:  see $SAMP02 for general debugging comments.
+
+ MEMLIST  xref debugging.
+ ------------------------
+
+   View output created by the xref job when it tried to create a XREF for an exec named: "MEMLIST".
+   ------------------------------------------------------------------------------------------------
+          SFRH66.PUBLIC.SAMPLE.REXXXREF.TREX(MEMLIST)   (prefix code) followed by original exec
+        + SFRH66.PUBLIC.SAMPLE.REXXXREF.XREF(MEMLIST)   the rexx scan, followed by xref
+
+      Note:  scanned exec's in the hlq.REXXXREF.TREX(member) library can almost be considered
+           "backup copies" of an exec at the time the xref job ran.
+
+   What I found in the XREF for MEMLIST:
+   --------------------------------------
+
+
+   (portion of xref code)
+   (--------------------)
+
+
+Variable (set w/rexx)   aliad               Assigned : 131
+Variable (NEVER USED)   aliad               No Reference -Variable set but never referenced and/or used in cmd
+
+Variable (set w/rexx)   alias               Assigned : 124 129 137
+Variable (used in/rexx) alias               Reference: 125 129 131 137 138 139
+
+
+   (end sample of xref code)
+   (-----------------------)
+
+
+      ---------------------------------------
+ ===> problem detected (by scanning the xref) <---
+      ---------------------------------------
+          variable "aliad"            was set at 131 (never referenced)
+                                 ==> BUT this was mispelled, Should have been "alias"
+
+                                     Note:  "alias" had assignments/references but exec is missing alias info due to
+                                           variable "aliad" being used.
+

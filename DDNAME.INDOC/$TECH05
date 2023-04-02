@@ -1,0 +1,79 @@
+   (contents described in $TECHIDX)
+   (------------------------------)
+
+
+TECH05 - Options available when invoking REXXXREF code.
+-------------------------------------------------------
+
+DEBUG=ON
+DEBUG=OFF   (default:  DEBUG=OFF)
+--------    ---------------------
+   This option, when ON, will generate a good amount of output.  But is fairly general.
+
+   With DEBUG=ON:
+      In C0070ParseLinePass1 (for each line of rexx code) it will display variables:
+            rexxline=#         (the number of the rexx statement being processed)
+            originalLine=....  (the statement to be processed)
+
+      in C0100ParseStatement (it will display)
+            debug:  lowerline=...
+            debug:       line=...
+
+      in c0450LabelReference (for each call to label reference)
+            debug:  c0450LabelReference: ('labelrefx') label='varX
+
+      in c0470LabelDefine    (for each call to label define   )
+            debug:  c0470LabelDefine:  ('rexxline') label='varX
+
+      in c0500AddVarStemAssignment (for each call)
+            debug:  c0500AddVarStemAssignment: ('rexxline') var='varX
+            (etc)
+
+      in c0510AddVarStemReference  (for each call)
+            debug:  c0510AddVarStemReference: ('rexxline') var='varX
+            (etc)
+
+      in C9900OutputResults (generating xref)
+            it provides more messages
+
+REXXLINE=#
+REXXLINE=0  (default:  REXXLINE=0)
+----------  ----------------------
+   This option will generate a detailed trace while processing a specific line from
+   then input exec.
+
+   This sets variable TraceRexxLine to value specified.
+
+      In C0070ParseLinePass1
+            IT will ignore trace if traceRexxLine = 0
+
+            if traceRexxLine = rexxLine (line we want to trace)
+            then do
+               it tells us trace has been started.
+               trace 'i'  /* for detailed trace */
+            end
+            else if rexxLine > traceRexxLine
+            then do
+               turns off trace w/ trace 'n'
+               sets traceRexxLine = 0 /* disabling any future checks */
+            end
+
+WIDTH=#     (default:  WIDTH=150)
+----------  ----------------------
+   This option limits how wide the xref listing should be.  It must be a value >= 130.
+
+   It's probably best to be set to 150.
+
+BLANK=BYVAR  (default:  BLANK=BYVAR)
+BLANK=NONE
+-----------  ----------------------
+   This option can add blank lines in the xref listing.
+
+   Note:  for each sorted "variable" or "stem variable" we may be generating multiple
+      output lines for that sorted variable.
+
+   If BLANK=BYVAR is in effect, it adds a blank line between those groups of output
+   lines (which is a logical break point).
+
+   If BLANK=NONE is in effect, there are no blanks lines and it's one continous xref
+   listing without any line breaks.

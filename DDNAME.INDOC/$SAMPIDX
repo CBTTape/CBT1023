@@ -1,0 +1,23 @@
+index to the $SAMPxx documentation members.
+   for this kind of issue see:
+   ---------------------------
+
+$SAMP01 refers to $SYNTAX in SFRH66.PUBLIC.SAMPLE.REXXXREF.TREX($SYNTAX) and *.XREF($SYNTAX)
+     view syntax error problems
+
+$SAMP02 XREF part 1 (detailed explaination)
+     =
+
+$SAMP03 refers to CHKAPF00 in SFRH66.PUBLIC.SAMPLE.REXXXREF.TREX(CHKAPF00) and *.XREF(CHKAPF00)
+     =
+     - Label problem (multiple duplicate labels defined (syntax ok); but only first one used)
+     - Procedure expose list problems (variable mispelled, expose list failure)
+     - referenced variable (But never assigned value) - spotting mispelled variable
+     - variable assigned value (But never referenced) - spotting mispelled variable
+
+$SAMP04 refers to MEMLIST  in SFRH66.PUBLIC.SAMPLE.REXXXREF.TREX(MEMLIST) and *.XREF(MEMLIST)
+     =
+     - variable assigned value (But never referenced) - spotting mispelled variable
+
+       Note:  this was on a share/tape for eons; no one reported problem, but here it is.
+
