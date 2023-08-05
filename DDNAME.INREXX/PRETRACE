@@ -1,0 +1,326 @@
+/* rexx = pretrace */
+/* assumption:  invoked from jcl */
+/*                                              */
+/*   ddname:  IN has a rexx member              */
+/*   ddname:  OUT      has a (new) rexx member  */
+/*                                              */
+/*   after opening IN  for input                */
+/*   after opening OUT for output               */
+/*   ... write /* REXX */ to output file        */
+/*   ... write trace 's'  to output file        */
+/*   copy contents of IN to OUT                 */
+/*                                              */
+/* Input Arguments give us details on datasets  */
+/*    involved.                                 */
+/*                                              */
+/* 1st (only) arg is a ddname where we can read dataset  */
+/*   information.                                        */
+/*                                                       */
+/* we will open and read from that verify dataset:       */
+/*   1) ignoring comments                                */
+/*   2) expect 4 lines (any order) with                  */
+/*        REXXLIB  pds-name                              */
+/*        REXXMEMB member-name                           */
+/*        SCANLIB  pds-name                              */
+/*        XREFLIB  pds-name                              */
+/*   3) if missing 1st arg, open/read fails, or          */
+/*        missing data, then exec will fail.             */
+/*   4) if duplicate pds-names are specified then        */
+/*        the exec will fail.  The pds names should be   */
+/*        unique.                                        */
+/*                                                       */
+/* After verification, the exec will commence doing the  */
+/* work it was meant to do.                              */
+/*                                                       */
+parse upper arg verifyDDname .
+
+/* verification code.  Should this exec do anything ??? */
+/* ---------------------------------------------------- */
+
+if verifyDDname = '' | length(verifyDDname) > 8
+then do
+   say ' '
+   say 'PRETRACE001E:  exec called w/missing or invalid arg'
+   say '   expected a ddname; found "'verifyDDname'"'
+   exit 12
+end
+
+say 'processing info from ddname="'verifyDDname'"'
+'EXECIO * DISKR' verifyDDname '(OPEN STEM VERIFY. FINIS'
+if rc <> 0
+then do
+   say ' '
+   say 'PRETRACE002E:  verification problem'
+   say 'error opening and/or reading from ddname="'verifyDDname'"'
+   say 'execio rc='rc
+   say 'aborting exec with rc=12'
+   exit 12
+end
+
+  /* valid keywords allowed in VERIFY have a non-null value */
+keyword. = ''
+keyword.REXXLIB = 'INPDS'
+keyword.REXXMEMB= 'INMEMBER'
+keyword.SCANLIB = 'OUTTRACE'
+keyword.XREFLIB = 'OUTPDS'
+
+  /* we will set lineValues based on INPDS, INMEMMBER, OUTTRACE and OUTPDS */
+lineValue. = ''
+
+PendingRc = 0
+maxLines = min(verify.0,30)
+say 'Read' verify.0 'lines from ddname='verifyDDname'; will process' maxlines 'lines'
+say '-----------------------------------------------================================'
+say 'Line##= "..."'
+say ' '
+do x = 1 by 1 for maxLines
+   say 'Line'right(x,2)'= "'strip(verify.x,'T')'"'
+   /* ignore comments/blank lines */
+   if verify.x = '' then iterate
+   if left(word(verify.x,1),1) = '*' then iterate
+   if left(word(verify.x,1),2) = '/*' then iterate
+
+   parse upper var verify.x keyword lineValue .
+   if keyword.keyword = ''
+   then do
+      say ' '
+      say ' PRETRACE003E:  verification error'
+      say '   Each non-comment line should begin with one of the following keywords:'
+      say '      REXXLIB or REXXMEMB or SCANLIB or XREFLIB'
+      say '   Followed by the PDS or member name'
+      say '  '
+      say '   But the following line began with an invalid keyword:'
+      say '   "'strip(verify.x,'T')'"'
+      say ' Pending rc=12'
+      PendingRc = 12
+      iterate
+   end
+
+   /* keyword is valid.  set lineType based on the keyword */
+   lineType = keyword.keyword
+
+   /* now look at lineType / lineValue */
+   if linevalue = '' /* ignore now, complain later */
+   then iterate
+
+   if lineValue.linetype <> '' & lineValue.lineType <> lineValue
+   then do /* if same linetype w/different values, an obvious error */
+      say ' '
+      say ' PRETRACE005E:  verification error'
+      say '   There are multiple lines starting with "'keyword'" previously:'
+      say '   There should only be one line for each type'
+      say ' Pending rc=12'
+      PendingRc = 12
+      iterate
+   end
+   lineValue.lineType = lineValue /* remember type + value */
+end
+
+if lineValue.inpds    = '' ,
+ | lineValue.outtrace = '' ,
+ | lineValue.outpds   = '' ,
+ | lineValue.inmember = ''
+then do
+   say ' '
+   say 'PRETRACE006E:  verification error'
+   say '  one or more lines from DDNAME='verifyDDname 'is missing values'
+   say "After reading verification data here's what we know"
+   say '   inPDS    = "'lineValue.inPDS'"'
+   say '   inMember = "'lineValue.inMember'"'
+   say '   outTrace = "'lineValue.outTrace'"'
+   say '   outPDS   = "'lineValue.outPDS'"'
+   say 'Aborting w/rc=12'
+   pendingRc = 12
+end
+
+   /* pds names should be valid (used in jcl) so just do logical verifies here */
+say ' '
+say "Input PDS/PDSE dsn w/original rexx code is in:"
+say "         '"LineValue.inpds"("lineValue.inmember")'"
+say ' '
+say "Output PDS/PDSE dsn modified rexx trace's code will be in:"
+say "         '"LineValue.outtrace"("lineValue.inmember")'"
+say ' '
+say "Output PDS/PDSE dsn containing xref will be in:"
+say "         '"LineValue.outpds"("lineValue.inmember")'"
+say ' '
+
+/* maximize possible error messages, by delaying exit 12 */
+/* ----------------------------------------------------- */
+if lineValue.inpds  = lineValue.outTrace ,
+ | lineValue.inpds  = lineValue.outpds   ,
+ | lineValue.outpds = lineValue.outTrace
+then do
+   say 'PRETRACE007E:  severe problem'
+   say 'There are one (or more) pds''s with the same name'
+   say 'To prevent problems, we will abort process with rc=12'
+   pendingRc = 12
+end
+
+if pendingRc > 0
+then exit PendingRc /* severe error already, abort now */
+
+/* ---------------------- */
+/* end verification code. */
+/* ---------------------- */
+
+/* ------------------------------------------------ */
+/* no initial problems detected.  let's continue on */
+/* ------------------------------------------------ */
+
+'EXECIO 100 DISKR IN (OPEN STEM IN.'
+INRc = rc
+if INRc = 0 | INRc = 2
+then nop
+else do
+   say 'PRETRACE008E:  severe error'
+   say 'error opening file IN rc='INRc
+   say 'exit with rc=8'
+   'EXECIO 0 DISKR IN (FINIS'
+   exit 8
+end
+
+rc= listdsi('IN FILE')
+if rc <> 0
+then do
+   say 'PRETRACE009E:  severe error'
+   say "LISTDSI('IN FILE') got rc="rc"; exiting with rc=12"
+   exit 12
+end
+recfm = left(sysrecfm,1) /* F, V or U */
+
+dsname = lineValue.inpds'('lineValue.inmember')'
+out.1 = '/* rexx */'
+out.2 = "  trace 's'"
+out.3 = ' '
+out.4 = '/*  rexx member for scan/xref was: */'
+out.5 = '/*     "'dsname'"      */'
+out.6 = '/*      'left('',length(dsname),"-")'       */'
+
+out.7 = '/*  date/time of XREF was:'
+out.7 = left(out.7,max(length(out.7),length(out.5)-2))'*/'
+
+out.8 = '/*     'date('S') time()
+out.8 = left(out.8,max(length(out.8),length(out.5)-2))'*/'
+
+out.9 = out.6
+out.10 = ' '
+'EXECIO 10 DISKW OUT (OPEN STEM OUT.'
+OUTRc = rc
+if OUTRc = 0
+then nop
+else do
+   say 'PRETRACE010E:  severe error'
+   say 'error opening/writing to file OUT rc='OUTRc
+   say 'exit with rc=8'
+   'EXECIO 0 DISKR IN (FINIS'
+   'EXECIO 0 DISKW OUT(FINIS'
+   exit 8
+end
+
+/* speed test for V vs. F */
+fixed.  = 0 /* default is false */
+fixed.F = 1 /* true  */
+fixed.FB= 1 /* true  */
+if in.0 > 0
+then if fixed.recfm = 0 & length(strip(left(in.1,8))) = 8 & datatype(left(in.1,8),'W')=1
+   then sequence = 1 /* variable rec and sequence # on left ==> need to remove sequence numbers */
+else if fixed.recfm = 1 & length(strip(right(in.1,8)))= 8 & datatype(right(in.1,8),'W')=1
+   then sequence = 1 /* fixed rec and sequence # on right ==> need to remove sequence numbers */
+   else sequence = 0 /* no sequence numbers, fast copy  */
+
+/* we have sequence numbers to remove, have to look at every line */
+/* -------------------------------------------------------------- */
+if sequence = 1 /* if sequence numbers, set some variables/stems */
+then do         /* ... for copy loop below.                      */
+   if fixed.recfm         /* if fixed */
+   then newlrecl = syslrecl - 8 /* lose last 8 bytes */
+                          /* variable, we lose first 8 bytes */
+end
+
+/* copy loop to copy the rexx exec to a temporary dataset */
+/* ------------------------------------------------------ */
+do forever
+   if in.0 = 0
+   then leave
+
+   if sequence /* if we have to strip off sequence numbers? */
+   then do     /* then update the input block               */
+      /* yes, modify every line in block */
+      do in = 1 by 1 for in.0
+         if fixed.recfm
+         then in.in = left(in.in,newlrecl) /* fixed, lose  last 8 bytes */
+         else in.in = substr(in.in,9)   /* variable, lose first 8 bytes */
+      end
+      /* now we can write out the block. */
+   end
+
+   /* write entire input buffer to OUT file */
+   'EXECIO' in.0 'DISKW OUT (STEM IN.'
+   OUTRc = rc
+   if OUTRc = 0
+   then nop
+   else do
+      say 'PRETRACE011E:  severe error'
+      say 'error writing file OUT rc='OUTRc
+      say 'exit with rc=8'
+      'EXECIO 0 DISKR IN (FINIS'
+      'EXECIO 0 DISKW OUT(FINIS'
+      exit 8
+   end
+
+   /* can we get another input buffer? */
+   if inRc = 2 /* if we already processed the last buffer */
+   then leave  /* then leave, can't read another block */
+
+   /* get next input buffer */
+   'EXECIO 100 DISKR IN (STEM IN.'
+   inRc = rc
+   if inRc = 0 | inRc = 2
+   then iterate /* go process the next input buffer */
+
+   /* error handling */
+   /* -------------- */
+   say 'PRETRACE012E:  severe error'
+   say 'error reading file IN; rc='inRc
+   say 'exit with rc=8'
+   'EXECIO 0 DISKR IN (FINIS'
+   'EXECIO 0 DISKW OUT(FINIS'
+   exit 8
+end
+
+/* close input file */
+'EXECIO 0 DISKR IN (FINIS'
+inRc = rc
+if inRc <> 0
+then do
+   /* error handling */
+   /* -------------- */
+   say 'PRETRACE013E:  severe error'
+   say 'error closing file IN; rc='inRc
+   say 'exit with rc=8'
+   'EXECIO 0 DISKW OUT(FINIS'
+   if OUTRc = 0
+   then nop
+   else do
+      say 'PRETRACE014E:  severe error'
+      say 'error closing file OUT rc='OUTRc
+      say 'exit with rc=8'
+   end
+   exit 8
+end
+
+/* close output file */
+'EXECIO 0 DISKW OUT (FINIS'
+if OUTRc = 0
+then nop
+else do
+   /* error handling */
+   /* -------------- */
+   say 'error closing file OUT rc='OUTRc
+   say 'exit with rc=8'
+   exit 8
+end
+
+/* normal end */
+exit 0

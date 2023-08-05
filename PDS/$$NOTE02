@@ -1,0 +1,75 @@
+Subject:  File 1023: rexx xreference utility
+From:     "richard.humphris" <richard.humphris@netnitco.net>
+Date:     12/22/2021, 12:50 PM
+To:       Sam Golob <sbgolob@cbttape.org>
+
+REXX does not have a built-in xreference facility.  But
+this provides a free one without a REXX compiler.
+
+Why do we need/want a REXX xref?   Because variables
+are not declared in REXX, and any misspelling of a
+variable (in an assignment and/or reference) can easily
+go undetected.   But with an xref and using it in
+looking for problems (especially in large execs), is
+much easier than visually looking thru an entire rexx
+exec.
+
+And the IBM rexx compiler, which not every one has, has
+           only recently added the following support in
+           their xreference: XREF has been enhanced to
+           provide more details in the compiler
+           listing, such as information about exposed
+           and dropped variables, variables without
+           assignment, and optimization stoppers.
+
+This, free offering, on the CBT tape, does almost
+       everything the IBM compiler does.   But it also
+       provides more visual clues than the IBM compiler
+       has.   This XREF has: - provides references for
+       exposed and dropped variables (just like it does
+       for any other reference).  - variables in the
+       xreference are separated by:
+             - assignment use
+             - reference use
+             - label definition (and warns about
+             duplicate labels) - label use (function,
+             call, signal on, call on) - variable shows
+             up in xref in either UPPER or Lower case
+             (upper case, if never assigned a value)
+       - stem variables show up in the xref along with
+             any variables used after the first period.
+             - any assignment/reference to a stem
+             variable also appears with any variables
+             used after the stem.
+             - and those variables to the right of the
+             stem will appear in either UPPER or LOWER
+             case depending on whether that variable
+             was ever assigned a value.   Note:   IBM's
+             compiler also shows variables used with a
+             stem variable, but doesn't show (visually)
+             whether variable was assigned a value (or
+             not)).
+
+Like the IBM compiler XREF, close examination of the
+XREF can help you identify problems with the rexx code
+that would be hard to spot otherwise.   Hopefully, the
+upper/lower case in this xreference may make it even
+easier to use than a normal xref.
+
+IBM's compiler also creates a xref for literals.   This
+one does not.   If this is a feature you want, please
+contact me and I may provide that as well.
+
+Included in the the offering is extensive
+documentation, along with sample rexx exec's (and their
+associated xreference output).
+
+Also the documentation, using sample rexx execs and
+xref listings, shows various problems that can be
+detected in the xref.
+
+In addition, the documentation provides some technical
+information about how the rexx xref itself works
+internally.   Along with some rexx performance tips in
+the technical documentation.
+

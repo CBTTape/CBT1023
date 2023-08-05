@@ -1,0 +1,211 @@
+   (contents described in $TECHIDX)
+   (------------------------------)
+
+
+Technical information about how "fast" stem lookups work.
+---------------------------------------------------------
+
+
+   How do rexx stem's work (setting stem variables):
+   -------------------------------------------------
+   Rexx stems are not "tables"; and are not stored as tables.  They are stored in a binary tree structure.
+
+   As new elements are added, rexx may automatically rebalances the tree, but it's still a tree structure.
+
+   So even if you create stems like:  stem.1, stem.2, stem.3, etc... Rexx finding a value for stem.1024
+   is not using 1024*(some length) and directly addressing the value.  It's going down a binary tree doing
+   a binary search to see if it can find stem.1024
+
+   In addition even if you use numbers, having gaps is perfectly ok.  As these are not tables.
+
+
+   What restrictions are there on the value of the stem (to the right of the stem variable)?
+   -----------------------------------------------------------------------------------------
+   For stem.x, for example what are the restrictions on the value of "x" in a stem?
+
+   Answer:  there are NO restrictions
+            It could contain gibberish (hex values) OR chars from some ccsid (any case of course) or anything
+            you want.
+
+            So just like there are no restrictions on what value you can assign to a variable, there are no
+            restrictions on the variables you specify on a stem itself.
+
+   Therefore, creating another stem variable is both easy (rexx does the work) and fast (make rexx do the work).
+
+
+   The secret to "fast" stem lookups:
+   ----------------------------------
+   Rather then using a "do loop" to go thru the stems to find a value in a series of stems.  We can setup another
+   stem variable to use as an "index"... and make rexx (internally build/maintain a binary tree) and make rexx
+   do fast lookup's (with it's binary tree) without us coding a "do loop".
+
+
+"Traditional" code might look like this.
+----------------------------------------
+
+  Say we are putting unique information into a stem "table" called TABLE.
+
+  In both cases ... we have a variable for size of table.  And the TABLE.# (entries).
+
+  for example:
+  ------------
+
+    /* regular code */
+    ------------------
+    table  = 0
+
+    name        = 'greg'
+    table       = table + 1 /* increase "size" of table */
+    table.table = name      /* add new entry into table */
+
+    name        = 'rich'
+    table       = table + 1 /* increase "size" of table */
+    table.table = name      /* add new entry into table */
+
+    name        = 'john'
+    table       = table + 1 /* increase "size" of table */
+    table.table = name      /* add new entry into table */
+
+    name        = 'fred'
+    table       = table + 1 /* increase "size" of table */
+    table.table = name      /* add new entry into table */
+
+    name        = 'ron'
+    table       = table + 1 /* increase "size" of table */
+    table.table = name      /* add new entry into table */
+
+
+    /* variables at this point */
+    -----------------------------
+    table = 5
+    table.1 = 'greg'
+    table.2 = 'rich'
+    table.3 = 'john'
+    table.4 = 'fred'
+    table.5 = 'ron'
+
+    "traditional" slow search example:
+    ----------------------------------
+      With only these variables set, the slow search (to find if a name is in the table)
+      would be via a do loop like this:
+
+      /* slow search ... requires do loop; AND if you do MANY lookups for adding or refering to table, it's EXPENSIVE */
+      /* ------------------------------------------------------------------------------------------------------------ */
+
+      xxx = 'some name' /* what we want to lookup */
+      do iii = 1 by 1 for table while table.iii <> xxx
+      end
+
+      /* result of "slow search" */
+      /* ----------------------- */
+      /* if iii >  table, (not found) ==> then NO table.#   entry has value of xxx */
+      /* if iii <= table, (found)     ==> then    table.iii entry has value of xxx */
+
+Setting up "FAST" stem lookup''s.  We need to create a 2nd (index) stem at time of creating first one.
+------------------------------------------------------------------------------------------------------
+
+  NEW example:
+  ------------
+
+    /* new code     */
+    index. = 0 /* if checking index stem, if found # > 0; if not found return 0 */
+
+    /* regular code (as before) PLUS setting an index variable for fast search.
+    ---------------------------------------------------------------------------
+    table  = 0
+
+    name        = 'greg'
+    table       = table + 1              /* increase size of table   */
+    table.table = name                   /* add new entry into table */
+    index.name  = table       /* new code:  update index at same time as adding new table.# entry */
+
+    name        = 'rich'
+    table       = table + 1              /* increase size of table   */
+    table.table = name                   /* add new entry into table */
+    index.name  = table       /* new code:  update index at same time as adding new table.# entry */
+
+    name        = 'john'
+    table       = table + 1              /* increase size of table   */
+    table.table = name                   /* add new entry into table */
+    index.name  = table       /* new code:  update index at same time as adding new table.# entry */
+
+    name        = 'fred'
+    table       = table + 1              /* increase size of table   */
+    table.table = name                   /* add new entry into table */
+    index.name  = table       /* new code:  update index at same time as adding new table.# entry */
+
+    name        = 'ron'
+    table       = table + 1              /* increase size of table   */
+    table.table = name                   /* add new entry into table */
+    index.name  = table       /* new code:  update index at same time as adding new table.# entry */
+
+    result:
+    ----------------    --------------------
+    as before:          but now an index too
+    ----------------    --------------------
+    index. = 0
+    table  = 5
+    table.1 = 'greg'    index.greg = 1
+    table.2 = 'rich'    index.rich = 2
+    table.3 = 'john'    index.john = 3
+    table.4 = 'fred'    index.fred = 4
+    table.5 = 'ron'     index.ron  = 5
+
+
+    /* fast search... requires one rexx statement */
+    /* ------------------------------------------ */
+
+      xxx = 'some name' /* what we want to lookup */
+      iii = index.xxx   /* fast search, make rexx do the work internally; via a binary tree */
+
+      /* result of "fast search" */
+      /* ----------------------- */
+      /* if iii = 0 (not found) ==> then NO table.#   entry has value of xxx */
+      /* if iii = # (found)     ==> then    table.iii entry has value of xxx */
+
+
+Comparison of fast/slow search:
+-------------------------------
+   1)  Fast search eliminates a "do loop" to search(found/not found) stem entries for a value we are searching for.
+
+   2)  However, fast search will require another stem variable to be created/maintained for the index.
+
+   3)  The fast/slow result conditions (found/not found) are different, but easy to code for.
+
+   4)  fast search can handle non-unique keys (if you were to append additional "table" values to an index.
+         a.  However, in our xref code, we want variable names to be unique.  And we enforce uniqueness.
+         b.  So, we always check the index first:
+               1)  if not found, we add the variable to the stem; and update the index.
+               2)  if found,     we have the stem # ... for this variable (which we use to update other stems)
+                                 See, $TECH02 for data structures.
+
+         c.  table example... adding to index only when unique "key" does not exist
+               given:  xxx = 'some name'
+                       iii = index.xxx /* lookup can return 0 or a # to table.iii */
+                       if iii = 0
+                       then do
+                          table = table + 1
+                          table.table = xxx
+                          index.xxx   = table  /* only one value in index.xxx */
+                          iii = index.xxx      /* would now return this table.iii entry */
+                       end
+
+         c.  table example... adding another duplicate key to table
+               given:  xxx = 'some name'
+                       iii = index.xxx /* lookup can return 0, a #, or a string of #'s */
+                       if iii = 0
+                       then do
+                          /* no table entry, yet */
+                          table = table + 1
+                          table.table = xxx
+                          index.xxx   = table  /* only one value in index.xxx */
+                       end
+                       else do /* add another table entry ... but update index for both table entries */
+                          /* I don't know why you'd want to do this, for illustration only */
+                          /* ------------------------------------------------------------- */
+                          table = table + 1
+                          table.table = xxx
+                          index.xxx   = index.xxx table /* now multiple table indexes in index.xxx */
+                       end
+                       /* now you'd have to handle fact that index.xxx can return multiple values */
+

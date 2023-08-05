@@ -1,0 +1,125 @@
+   (contents described in $TECHIDX)
+   (------------------------------)
+
+
+TECH03 - Logic + "data structures" in pass 1 (looking at user rexx code)
+------------------------------------------------------------------------
+
+Understanding/parsing rexx statements in extremely messy and error prone.
+  - To reduce mess and/errors:
+    -  The job runs a rexx scan first
+    -  And if scan was successful (no detected syntax errors) it will produce:
+       1)  Scan output with "statement numbers" we can use in our xreference.
+       2)  A good basis for us to process rexx code without a lot of worry about syntax.
+
+A rexx statement begins with a line # (for our xref).  Although since multiple rexx statements
+may appear on the same rexx statement line, rexx will arrange the output like this:
+
+     # *-* first statement from line (#).
+       *-* 2nd statement (but use line # above in xref)
+       *=* 3rd statement (but use line # above in xref)
+
+     # *-* first statement from line (#).
+
+     # *-* first statement from line (#).
+   continuation of first stmt
+   continuation of first stmt
+       *-* 2nd statement (but use line # above in xref)
+
+     # *-* first statement from line (#).
+
+     # *-* first statement from line (#).
+
+     # *-* first statement from line (#).
+       *-* 2nd statement (but use line # above)
+
+We will read the input and assemble a "complete" statement (with any continuations) before processing it.
+We will set rexxline to the # of on the first statement.
+
+c0050Pass1:
+   reads scan input
+   when it accumulates a statement to process, it calls C0070ParseLinePass1.
+   repeats (until out of input).
+
+c0070ParseLinePass1:
+   lowerLine = line /* saves before upper casing line */
+   upper line       /* upper case line */
+
+   1.  remove comments from both LowerLine and Line
+
+   2.  find/replace literals from both LowerLine and Line
+      Note:  a literal can be:  'binary digits'B
+                                'hex digits'X
+                                'characters'
+      Note:  as we did a rexx scan, we assume:
+                                'string'b  is a binary literal
+                                "string"b  is a binary literal
+                                'string'x  is a hex    literal
+                                "string"x  is a hex    literal
+                                'string'   is obviously a string
+                                "string"   is obviously a string
+
+      When we replace a literal, we will replace it (in lowerLine and line) with:
+                                'LITB#   (no closing quote, always a single quote)
+                                'LITX#   (no closing quote, always a single quote)
+                                'LIT#    (no closing quote, always a single quote)
+                             or 'FUN#    (no closing quote, always a single quote)
+
+      and using the literal string from LowerLine (we can get upper/lower case literal)
+                             and we save lit value in LITB.#
+                                                      LITX.#
+                                                      LIT.#
+                                                  or  FUN.#
+
+      Note:  if we found 'string'(  or "string"(  ... i.e. a function call, then we will use
+         'FUN# instead and remove the left paren as well (from the line)
+
+   3.  find/remove labels (and call c0470LabelDefine for any labels we found)
+
+   4.  if anything left in Line, we call C0100ParseStatement
+
+   5   and return to caller.
+
+
+c0100ParseStatement:
+   rexxline = line # of rexx statement for xref
+   line = statement (with no comments) (with literals like 'LIT) and rest of rexx statement
+
+   1.  if an assignement statement
+       set varX = variable / stem getting a value and call c0500AddVarStemAssignment
+
+       put value (to right of = sign) into "line"
+       call c0300ParseRemaining (to get references and/or function calls)
+       and return.
+
+   2.  look up "first word" (theSymbol) in statement to see if it's a statement
+           rexxStmt = ''
+           if rexxStmt.theSymbol = 1
+           then rexxStmt = theSymbol
+
+   3.  if rexx statement, process it
+           if rexxStmt <> ''
+           then do
+              code to handle each rexx statement
+              (see code)
+              Typically this involves removing keywords from the statement so that keywords
+              won't (erronously) show up in the xref.
+
+              But some statements like "SIGNAL ON" and "CALL ON" have some special code too.
+
+              Often, not always, it ends up call c0300ParseRemaining.
+              (see code)
+           end
+           else do
+              call c0300ParseRemaining (to get references and/or function calls)
+              return
+           end
+
+c0300ParseRemaining:
+   /* this is an expression */
+   /*    1.  let's remove operators  */
+   /*    2.  let's remove functions  */
+   /*    3.  let's remove literals   */
+   /* then look for variables and reference them */
+   return
+

@@ -1,0 +1,52 @@
+   (contents described in $TECHIDX)
+   (------------------------------)
+
+
+TECH06 - Restrictions ... what rexxxref will ignore
+---------------------------------------------------
+
+
+"procedure expose varlist" statement.
+-------------------------------------
+   1) We will dutifully reference the variable(s) listed in the "expose varlist" statement in the xref.
+
+   2) But what we will NOT do is:  treat exposed (or non-exposed) variables any differently than any other variable.
+
+   That said, we will try and high light these variables/stems in the xref.
+   For example, you can see "Expose Ref:", below:
+
+   Note:  if you find a variable used in a expose list (that was never set); either is was set via some command interface
+   like EXECIO, some ISPF cmd, etc.  OR  it might be a mispelled variable in the expose list.
+
+sample xref (with expose references):
+
+Variable (set w/rexx)   xmsg                                               Assigned : 67 137 581 590
+Variable (used in/rexx) xmsg                                               Reference: 590
+Variable (used in/rexx) xmsg                                               Expose Ref: 628 763 1631
+
+
+Stem-1 CSV_LINE.                   Expose Ref: 628 763 2472
+Stem-1 CSV_LINE.0                  Assigned : 859
+Stem-1 CSV_LINE.0                  Reference: 243
+Stem-1 CSV_LINE.0                  Expose Ref: 628 763 2472
+Stem-1 CSV_LINE.csv_lineix         Assigned : 855
+
+
+
+
+XREF will not look at variable/stem use inside quoted strings.
+--------------------------------------------------------------
+   if you have an execio statement like:
+      'EXECIO * DISKR INPUT (OPEN FINIS STEM INPUT.'
+
+   Then the xref generated:
+      Will NOT have a xref for ANYTHING on this line.
+         - The line contains no rexx variables, just a literal string being passed to the command processor.
+
+         - And there are way too many address environments with commands that might reference/set rexx variables.
+
+   The user could re-write the execio command so INPUT. is referenced in the XREF.  But it would appear as a
+   reference and not an assignment.  Rewrite could look like this (but probably more trouble than it's worth):
+
+   Rewrite could look like this (but rewrite is more trouble than it's worth anyway):
+      'EXECIO * DISKR INPUT (OPEN FINIS STEM' input.

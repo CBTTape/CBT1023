@@ -1,0 +1,57 @@
+---------------------------
+library = &hlq.REXXXREF.JCL
+---------------------------
+
+members:
+--------
+  $README  (referring to this member in &hlq.REXXREF.DOC($JCLLIB))
+  REXXREEF (job you should submit)
+  SAMPLE   (sample job I submitted... just for comparison.
+
+REXXXREF:
+---------
+  This has jcl you'll need to modify to submit to get your
+  xref listings.
+
+  Things to modify:
+
+     1) add a job card
+
+     2) you'll need a HLQ (high level qualifier) for the
+    output datasets.
+
+        change "// SET NEWHLQ='to your hlq'
+
+     3) for the pds(member) that you want an xref you'll
+    need to specify them in set statements:
+        change/add  // SET REXXLIBR='...'   to pds library name
+        change/add  //  SET REXXMEMB='...'  to pds member name
+
+     4) submit job
+
+     5) look at:  &NEWHLQ.REXXXREF.TLIB(&REXXMEMB) output
+        look at:  &NEWHLQ.REXXXREF.XREF(&REXXMEMB) output
+
+SAMPLE:
+-------
+   similar to REXXXREF job
+
+   but this job was actually submitted multiple times with
+      //  SET NEWHLQ='SFRH66.PUBLIC.SAMPLE'
+
+      + run multiple times (with different settings for
+                            REXXLIBR and REXXMEMB)
+
+   as a result there is output in sample OUTPUT PDS datasets:
+   ----------------------------------------------------------
+          SFRH66.PUBLIC.SAMPLE.TREXLIB
+      and SFRH66.PUBLIC.SAMPLE.XREFLIB
+
+      so you can see what the input rexx execs are changed into
+          in sfrh66.public.sample.trexlib
+
+      so you can see what the xref listings look like:
+          in sfrh66.public.sample.xreflib
+
+      the original exec's aren't shown but, except for header,
+      are identical to exec's saved in hlq.TREXLIB

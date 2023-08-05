@@ -1,0 +1,3291 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.SAMPLE.REXXXREF.TREX(REX$XREF)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.SAMPLE.REXXXREF.XREF(REX$XREF)
+   -----------------------------------------
+
+READY
+    REX$XREF
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.PUBLIC.REXXXREF.REXX(REX$XREF)"      */
+    Generated scan code/comment:   /*      -------------------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                          */
+    Generated scan code/comment:   /*     20211027 16:03:57                            */
+    Generated scan code/comment:   /*      -------------------------------------       */
+     1 *-* /* REXX */
+     2 *-* /*                                                                           */
+     3 *-* /* written by:  Richard Humphris                                             */
+     4 *-* /* email:       richard.humphris@netnitco.net                                */
+     5 *-* /* cell:        219-707-1409                                                 */
+     6 *-* /*                                                                           */
+     7 *-* /* version      change                                                       */
+     8 *-* /* -------      ------------------------------------------------------------ */
+     9 *-* /* 1.01         initial "release"                                            */
+    10 *-* /*                                                                           */
+    11 *-* /*                                                                           */
+    12 *-* /*    summarize process:                                                     */
+    13 *-* /*    ------------------                                                     */
+    14 *-* /*          Input:  a rexx exec you want a cross reference for.              */
+    15 *-* /*                                                                           */
+    16 *-* /*          process:                                                         */
+    17 *-* /*             1) read rexx exec from libraryX.(member) (your exec library)  */
+    18 *-* /*                                                                           */
+    19 *-* /*             2) create member in hlq.TREX(member)                          */
+    20 *-* /*                                                                           */
+    21 *-* /*                a) if fb, change to vb (hlq.TREX) is vb                    */
+    22 *-* /*                                                                           */
+    23 *-* /*                b) remove seq #'s (either fb or vb)                        */
+    24 *-* /*                                                                           */
+    25 *-* /*                c) add header information (comments) to converted exec     */
+    26 *-* /*                                                                           */
+    27 *-* /*                d) add trace 's' after header        in converted exec     */
+    28 *-* /*                                                                           */
+    29 *-* /*             3) run converted member with/  trace 's'                      */
+    30 *-* /*                                                                           */
+    31 *-* /*                a) save output in a temporary file.                        */
+    32 *-* /*                                                                           */
+    33 *-* /*                b) if trace unsuccessful, update hlq.XREF with scan        */
+    34 *-* /*                 output and we're done.                                    */
+    35 *-* /*                                                                           */
+    36 *-* /* ====>       4) run REX$XREF (this exec) to create the cross reference     */
+    37 *-* /*                                                                           */
+    38 *-* /*                a) save xref in a temporary file.                          */
+    39 *-* /*                                                                           */
+    40 *-* /*             5) create header, copy scan output, copy xref output and      */
+    41 *-* /*               create a member in hlq.XREF(member)                         */
+    42 *-* /*                                                                           */
+    43 *-* /*    purpose of REX$XREF:                                                   */
+    44 *-* /*    --------------------                                                   */
+    45 *-* /*                                                                           */
+    46 *-* /*         1)  input:  trace 's' output of exec; we want to gen a xref for.  */
+    47 *-* /*                                                                           */
+    48 *-* /*         2)  process trace 's' output and create s xref                    */
+    49 *-* /*                                                                           */
+    50 *-* /*             a)  "pass 1" reads rexx code and looks for labels, call       */
+    51 *-* /*            instructions, function calls, signal instructions, variables   */
+    52 *-* /*            used (assigned and/or referrenced) and stems used and/or       */
+    53 *-* /*            referenced.  All labels, variable and stems are saved in       */
+    54 *-* /*                                                                           */
+    55 *-* /*                 1)  all labels, variables, stems (with variables used)    */
+    56 *-* /*                are all saved in upperCase.                                */
+    57 *-* /*                                                                           */
+    58 *-* /*                 2)  stems with numeric values after the period are changed*/
+    59 *-* /*                to # (except for 0).                                       */
+    60 *-* /*                                                                           */
+    61 *-* /*                    For example:                                           */
+    62 *-* /*                                                                           */
+    63 *-* /*                     stem as used     stem as saved for xref               */
+    64 *-* /*                     ------------     ----------------------               */
+    65 *-* /*                     xyz.var1.0       XYZ.VAR1.0                           */
+    66 *-* /*                     xyz.var1.1       XYZ.VAR1.#                           */
+    67 *-* /*                     xyz.var1.2         (see above)                        */
+    68 *-* /*                     xyz.var1.3         (see above)                        */
+    69 *-* /*                                                                           */
+    70 *-* /*                                                                           */
+    71 *-* /*             b)  "pass 2" the "output pass"                                */
+    72 *-* /*                                                                           */
+    73 *-* /*                 1) the "constant" xref section 1                          */
+    74 *-* /*                                                                           */
+    75 *-* /*                    a) variables are sorted                                */
+    76 *-* /*                                                                           */
+    77 *-* /*                    b) only variables that aren't assigned in rexx code    */
+    78 *-* /*                   appear here.                                            */
+    79 *-* /*                                                                           */
+    80 *-* /*                    c) so labels (also used as variables) are only reported*/
+    81 *-* /*                   here if the variable use was only a reference.          */
+    82 *-* /*                                                                           */
+    83 *-* /*                                                                           */
+    84 *-* /*                                                                           */
+    85 *-* /*    Note:                                                                  */
+    86 *-* /*          NO syntax checking is done.  We ran the rexx syntax checker and  */
+    87 *-* /*         what's "good" for rexx is "good" for us.                          */
+    88 *-* /*                                                                           */
+    89 *-* /*          Therefore, it greatly simplifies code.  For example, if you put  */
+    90 *-* /*         a variable on a "ITERATE" statement, for example, we just assume  */
+    91 *-* /*         it will be a single variable and references a active do loop. BUT */
+    92 *-* /*         to simplify this code, we treat value like any other expression   */
+    93 *-* /*         on the right hand side of an assignment statement say.  We depend */
+    94 *-* /*         on REXX to pick up syntax problems.                               */
+    95 *-* /*                                                                           */
+    96 *-* /*          Also, we do NOT look at "constants" enclosed in quotes.  So if   */
+    97 *-* /*         for example,you code a "EXECIO" command with STEM X. in quotes    */
+    98 *-* /*         we will NOT generate a assignment for the rexx stem X. (for that  */
+    99 *-* /*         statement).                                                       */
+   100 *-* /*                                                                           */
+   101 *-* /*                                                                           */
+   103 *-* signal on syntax /* set trap for syntax errors */
+   104 *-* parse source . . . . . . . addressSpace .
+   105 *-* if addressSpace = 'OMVS'
+   106 *-*  then
+       *-*  do
+   107 *-*   omvsSeg = 1 /* user can use bpxwunix() function */
+   108 *-*  end
+   109 *-* else
+       *-*  do
+   110 *-*   x = syscalls('ON')
+   111 *-*   if x = 0
+   112 *-*    then
+       *-*    do
+   113 *-*     omvsSeg = 1 /* user can use bpxwunix function */
+   114 *-*     x = syscalls('OFF')
+   115 *-*    end
+   116 *-*   else
+       *-*    omvsSeg = 0 /* will have to use rexx subroutine to do sorting (slow)*/
+   117 *-*  end
+   119 *-* say ' '
+   120 *-* if omvsSeg = 1
+   121 *-*  then
+       *-*  say 'XREF will be able to use a fast omvs sort, as we have an OMVS segment)'
+   122 *-* else
+       *-*  say 'XREF can''t do a fast omvs sort (no OMVS segment); will use rexx code to sort'
+   123 *-* say ' '
+   125 *-* signal startUp      /* "branch" over the syntax handling routine */
+   127 *-* syntax:
+   128 *-* /*-------*/
+   129 *-* /*-------*/
+   130 *-* /* syntax:  error handling */
+   131 *-* /*   rc    is set to the syntax error number;                        */
+   132 *-* /*         ... equivelent to IRX00nnL as rc = 00, 01 to 99           */
+   133 *-* /*   sigl  is set to the line number in error                        */
+   134 *-* parse source . . execname .
+   135 *-* say 'IRX00'right('00'rc,2)'I Error running exec' ,              execName 'line' sigl':' errortext(rc)
+   137 *-* syntaxLow = max(sigl-7,1)            /* -7 before (or pgm start) */
+   138 *-* syntaxHigh= min(sigl+7,sourceline()) /* +7 after  (or pgm end)   */
+   139 *-* do syntaxII = syntaxLow to syntaxHigh/* -7 lines back to +7 lines*/
+   140 *-*  if syntaxII <> sigl
+   141 *-*   then
+       *-*   say 'line   ' right(syntaxii,length(syntaxHigh))':' ,                     sourceline(syntaxII)
+   143 *-*  else
+       *-*   say 'line==>' right(syntaxii,length(syntaxHigh))':' ,                     sourceline(syntaxII)
+   145 *-* end
+   146 *-* say 'exiting exec with rc=12'
+   147 *-* exit 12
+   149 *-* startUp:
+   150 *-* /*--------*/
+   151 *-* /*--------*/
+   152 *-* /* start of pgm... skipped error routine "syntax:" */
+   153 *-* /* ----------------------------------------------- */
+   155 *-* /* handle arguments/options for the execution of this exec */
+   156 *-* /* ------------------------------------------------------- */
+   157 *-* debug = 'OFF'  /* set to ON or OFF; will do more say statements if ON */
+   158 *-* parse upper arg . 'DEBUG=' valuex .
+   159 *-* parse upper arg . 'REXXLINE=' valuey .
+   160 *-* parse upper arg . 'WIDTH=' valuez .
+   161 *-* parse upper arg . 'BLANK=' valueb .
+   163 *-* say ' '
+   164 *-* say 'Options used:'
+   165 *-* say '-------------'
+   166 *-* say ' '
+   168 *-* if valuex = 'ON' | valuex = 'OFF'
+   169 *-*  then
+       *-*  debug = valuex
+   170 *-* else
+       *-*  debug = 'OFF'
+   171 *-* say 'DEBUG option is DEBUG='debug
+   172 *-* say '   For DEBUG=ON, you will have to look at SYSTSPRT in step //XREF for debug output'
+   174 *-* if datatype(valueY,'W') = 0 | valueY < 0
+   175 *-*  then
+       *-*  TraceRexxLine = 0
+   176 *-* else
+       *-*  TraceRexxline = valueY  /* line of input exec to trace */
+   178 *-* if traceRexxLine > 0
+   179 *-*  then
+       *-*  do
+   180 *-*   say ' '
+   181 *-*   say 'REXXLINE='tracerexxLine'; we will turn on:  trace ''r'' while processing line' tracerexxline 'of input exec'
+   182 *-*   say 'REXXLINE trace, you will have to look at SYSTSPRT in step //XREF for debug output'
+   183 *-*  end
+   185 *-* say ' '
+   186 *-* if datatype(valuez,'W') = 0 | valuez = ''
+   187 *-*  then
+       *-*  do
+   188 *-*   say 'WIDTH option:  we will be using default width = 150'
+   189 *-*   width = 150
+   190 *-*   defaultMaxoutputvar = 50 /* use longer default */
+   191 *-*  end
+   192 *-* else
+       *-*  if valuez < 130
+   193 *-*   then
+       *-*   do
+   194 *-*    say 'WIDTH optione:  width='valuez 'specified, but minimum width=130 used instead'
+   195 *-*    width = 130
+   196 *-*    defaultMaxoutputvar = 30 /* shorten default size */
+   197 *-*   end
+   198 *-*  else
+       *-*   do
+   199 *-*    say 'WIDTH option:  width='valuez 'will be used'
+   200 *-*    width = valuez
+   201 *-*    defaultMaxoutputvar = 50 /* use longer default */
+   202 *-*   end
+   204 *-* say ' '
+   205 *-* if valueb = 'BYVAR'
+   206 *-*  then
+       *-*  do
+   207 *-*   blankOption = valueb
+   208 *-*   say 'Blank=BYVAR, indicates there will be a blank line between groups of xref lines w/same variable/label name'
+   209 *-*  end
+   210 *-* else
+       *-*  if valueB = 'NONE'
+   211 *-*   then
+       *-*   do
+   212 *-*    blankOption = valueb
+   213 *-*    say 'Blank=NONE, indicates there will be no blank lines in XREF'
+   214 *-*   end
+   215 *-*  else
+       *-*   do
+   216 *-*    blankOption = 'BYVAR'
+   217 *-*    say 'Blank="'valueb'" was an invalid option, using Blank=BYVAR instead'
+   218 *-*    say 'Blank=BYVAR, indicates there will be a blank line between groups of xref lines w/same variable/label name'
+   219 *-*   end
+   221 *-* say 'finished process options'
+   222 *-* say ' '
+   224 *-* /* end of options handling */
+   225 *-* /* ----------------------- */
+   227 *-* /* define some "special" variable handling for xref */
+   228 *-* /* ------------------------------------------------ */
+   229 *-* specialVar. = 0 /* default (not special) */
+   230 *-* /* --------------------- */
+   231 *-* special = 'RC'
+   232 *-* specialVar.special = 1   /* set specialVar.RC = 1  */
+   234 *-* special = 'SIGL'
+   235 *-* specialVar.special = 1   /* set specialVar.SIGL =1 */
+   237 *-* special = 'RESULT'
+   238 *-* specialVar.special = 1   /* set specialVar.RESULT = 1 */
+   240 *-* special = 'SQLCODE'
+   241 *-* specialVar.special = 1   /* set specialVar.SQLCODE = 1   (db2) dsnrexx */
+   243 *-* special = 'SQLERRMC'
+   244 *-* specialVar.special = 1   /* set specialVar.SQLERRMC = 1  (db2) dsnrexx */
+   246 *-* special = 'SQLERRP'
+   247 *-* specialVar.special = 1   /* set specialVar.SQLERRP  = 1  (db2) dsnrexx */
+   249 *-* special = 'SQLSTATE'
+   250 *-* specialVar.special = 1   /* set specialVar.SQLSTATE = 1  (db2) dsnrexx */
+   252 *-* specialStem. = 0
+   253 *-* specialStem.SQLERRD = 1
+   254 *-* specialStem.SQLWARN = 1
+   255 *-* /* end of special xref defaults */
+   256 *-* /* ---------------------------= */
+   258 *-* /* define rexx statement keywords we will handle */
+   259 *-* /* --------------------------------------------- */
+   260 *-* rexxStmt. = 0
+   261 *-* rexxStmt = 'ADDRESS'
+       *-* rexxStmt.rexxStmt = 1
+   262 *-* rexxStmt = 'ARG'
+       *-* rexxStmt.rexxStmt = 1
+   263 *-* rexxStmt = 'CALL'
+       *-* rexxStmt.rexxStmt = 1
+   264 *-* rexxStmt = 'DO'
+       *-* rexxStmt.rexxStmt = 1
+   265 *-* rexxStmt = 'END'
+       *-* rexxStmt.rexxStmt = 1 /* not really a stmt, but 'end'(s) DO or SELECT */
+   266 *-* rexxStmt = 'DROP'
+       *-* rexxStmt.rexxStmt = 1
+   267 *-* rexxStmt = 'EXIT'
+       *-* rexxStmt.rexxStmt = 1
+   268 *-* rexxStmt = 'IF'
+       *-* rexxStmt.rexxStmt = 1
+   269 *-* rexxStmt = 'THEN'
+       *-* rexxStmt.rexxStmt = 1 /* not really a stmt, but used in IF or SELECT */
+   270 *-* rexxStmt = 'ELSE'
+       *-* rexxStmt.rexxStmt = 1 /* not really a stmt, but used with IF stmt    */
+   271 *-* rexxStmt = 'INTERPRET'
+       *-* rexxStmt.rexxStmt = 1
+   272 *-* rexxStmt = 'ITERATE'
+       *-* rexxStmt.rexxStmt = 1
+   273 *-* rexxStmt = 'LEAVE'
+       *-* rexxStmt.rexxStmt = 1
+   274 *-* rexxStmt = 'NOP'
+       *-* rexxStmt.rexxStmt = 1
+   275 *-* rexxStmt = 'NUMERIC'
+       *-* rexxStmt.rexxStmt = 1
+   276 *-* rexxStmt = 'OPTIONS'
+       *-* rexxStmt.rexxStmt = 1
+   277 *-* rexxStmt = 'PARSE'
+       *-* rexxStmt.rexxStmt = 1
+   278 *-* rexxStmt = 'PROCEDURE'
+       *-* rexxStmt.rexxStmt = 1
+   279 *-* rexxStmt = 'PULL'
+       *-* rexxStmt.rexxStmt = 1
+   280 *-* rexxStmt = 'PUSH'
+       *-* rexxStmt.rexxStmt = 1
+   281 *-* rexxStmt = 'QUEUE'
+       *-* rexxStmt.rexxStmt = 1
+   282 *-* rexxStmt = 'RETURN'
+       *-* rexxStmt.rexxStmt = 1
+   283 *-* rexxStmt = 'SAY'
+       *-* rexxStmt.rexxStmt = 1
+   284 *-* rexxStmt = 'SELECT'
+       *-* rexxStmt.rexxStmt = 1
+   285 *-* rexxStmt = 'WHEN'
+       *-* rexxStmt.rexxStmt = 1 /* not really a stmt, but used with SELECT stmt */
+   286 *-* rexxStmt = 'OTHERWISE'
+       *-* rexxStmt.rexxStmt = 1 /* not really a stmt, but used with SELECT stmt */
+   287 *-* rexxStmt = 'SIGNAL'
+       *-* rexxStmt.rexxStmt = 1
+   288 *-* rexxStmt = 'TRACE'
+       *-* rexxStmt.rexxStmt = 1
+   289 *-* rexxStmt = 'UPPER'
+       *-* rexxStmt.rexxStmt = 1
+   290 *-* /* end of special rexxStmt. keywords. */
+   291 *-* /* ---------------------------------- */
+   293 *-* validSymbolChars  ='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$¢.!?_' /* full set of valid symbol chars */
+   294 *-* validVariableStart='ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$¢!?_'            /* variable can't start with . or digit */
+   296 *-* 'EXECIO 0 DISKW RESULTS (OPEN'
+   297 *-* if rc <> 0
+   298 *-*  then
+       *-*  do
+   299 *-*   say 'DDname RESULTS failed to open for output; rc='rc
+   300 *-*   say 'exit 8'
+   301 *-*   'EXECIO 0 DISKW RESULTS (FINIS'
+   302 *-*   exit 8
+   303 *-*  end
+   305 *-* call c0050Pass1 /* find and identify variables */
+   306 *-* call c9900OutputResults /* now, output our results */
+   307 *-* exit 0
+   309 *-* c0050Pass1:
+   310 *-* 'EXECIO 100 DISKR SCANINP (OPEN STEM IN.'
+   311 *-* inRc = rc
+   312 *-* if inRc = 0 | inRc = 2
+   313 *-*  then
+       *-*  nop
+   314 *-* else
+       *-*  do
+   315 *-*   say 'error opening ddname=SCANINP; rc='inRc
+   316 *-*   say 'exiting w/rc=8'
+   317 *-*   'EXECIO 0 DISKR SCANINP (FINIS'
+   318 *-*   exit 8
+   319 *-*  end
+   320 *-* if in.0 > 0 /* in input read, copy to output */
+   321 *-*  then
+       *-*  do
+   322 *-*   /* copy scan to output member, followed by xref */
+   323 *-*   'EXECIO' in.0 'DISKW RESULTS (STEM IN.'
+   324 *-*   if rc <> 0
+   325 *-*    then
+       *-*    do
+   326 *-*     say 'error writing to ddname=RESULTS, rc='rc
+   327 *-*     say 'exiting w/rc=8'
+   328 *-*     'EXECIO 0 DISKR SCANINP (FINIS'
+   329 *-*     'EXECIO 0 DISKW RESULTS  (FINIS'
+   330 *-*     exit 8
+   331 *-*    end
+   332 *-*  end
+   333 *-* variablesIndx. = 0
+   334 *-* variable = 0
+   335 *-* /* define defaults for structures associated with "variable." */
+   336 *-* /* ---------------------------------------------------------- */
+   337 *-* variable.          = '' /* name of variable like USER; always UpperCase*/
+   338 *-* variableRef.       = '' /* referencing a variable,   list of line #'s */
+   339 *-* variableExposeRef. = '' /* expose list ref. variable,list of line #'s */
+   340 *-* variableSet.       = '' /* setting     a variable,   list of line #'s */
+   341 *-* variableStemSet.   = '' /* used in setting stem var, list of line #'s */
+   342 *-* variableStemRef.   = '' /* used in ref.    stem var, list of line #'s */
+   343 *-* variableLabelDef.  = '' /* label definition,         list of line #'s */
+   344 *-* variableLabelRef.  = '' /* label reference,          list of line #'s */
+   345 *-* /* end of defaults */
+   347 *-* stemIndx.      = 0
+   348 *-* stem     = 0
+   349 *-* /* define defaults for structures associated with "stem." */
+   350 *-* /* ------------------------------------------------------ */
+   351 *-* stemVariable.     = '' /* name of stem variable (like NAME.FIRST.LAST) always upper case */
+   352 *-* stemPeriods.      = '' /* # of periods used in stem variable */
+   353 *-* stemRef.          = '' /* stem variable references, list of line #'s */
+   354 *-* stemExposeRef.    = '' /* stem variable references, list of line #'s */
+   355 *-* StemAsg.          = '' /* stem variable assignment, list of line #'s */
+   356 *-* /* end of defaults */
+   358 *-* exposeRef = 0 /* only set to 1 when reference "PROCEDURE EXPOSE" list of variables */
+   359 *-* line = ''
+   360 *-* startcmd = 0
+   361 *-* totalLine= 0
+   362 *-* in = 0
+   363 *-* do forever /* identify variables / stems */
+   364 *-*  in = in + 1
+   365 *-*  if in > in.0
+   366 *-*   then
+       *-*   do
+   367 *-*    /* need another buffer */
+   368 *-*    if inRc = 2/* finished using last buffer? */
+   369 *-*     then
+       *-*     leave /* ...yes, time to leave.      */
+   371 *-*     /* get next buffer */
+   372 *-*    in = 0 /* reset buffer pointer, very important for forever loop */
+   373 *-*    'EXECIO 100 DISKR SCANINP (STEM IN.'
+   374 *-*    inRc = rc /* save read rc */
+   375 *-*    if inRc = 0 | inRc = 2
+   376 *-*     then
+       *-*     do /* got next input buffer */
+   377 *-*      if in.0 > 0 /* if input recs, copy to output */
+   378 *-*       then
+       *-*       do
+   379 *-*        /* copy scan to output member, followed by xref */
+   380 *-*        'EXECIO' in.0 'DISKW RESULTS (STEM IN.'
+   381 *-*        if rc <> 0
+   382 *-*         then
+       *-*         do
+   383 *-*          say 'error writing to ddname=RESULTS, rc='rc
+   384 *-*          say 'exiting w/rc=8'
+   385 *-*          'EXECIO 0 DISKR SCANINP (FINIS'
+   386 *-*          'EXECIO 0 DISKW RESULTS  (FINIS'
+   387 *-*          exit 8
+   388 *-*         end
+   389 *-*       end
+   390 *-*       /* normal, we read buffer successfully */
+   391 *-*       /*         we wrote buffer successfully*/
+   392 *-*       /*         time to resume loop         */
+   393 *-*       /*         and variable "in" equals zero*/
+   394 *-*      iterate /* got next input buffer, resume forever loop*/
+   395 *-*     end
+   397 *-*     /* bad read rc */
+   398 *-*    say 'error reading from ddname=SCANINP; rc='rc
+   399 *-*    say 'exit w/rc=8'
+   400 *-*    'EXECIO 0 DISKR SCANINP (FINIS'
+   401 *-*    exit 8
+   402 *-*   end
+   404 *-*   /* next input line in "in.in" is ready to process */
+   405 *-*  totalLine = totalLine + 1
+   406 *-*  if startcmd = 1
+   407 *-*   then
+       *-*   do /* put most likely choice first */
+   408 *-*    parse var in.in rexxLine2 8 cmd 12 pendingCmd
+   409 *-*    if datatype(strip(rexxLine2),'W') & cmd = '*-* '
+   410 *-*     then
+       *-*     do /* we have start of a "command" to process */
+   411 *-*      call c0070ParseLinePass1 /* process previous line first */
+   412 *-*      rexxline = strip(rexxline2)
+   413 *-*      line = pendingCmd   /* now save start of next cmd  */
+   414 *-*      iterate
+   415 *-*     end
+   417 *-*     /* command continued, add to line, for full line to parse*/
+   418 *-*    if left(in.in,10) = '*-*'
+   419 *-*     then
+       *-*     do
+   420 *-*      call c0070ParseLinePass1 /* process previous cmd first */
+   421 *-*      /* rexxline is still set... multiple cmds on same line  */
+   422 *-*      line = pendingCmd   /* now save start of next cmd  */
+   423 *-*      iterate
+   424 *-*     end
+   425 *-*    else
+       *-*     line = line || in.in /* continuation of a command, append it together */
+   426 *-*    iterate
+   427 *-*   end
+   428 *-*  else
+       *-*   do
+   429 *-*    /* this happens first, but once we set startcmd to 1*/
+   430 *-*    /* ... it will never be reset.  So this is least used*/
+   431 *-*    /* portion of this loop.                             */
+   432 *-*    parse var in.in rexxline 8 cmd 12 rest
+   433 *-*    if datatype(strip(rexxline),'W') & cmd = '*-* '
+   434 *-*     then
+       *-*     do /* we have start of a "command" to process */
+   435 *-*      startcmd = 1
+   436 *-*      line = rest
+   437 *-*      rexxline = strip(rexxline)
+   438 *-*      iterate
+   439 *-*     end
+   440 *-*    else
+       *-*     iterate /* ignore nonsense */
+   441 *-*   end
+   442 *-* end
+   443 *-* if startcmd = 1
+   444 *-*  then
+       *-*  do
+   445 *-*   if right(line,8) = 'READYEND' & length(line) > 8 /* sure it is */
+   446 *-*    then
+       *-*    line = left(line,length(line)-8) /* remove "READYEND" */
+   447 *-*   call c0070ParseLinePass1
+   448 *-*  end
+   449 *-* 'EXECIO 0 DISKR SCANINP (FINIS'
+   450 *-* return /* 1st pass is complete */
+   452 *-* c0070ParseLinePass1:
+   453 *-* /* 1.  remove comments from line, as they just confuse things. */
+   454 *-* /*                                                             */
+   455 *-* /* 2.  replace 'all literals'               with " 'LIT###     */
+   456 *-* /* 2.  replace 'all literal functions       with " 'FUN###(    */
+   457 *-* /*     replace '0101 1100'b BINARY literals with " 'LIT###B    */
+   458 *-* /*     replace '04E3 DD3C'x HEX literals    with " 'LIT###X    */
+   459 *-* /*     ... as they just confuse things.                        */
+   460 *-* /*                                                             */
+   461 *-* /* After this, any digits left in "line" are digits used by    */
+   462 *-* /* rexx, as opposed to those that used to be in:               */
+   463 *-* /*          1. comments (removed)                              */
+   464 *-* /*          2. literals (removed)                              */
+   465 *-* /*                                                             */
+   466 *-* if traceRexxLine > 0
+   467 *-*  then
+       *-*  if rexxLine = traceRexxLine
+   468 *-*   then
+       *-*   do
+   469 *-*    trace 'n'
+   470 *-*    say ' '
+   471 *-*    say 'Turning on and/or continuing Tracing while processing line' rexxline 'of the input exec'
+   472 *-*    trace 'i' /* turn on tracing for this one line of 'input' rexx code */
+   473 *-*   end
+   474 *-*  else
+       *-*   if rexxLine > traceRexxLine
+   475 *-*    then
+       *-*    do
+   476 *-*     traceRexxLine = 0 /* nothing more to trace */
+   477 *-*     trace 'n'         /* keep tracing off      */
+   478 *-*    end
+   480 *-* originalLine = line /* save original line  */
+   481 *-* if debug = 'ON'
+   482 *-*  then
+       *-*  do
+   483 *-*   say ' '
+   484 *-*   say 'rexxline='rexxline
+   485 *-*   say 'debug:  originalLine="'originalLine'"'
+   486 *-*  end
+   487 *-* lowerLine    = line /* in case of literals */
+   488 *-* upper line /* just upper case it */
+   489 *-* startPos = 1
+   490 *-* commentNested = 0
+   491 *-* commentStart  = 0
+   492 *-* literalStart  = 0
+   493 *-* LitValue. = ''   /* save lit values here */
+   494 *-* litNext    = 0   /* # of lit values saved*/
+   495 *-* do while pos('/*',line,startPos) > 0 ,                  | pos('*/',line,startPos) > 0 ,                  | pos("'",line,
+startPos)  > 0 ,                  | pos('"',line,startPos)  > 0
+   499 *-*  /* we have a possible comment and/or literal */
+   500 *-*  x1= pos('/*',line'/*',startPos)
+   501 *-*  x2= pos('*/',line'*/',startPos)
+   502 *-*  y1= pos("'",line"'",startPos)
+   503 *-*  y2= pos('"',line'"',startPos)
+   505 *-*  x = min(x1,x2)
+   506 *-*  y = min(y1,y2)
+   508 *-*  if commentStart > 0 /* at least one comment active */
+   509 *-*   then
+       *-*   do
+   510 *-*    /* ignore "y" literals inside of comments */
+   511 *-*    if x1 = x2 /* should be impossible */
+   512 *-*     then
+       *-*     leave /* ... rexx syntax should have found this */
+   513 *-*    if x1 = x  /* start of another nested comment? */
+   514 *-*     then
+       *-*     do
+   515 *-*      commentNested = commentNested + 1 /* bump number nested*/
+   516 *-*      startPos = x + 2 /* skip past this comment delimiter */
+   517 *-*      iterate
+   518 *-*     end
+   519 *-*     /* found end of a comment */
+   520 *-*    commentNested = commentNested - 1 /* decrement number of active comments*/
+   522 *-*    if commentNested > 0
+   523 *-*     then
+       *-*     do
+   524 *-*      /* nested comments, we need to find more end of comment literals */
+   525 *-*      startPos = x + 2 /* skip past this comment delimiter */
+   526 *-*      iterate
+   527 *-*     end
+   528 *-*     /* finally entire comment "commentStart to x" can be removed */
+   529 *-*     /* replace with a blank, if imbedded comment                 */
+   530 *-*    if commentStart = 1
+   531 *-*     then
+       *-*     do
+   532 *-*      /* remove comment from start of line */
+   533 *-*      line      = strip(substr(line,x+2))
+   534 *-*      lowerLine = strip(substr(lowerLine,x+2))
+   535 *-*      startPos = 1
+   536 *-*      commentStart = 0 /* with no comment active any longer, this is now zero */
+   537 *-*      iterate
+   538 *-*     end
+   539 *-*     /* remove comment from middle of line; replace with blank */
+   540 *-*    line      = left(line,commentStart-1)      substr(line,x+2)
+   541 *-*    lowerLine = left(lowerLine,commentStart-1) substr(lowerLine,x+2)
+   542 *-*    startPos = commentStart + 1
+   543 *-*    commentStart = 0 /* with no comment active any longer, this is now zero */
+   544 *-*    iterate
+   545 *-*   end
+   547 *-*  if x < y /* comment started before literal? */
+   548 *-*   then
+       *-*   do
+   549 *-*    /* logic says (see prior "if commentNested > 0" that commentNested must be zero */
+   550 *-*    if substr(line,x,2) = '/*'
+   551 *-*     then
+       *-*     do
+   552 *-*      /* this must be true for rexx syntax approved code */
+   553 *-*      commentNested = 1 /* this is start of a comment */
+   554 *-*      commentStart  = x /* ... and started here       */
+   555 *-*      startPos = x + 2  /* start looking for end of comment here */
+   556 *-*      iterate
+   557 *-*     end
+   558 *-*    call logicMsg 'how can a comment end, that was never started?'
+   559 *-*    startPos = x+2
+   560 *-*    iterate
+   561 *-*   end
+   563 *-*   /* start of literal found, it may be a:            */
+   564 *-*   /*    'some literal value' a regular literal       */
+   565 *-*   /* or '1010 1100'b         a binary  literal       */
+   566 *-*   /* or '03ef ff'x           a hex     literal       */
+   567 *-*   /*                                                 */
+   568 *-*   /* note:  we won't verify contents of binary or hex*/
+   569 *-*   /*    literals, the rexx syntax checker did that.  */
+   570 *-*   /*                                                 */
+   571 *-*   /* so we will remove literal and replace it with   */
+   572 *-*   /*    " 'LIT' "  i.e. with 'LIT' with blanks around*/
+   573 *-*   /*    it.                                          */
+   574 *-*   /*                                                 */
+   575 *-*  LiteralStart = y
+   576 *-*  LitQuote = substr(line,y,1)
+   577 *-*  do forever /* find end of literal */
+   578 *-*   yy= pos(litQuote,line,y+1) /* find ending quote */
+   579 *-*   if yy = 0
+   580 *-*    then
+       *-*    do
+   581 *-*     /* literal should have ended, if syntax corrrect */
+   582 *-*     /* add closing quote (that should have been in literal */
+   583 *-*     litValue = substr(lowerLine,LiteralStart) || litQuote
+   584 *-*     litNext = litNext + 1
+   585 *-*     litValue.litNext = litValue
+   587 *-*     call logicMsg 'Why didn''t literal end'
+   588 *-*     if LiteralStart = 1
+   589 *-*      then
+       *-*      return /* basically one long literal, even if it didn't end */
+   591 *-*     line = left(line,y-1) " 'LIT"||litnext
+   592 *-*     literalStart = 0          /* basically end of parsing */
+   593 *-*     startPos = length(line)+1 /* basically end of parsing */
+   594 *-*     leave
+   595 *-*    end
+   596 *-*   if substr(line,yy,1) = substr(line,yy+1,1) /* double " or double ' */
+   597 *-*    then
+       *-*    do
+   598 *-*     /* skip them by */
+   599 *-*     y = yy + 2
+   600 *-*     iterate
+   601 *-*    end
+   602 *-*    /* we found end of literal at yy*/
+   603 *-*   leave
+   604 *-*  end
+   605 *-*  if literalStart = 0
+   606 *-*   then
+       *-*   leave
+   608 *-*   /* normal case, found end of literal */
+   609 *-*  Litvalue = substr(lowerLine,LiteralStart,yy-literalStart+1)
+   611 *-*  /* is it really a binary literal.... don't want "b" to ba a variable */
+   612 *-*  if substr(line,yy+1,1) = 'B' ,                    & datatype(substr(line,yy+2,1),'S')= 0 /* char after B not a symbol..
+. then a binary literal */
+   614 *-*   then
+       *-*   do
+   615 *-*    /* it's a binary/hex literal */
+   616 *-*    litValue = litValue||'B'
+   617 *-*    litNext = litNext + 1
+   618 *-*    litValue.litNext = litValue /* save literal value */
+   620 *-*    /* now replace literal with " 'LIT#' " in line/lowerLine */
+   621 *-*    if literalStart = 1
+   622 *-*     then
+       *-*     do
+   623 *-*      line      = "'LITB"||litNext strip(substr(line,yy+2))
+   624 *-*      lowerLine = "'LITB"||litNext strip(substr(lowerLine,yy+2))
+   625 *-*      startPos = 6 + length(litNext)
+   626 *-*      literalStart = 0
+   627 *-*      iterate
+   628 *-*     end
+   630 *-*    line      = left(line,literalStart-1) "'LITB"litNext substr(line,yy+2)
+   631 *-*    lowerline = left(line,literalStart-1) "'LITB"litNext substr(lowerline,yy+2)
+   632 *-*    startPos = literalStart + 6 + length(litNext)
+   633 *-*    literalStart = 0
+   634 *-*    iterate
+   635 *-*   end
+   637 *-*   /* is it really a hex literal.... don't want "x" to ba a variable */
+   638 *-*  if substr(line,yy+1,1) = 'X' ,                    & datatype(substr(line,yy+2,1),'S')= 0 /* char after X is not a symbo
+l; then hex literal */
+   640 *-*   then
+       *-*   do
+   641 *-*    /* it's a binary/hex literal */
+   642 *-*    litValue = litValue||'X'
+   643 *-*    litNext = litNext + 1
+   644 *-*    litValue.litNext = litValue /* save literal value */
+   646 *-*    /* now replace literal with " 'LIT#' " in line/lowerLine */
+   647 *-*    if literalStart = 1
+   648 *-*     then
+       *-*     do
+   649 *-*      line      = "'LITX"||litNext strip(substr(line,yy+2))
+   650 *-*      lowerLine = "'LITX"||litNext strip(substr(lowerLine,yy+2))
+   651 *-*      startPos = 6 + length(litNext)
+   652 *-*      iterate
+   653 *-*     end
+   655 *-*    line      = left(line,literalStart-1) "'LITX"litNext substr(line,yy+2)
+   656 *-*    lowerline = left(line,literalStart-1) "'LITX"litNext substr(lowerline,yy+2)
+   657 *-*    startPos = literalStart + 6 + length(litNext)
+   658 *-*    literalStart = 0
+   659 *-*    iterate
+   660 *-*   end
+   662 *-*   /* just a simple literal */
+   663 *-*  litNext = litNext + 1
+   664 *-*  litValue.litNext = litValue /* save literal value */
+   666 *-*  if literalStart = 1
+   667 *-*   then
+       *-*   do
+   668 *-*    if substr(line,yy+1) = '(' /* looks like a function? */
+   669 *-*     then
+       *-*     do /*function... remove left paren...add space before/after like 'FUN# ... */
+   670 *-*      line      = "'FUN"||litNext strip(substr(line,yy+2))
+   671 *-*      lowerLine = "'FUN"||litNext strip(substr(lowerLine,yy+2))
+   672 *-*      startPos = 5 + length(litNext)
+   673 *-*     end
+   674 *-*    else
+       *-*     do /* not a function... add space before/after              like 'LIT# ... */
+   675 *-*      line      = "'LIT"||litNext strip(substr(line,yy+1))
+   676 *-*      lowerLine = "'LIT"||litNext strip(substr(lowerLine,yy+1))
+   677 *-*      startPos = 5 + length(litNext)
+   678 *-*     end
+   679 *-*    literalStart = 0
+   680 *-*    iterate
+   681 *-*   end
+   683 *-*   /* insert literal in middle of line */
+   684 *-*  if substr(line,yy+1,1) = '(' /* looks like a function? */
+   685 *-*   then
+       *-*   do /* function... remove left paren.. add space before/after like 'FUN# ... */
+   686 *-*    line      = left(line,literalStart-1)      "'FUN"||litnext substr(line,yy+2)
+   687 *-*    lowerLine = left(lowerLine,LiteralStart-1) "'FUN"||litnext substr(lowerLine,yy+2)
+   688 *-*    startPos = literalStart + 5 + length(litNext)
+   689 *-*   end
+   690 *-*  else
+       *-*   do /* not a function... add space before/after               like 'LIT# ... */
+   691 *-*    line      = left(line,literalStart-1)      "'LIT"||litnext substr(line,yy+1)
+   692 *-*    lowerLine = left(lowerLine,LiteralStart-1) "'LIT"||litnext substr(lowerLine,yy+1)
+   693 *-*    startPos = literalStart + 5 + length(litNext)
+   694 *-*   end
+   695 *-*  literalStart = 0
+   696 *-*  iterate
+   697 *-* end
+   699 *-* /* now comments have been removed */
+   700 *-* /* literals changed to 'LIT'      */
+   701 *-* if line = ''
+       *-*  then
+       *-*  return
+   703 *-*  /* handle label(s), and if found, remove them from line */
+   704 *-* do forever
+   705 *-*  line = strip(line)
+   706 *-*  if line = ''
+       *-*   then
+       *-*   return
+   708 *-*  if pos(':',line) = 0
+   709 *-*   then
+       *-*   leave
+   711 *-*  parse var line varX ':' rest
+   712 *-*  if words(varx) = 1
+   713 *-*   then
+       *-*   if datatype(varx,'s') = 1
+   714 *-*    then
+       *-*    do
+   715 *-*     call c0470LabelDefine /* define this internal label */
+   716 *-*     line = rest           /* remove label:              */
+   717 *-*     iterate               /* continue looking for more labels */
+   718 *-*    end
+   719 *-*   else
+       *-*    leave /* we've removed all labels, line variable set correctly */
+   720 *-*  else
+       *-*   leave    /* we've removed all labels, line variable set correctly */
+   721 *-* end
+   722 *-* line = strip(line)
+   723 *-* if line = ''
+       *-*  then
+       *-*  return
+   727 *-*  /* ===>  comments, if any, now removed */
+   728 *-*  /* ===>  literals changed to 'LIT'     */
+   729 *-*  /* ===>  scientific notation #E# change to # before E   */
+   730 *-*  /* ===>  scientific notation #E+# changed to # before E */
+   731 *-*  /* ===>  scientific notation #E-# changed to # before E */
+   732 *-* call c0100ParseStatement
+   733 *-* return
+   735 *-* c0100ParseStatement:
+   736 *-* /* handle statement */
+   737 *-* /* Note:   to handle if expression THEN statement      */
+   738 *-* /*                   or else statement                 */
+   739 *-* /*                   or when expression THEN statement */
+   740 *-* /*         we need the c0100var loop                   */
+   741 *-* /* look at line, rid us of scientific notation; don't want extra variable 'E' in xref */
+   742 *-* /* for scientic notation just get rid of E# or E+# or E-# (keep preceding #)          */
+   743 *-* /*                                                                                    */
+   744 *-* /* ---------------------------------------------------------------------------------- */
+   746 *-* /* handle first symbol in line:  */
+   747 *-* /*    1)  an assignment statement*/
+   748 *-* /*    2)  a rexx statement       */
+   749 *-* /*    3)  or a command for env.  */
+   751 *-* if debug = 'ON'
+   752 *-*  then
+       *-*  do
+   753 *-*   say 'debug:     lowerLine="'lowerLine'"'
+   754 *-*   say 'debug:          line="'line'"'
+   755 *-*  end
+   758 *-* rexxStmt = ''     /* assume not processing a rexx statement  */
+   759 *-* if left(line,4) = "'LIT"
+   760 *-*  then
+       *-*  nop /* can't be assignment and/or rexx statement */
+   761 *-* else
+       *-*  do
+   762 *-*   x = verify(line'+',validSymbolChars,,1) /* find where it is no longer a symbol*/
+   763 *-*   if x = 1 , /* = 1, it's not a symbol */                                     | pos(left(line,1),'ABCDEFGHIJKLMNOPQRSTUV
+WXYZ_?!') = 0 /* variable/stem had to start with one of these*/
+   765 *-*    then
+       *-*    nop /* can't be an assignment stmt (has to start with a variable and/or stem */
+   766 *-*   else
+       *-*    do /* it's the start of a symbol & symbol looks like a variable and/or stem */
+   767 *-*     /* we have start of a symbol   */
+   769 *-*     /* but it could be an assignment statement */
+   770 *-*     /*              or an rexx       statement */
+   771 *-*     /*              or a command for envirnoment*/
+   772 *-*     theSymbol = substr(line,1,x-1) /* we have stem and/or variable (or rexx stmt)*/
+   773 *-*     if substr(line,x,1) = '='   , /* looks like variable/stem = something ? */          & substr(line,x,2) <> '=='   /*
+... except variable/stem == somthing is not an assignment */
+   775 *-*      then
+       *-*      do
+   776 *-*       /* it's an assignment statement; handle it and return   */
+   777 *-*       varx = theSymbol
+   778 *-*       call c0500AddVarStemAssignment /* varx being assigned a value */
+   780 *-*       line = strip(substr(line,x+1))
+   781 *-*       if line <> ''
+   782 *-*        then
+       *-*        call c0300ParseRemaining /* expression to be evaluated */
+   783 *-*       return
+   784 *-*      end
+   785 *-*     else
+       *-*      if substr(line,x,1) = ' ' /* could be a rexx stmt or an assignment statement or command */
+   786 *-*       then
+       *-*       do
+   787 *-*        y = verify(line'+',' ',,x)      /* find next position of non-blank after x */
+   788 *-*        if substr(line,y,1) = '='     , /* looks like an assignment statement? */               & substr(line,y,2) <> '==
+'   /* ... == (says its not)               */
+   790 *-*         then
+       *-*         do
+   791 *-*          /* it's an assignment statement; handle it and return   */
+   792 *-*          varx = theSymbol
+   793 *-*          call c0500AddVarStemAssignment /* varx being assigned a value */
+   795 *-*          line = strip(substr(line,y+1))
+   796 *-*          if line <> ''
+   797 *-*           then
+       *-*           call c0300ParseRemaining /* expression to be evaluated */
+   798 *-*          return
+   799 *-*         end
+   800 *-*       end
+   802 *-*       /* could be a rexx statement */
+   803 *-*     if rexxStmt.theSymbol = 1
+   804 *-*      then
+       *-*      rexxStmt = theSymbol /* it is, set rexxStmt to theSymbol */
+   805 *-*    end
+   806 *-*  end
+   808 *-* if rexxStmt <> ''
+   809 *-*  then
+       *-*  do /* we know we are processing a rexx statement. */
+   810 *-*   /* start processing REXX statements */
+   811 *-*   /* -------------------------------- */
+   812 *-*   if rexxStmt = 'ADDRESS'
+   813 *-*    then
+       *-*    do
+   814 *-*     parse var line . line /* remove ADDRESS */
+   815 *-*     if left(line,6) = 'VALUE'
+   816 *-*      then
+       *-*      line = strip(substr(line,6))
+   818 *-*     if line = ''
+       *-*      then
+       *-*      return
+   819 *-*     call c0300ParseRemaining /* parse line for references */
+   820 *-*     return
+   821 *-*    end
+   822 *-*   else
+       *-*    if rexxStmt = 'ARG'
+   823 *-*     then
+       *-*     do
+   824 *-*      parse var line . template /* remove ARG */
+   825 *-*      call c0325TemplateAssignments /* handle parse template */
+   826 *-*      return
+   827 *-*     end
+   828 *-*    else
+       *-*     if rexxStmt = 'CALL'
+   829 *-*      then
+       *-*      do
+   830 *-*       parse var line . line /* remove 'call' from line */
+   831 *-*       if left(line,4) = 'OFF'
+   832 *-*        then
+       *-*        return /* since valid syntax, must all be valid keywords, just return */
+   833 *-*       if left(line,3) = 'ON' /* this may specify a "trapname" */
+   834 *-*        then
+       *-*        do
+   835 *-*         parse var Line onx verbx namex trapname
+   836 *-*         /* verbx must have been ERROR, FAILURE or HALT ... for rexx to like syntax */
+   837 *-*         /* if trapname <> '' then namex must have been NAME ... for rexx to like syntax */
+   838 *-*         if trapname <> ''
+   839 *-*          then
+       *-*          do
+   840 *-*           if left(trapName,4) = "'LIT"
+   841 *-*            then
+       *-*            do
+   842 *-*             parse var trapName . 'LIT' litNum "'" .
+   843 *-*             varX = litValue.Litnum
+   844 *-*            end
+   845 *-*           else
+       *-*            varX = strip(trapName)
+   846 *-*           varx = varx '(CALL ON' verbx')'
+   847 *-*           call c0400CallReference
+   848 *-*           return /* and we're done here */
+   849 *-*          end
+   850 *-*         else
+       *-*          do
+   851 *-*           varx = verbx '(CALL ON' verbx')'
+   852 *-*           call c0400CallReference
+   853 *-*           return /* and we're done here */
+   854 *-*          end
+   855 *-*        end
+   856 *-*       parse var line namex expression
+   857 *-*       if left(namex,4) = "'LIT"
+   858 *-*        then
+       *-*        do
+   859 *-*         parse var namex . 'LIT' litNum "'" .
+   860 *-*         varX = litValue.LitNum
+   861 *-*         line = strip(expression)
+   862 *-*        end
+   863 *-*       else
+       *-*        do
+   864 *-*         x = verify(line'+',validSymbolChars,,1) /* find where it is no longer a symbol*/
+   865 *-*         varX = left(line,x-1)
+   866 *-*         line = strip(substr(line,x))
+   867 *-*        end
+   868 *-*       call C0400CallReference /* reference call to routine in "varx" */
+   870 *-*       call c0300ParseRemaining
+   871 *-*       return
+   872 *-*      end
+   873 *-*     else
+       *-*      if rexxStmt = 'DO'
+   874 *-*       then
+       *-*       do
+   876 *-*        doLine = subword(line,2)  /* start with everything after "DO" */
+   878 *-*        if doLine = '' | doline = 'FOREVER'
+   879 *-*         then
+       *-*         return  /* nothing more to do */
+   881 *-*        if word(doline,1) = 'WHILE' ,          | word(doline,1) = 'UNTIL'
+   883 *-*         then
+       *-*         do
+   884 *-*          /* it began with WHILE expr or UNTIL expr; handle it quickly */
+   885 *-*          parse var doline . line
+   886 *-*          if line <> ''
+   887 *-*           then
+       *-*           call c0300ParseRemaining
+   888 *-*          return
+   889 *-*         end
+   891 *-*        if subword(doline,1,2) = 'FOREVER WHILE' ,          | subword(doline,1,2) = 'FOREVER UNTIL'
+   893 *-*         then
+       *-*         do
+   894 *-*          /* remove 'forever while' or 'forever until' and process remaining expression */
+   895 *-*          parse var doline . . line
+   896 *-*          if line <> ''
+   897 *-*           then
+       *-*           call c0300ParseRemaining
+   898 *-*          return
+   899 *-*         end
+   901 *-*         /* figure out if we have a conditional expression (and remove word) */
+   902 *-*         /* ---------------------------------------------------------------- */
+   903 *-*        x1 = wordpos('WHILE',doline 'WHILE') /* note:  illegal to have both WHILE and UNTIL in same do stmt */
+   904 *-*        x2 = wordpos('UNTIL',doline 'UNTIL') /* note:  illegal to have both WHILE and UNTIL in same do stmt */
+   906 *-*        if x1 < x2
+   907 *-*         then
+       *-*         doline = subword(doline,1,x1-1) subword(doline,x1+1) /* just make longer expression, remove WHILE */
+   908 *-*        else
+       *-*         if x1 > x2
+   909 *-*          then
+       *-*          doline = subword(doline,1,x2-1) subword(doline,x2+1) /* just make longer expression, remove UNTIL */
+   912 *-*          /* now, let's look at 'repetitor */
+   913 *-*          /* ----------------------------- */
+   914 *-*        repetitor = doLine
+   915 *-*        if repetitor = '' | repetitor = 'FOREVER'
+   916 *-*         then
+       *-*         return
+   918 *-*        parse var repetitor namex '=' doRest
+   919 *-*        if namex <> '' & f9920VerifyRexxSymbol(nameX,'S') = 1 ,                                                & dorest <
+> ''                                       ,          & left(strip(doRest),1) <> '=' /* variable/Stem '=' expri (not == expr) */
+   922 *-*         then
+       *-*         do
+   923 *-*          /* we've got:  do name=expri <TO exprt> <BY exprb> <FOR exprf> */
+   924 *-*          /* ... eliminate 'TO' 'BY' or 'FOR' */
+   925 *-*          /* and use one big expression */
+   927 *-*          /* namex used in an assignement */
+   928 *-*          varx = namex
+   929 *-*          call c0500AddVarStemAssignment /* add assignment reference */
+   931 *-*          /* TO exprt (BY exprb) or (FOR exprf) can occur in any order */
+   932 *-*          x = min(wordpos('TO',dorest' TO'),wordpos('BY',dorest' BY'),wordpos('FOR',dorest' FOR'))
+   934 *-*          if x > words(dorest)
+   935 *-*           then
+       *-*           do
+   936 *-*            line = strip(dorest)
+   937 *-*            if line <> ''
+   938 *-*             then
+       *-*             call c0300ParseRemaining /* parse expri for references */
+   939 *-*            return
+   940 *-*           end
+   942 *-*          doKeyword = word(dorest,x)    /* remember keyword (TO, BY or FOR */
+   943 *-*          dorest = subword(dorest,1,x-1) subword(dorest,x+1) /* just remove keyword, make longer expression */
+   945 *-*          /* find end of next expression, at unused 'TO' 'BY' or 'FOR' */
+   946 *-*          if doKeyword = 'TO'
+   947 *-*           then
+       *-*           x = min(wordpos('BY',dorest' BY'),wordpos('FOR',dorest' FOR'))
+   948 *-*          else
+       *-*           if doKeyword = 'BY'
+   949 *-*            then
+       *-*            x = min(wordpos('TO',dorest' TO'),wordpos('FOR',dorest' FOR'))
+   950 *-*           else
+       *-*            if doKeyword = 'FOR'
+   951 *-*             then
+       *-*             x = min(wordpos('TO',dorest' TO'),wordpos('BY',dorest' BY'))
+   952 *-*            else
+       *-*             x = words(dorest) + 1 /* this can't happen, but looks good */
+   954 *-*          if x > words(dorest)
+   955 *-*           then
+       *-*           do /* just one more expression to process */
+   956 *-*            line = strip(dorest)
+   957 *-*            if line <> ''
+   958 *-*             then
+       *-*             call c0300ParseRemaining /* process this expression */
+   959 *-*            return
+   960 *-*           end
+   962 *-*           /* multiple expressions */
+   963 *-*           /* ... just remove keyword... and make a longer expression */
+   964 *-*          doKeyword = doKeyword word(dorest,x)
+   965 *-*          dorest = subword(dorest,1,x-1) subword(dorest,x+1) /* just remove keyword, make longer expression */
+   967 *-*          /* find end of next expression, at unused 'TO' 'BY' or 'FOR' */
+   968 *-*          if wordpos('TO',doKeyword)  = 0
+       *-*           then
+       *-*           x = wordpos('TO',dorest)
+   969 *-*          else
+       *-*           if wordpos('BY',doKeyword)  = 0
+       *-*            then
+       *-*            x = wordpos('BY',dorest)
+   970 *-*           else
+       *-*            if wordpos('FOR',doKeyword) = 0
+       *-*             then
+       *-*             x = wordpos('FOR',dorest)
+   971 *-*            else
+       *-*             x = 0 /* just looks good */
+   973 *-*          if x > 0
+   974 *-*           then
+       *-*           dorest = subword(dorest,1,x-1) subword(dorest,x+1) /* just remove keyword, make longer expression */
+   976 *-*          line = strip(dorest)
+   977 *-*          if line <> ''
+   978 *-*           then
+       *-*           call c0300ParseRemaining /* parse references to one big expression */
+   979 *-*          return
+   980 *-*         end
+   981 *-*        else
+       *-*         do
+   982 *-*          line = strip(repetitor)
+   983 *-*          if line = ''
+   984 *-*           then
+       *-*           return
+   986 *-*          call c0300ParseRemaining /* parse line for references */
+   987 *-*          return
+   988 *-*         end
+   989 *-*       end
+   990 *-*      else
+       *-*       if rexxStmt = 'END' /* end could be for "do" or for "select" */
+   991 *-*        then
+       *-*        do
+   992 *-*         parse var line . line . /* remove 'end' */
+   993 *-*         if line <> ''
+   994 *-*          then
+       *-*          call c0300ParseRemaining /* might have been:  end <name> */
+   995 *-*         return
+   996 *-*        end
+   997 *-*       else
+       *-*        if rexxStmt = 'DROP'
+   998 *-*         then
+       *-*         do
+   999 *-*          parse var line . line
+  1000 *-*          line = translate(line,'  ','()') /* remove parens */
+  1001 *-*          call c0300ParseRemaining /* parse line for references */
+  1002 *-*          return
+  1003 *-*         end
+  1004 *-*        else
+       *-*         if rexxStmt = 'EXIT'
+  1005 *-*          then
+       *-*          do
+  1006 *-*           parse var line . line
+  1007 *-*           call c0300ParseRemaining /* parse line for references */
+  1008 *-*           return
+  1009 *-*          end
+  1010 *-*         else
+       *-*          if rexxStmt = 'IF'
+  1011 *-*           then
+       *-*           do
+  1012 *-*            parse var line . line
+  1013 *-*            call c0300ParseRemaining /* parse line for references */
+  1014 *-*            return
+  1015 *-*           end
+  1016 *-*          else
+       *-*           if rexxStmt = 'THEN' /* it's either just "THEN" or "THEN ," */
+  1017 *-*            then
+       *-*            return
+  1018 *-*           else
+       *-*            if rexxStmt = 'ELSE' /* it's either just "ELSE" or "ELSE ," */
+  1019 *-*             then
+       *-*             return
+  1020 *-*            else
+       *-*             if rexxStmt = 'INTERPRET'
+  1021 *-*              then
+       *-*              do
+  1022 *-*               parse var line . line
+  1023 *-*               call c0300ParseRemaining /* parse line for references */
+  1024 *-*               return
+  1025 *-*              end
+  1026 *-*             else
+       *-*              if rexxStmt = 'ITERATE'
+  1027 *-*               then
+       *-*               do
+  1028 *-*                parse var line . line
+  1029 *-*                call c0300ParseRemaining /* parse line for references */
+  1030 *-*                return
+  1031 *-*               end
+  1032 *-*              else
+       *-*               if rexxStmt = 'LEAVE'
+  1033 *-*                then
+       *-*                do
+  1034 *-*                 parse var line . line
+  1035 *-*                 call c0300ParseRemaining /* parse line for references */
+  1036 *-*                 return
+  1037 *-*                end
+  1038 *-*               else
+       *-*                if rexxStmt = 'NOP'
+  1039 *-*                 then
+       *-*                 return
+  1040 *-*                else
+       *-*                 if rexxStmt = 'NUMERIC'
+  1041 *-*                  then
+       *-*                  do
+  1042 *-*                   parse var line word1 word2 word3 .
+  1044 *-*                   if word2 word3 = 'FORM SCIENTIFIC'
+       *-*                    then
+       *-*                    return
+  1045 *-*                   if word2 word3 = 'FORM ENGINEERING'
+       *-*                    then
+       *-*                    return
+  1047 *-*                   if word2 word3 = 'FORM VALUE'
+       *-*                    then
+       *-*                    parse var line . . . line
+  1048 *-*                   else
+       *-*                    if word2  = 'FORM'
+       *-*                     then
+       *-*                     parse var line . . line
+  1049 *-*                    else
+       *-*                     if word2  = 'DIGITS'
+       *-*                      then
+       *-*                      parse var line . . line
+  1050 *-*                     else
+       *-*                      if word2  = 'FUZZ'
+       *-*                       then
+       *-*                       parse var line . . line
+  1051 *-*                      else
+       *-*                       return /* this looks wrong, but can't happen with syntax checking*/
+  1053 *-*                   call c0300ParseRemaining /* parse line for references */
+  1054 *-*                   return
+  1055 *-*                  end
+  1056 *-*                 else
+       *-*                  if rexxStmt = 'OPTIONS'
+  1057 *-*                   then
+       *-*                   return /* we don't handle the options statement */
+  1058 *-*                  else
+       *-*                   if rexxStmt = 'PARSE'
+  1059 *-*                    then
+       *-*                    do
+  1060 *-*                     parse var line . line      /* remove 'parse' from line */
+  1062 *-*                     if word(line,1) = 'UPPER'
+  1063 *-*                      then
+       *-*                      parse var line . line /* remove 'upper' from line */
+  1065 *-*                     if wordpos(word(line,1),'ARG EXTERNAL NUMERIC PULL SOURCE VERSION') > 0
+  1066 *-*                      then
+       *-*                      do
+  1067 *-*                       parse var line . template     /* get template */
+  1068 *-*                       call c0325TemplateAssignments /* handle parse template */
+  1069 *-*                       return
+  1070 *-*                      end
+  1071 *-*                     if word(line,1) = 'VALUE'
+  1072 *-*                      then
+       *-*                      do
+  1073 *-*                       /* parse ... VALUE expression WITH template */
+  1074 *-*                       parse var line . expression ' WITH ' template
+  1075 *-*                       line = expression
+  1076 *-*                       call c0300ParseRemaining      /* handle references in expression */
+  1078 *-*                       call c0325TemplateAssignments /* handle parse template */
+  1079 *-*                       return
+  1080 *-*                      end
+  1081 *-*                     if word(line,1) = 'VAR'
+  1082 *-*                      then
+       *-*                      do
+  1083 *-*                       /* parse ... VAR name template */
+  1084 *-*                       parse var line . name template
+  1085 *-*                       line = name
+  1086 *-*                       call c0300ParseRemaining      /* handle references in expression */
+  1088 *-*                       call c0325TemplateAssignments /* handle parse template */
+  1089 *-*                       return
+  1090 *-*                      end
+  1091 *-*                     return /* this would be invalid syntax (which can't happen) but it looks better */
+  1092 *-*                    end
+  1093 *-*                   else
+       *-*                    if rexxStmt = 'PROCEDURE'
+  1094 *-*                     then
+       *-*                     do
+  1095 *-*                      parse var line . line      /* remove 'procedure' from line */
+  1097 *-*                      if word(line,1) = 'EXPOSE'
+  1098 *-*                       then
+       *-*                       do
+  1099 *-*                        parse var line . line /* remove 'expose' from line */
+  1100 *-*                        line = translate(line,'  ','()') /* remove any parens from line */
+  1101 *-*                        if line <> ''
+  1102 *-*                         then
+       *-*                         do
+  1103 *-*                          exposeRef = 1 /* turn on now */
+  1104 *-*                          template = line
+  1105 *-*                          call c0326TemplateList   /* handle references in rest of line */
+  1106 *-*                          exposeRef = 0 /* turn off now */
+  1107 *-*                         end
+  1108 *-*                        return
+  1109 *-*                       end
+  1110 *-*                      return
+  1111 *-*                     end
+  1112 *-*                    else
+       *-*                     if rexxStmt = 'PULL'
+  1113 *-*                      then
+       *-*                      do
+  1114 *-*                       parse var line . template  /* remove 'pull' from line, put rest into template */
+  1115 *-*                       if template <> ''
+  1116 *-*                        then
+       *-*                        call c0325TemplateAssignments /* handle parse template */
+  1117 *-*                       return
+  1118 *-*                      end
+  1119 *-*                     else
+       *-*                      if rexxStmt = 'PUSH'
+  1120 *-*                       then
+       *-*                       do
+  1121 *-*                        parse var line . line      /* remove 'push' from line */
+  1122 *-*                        if line <> ''
+  1123 *-*                         then
+       *-*                         call c0300ParseRemaining /* handle references in expression */
+  1124 *-*                        return
+  1125 *-*                       end
+  1126 *-*                      else
+       *-*                       if rexxStmt = 'QUEUE'
+  1127 *-*                        then
+       *-*                        do
+  1128 *-*                         parse var line . line      /* remove 'queue' from line */
+  1129 *-*                         if line <> ''
+  1130 *-*                          then
+       *-*                          call c0300ParseRemaining /* handle references in expression */
+  1131 *-*                         return
+  1132 *-*                        end
+  1133 *-*                       else
+       *-*                        if rexxStmt = 'RETURN'
+  1134 *-*                         then
+       *-*                         do
+  1135 *-*                          parse var line . line      /* remove 'return' from line */
+  1136 *-*                          if line <> ''
+  1137 *-*                           then
+       *-*                           call c0300ParseRemaining /* handle references in expression */
+  1138 *-*                          return
+  1139 *-*                         end
+  1140 *-*                        else
+       *-*                         if rexxStmt = 'SAY'
+  1141 *-*                          then
+       *-*                          do
+  1142 *-*                           parse var line . line      /* remove 'say' from line */
+  1143 *-*                           if line <> ''
+  1144 *-*                            then
+       *-*                            call c0300ParseRemaining /* handle references in expression */
+  1145 *-*                           return
+  1146 *-*                          end
+  1147 *-*                         else
+       *-*                          if rexxStmt = 'SELECT'
+  1148 *-*                           then
+       *-*                           do
+  1149 *-*                            parse var line . ' WHEN ' expression ' THEN ' statement
+  1150 *-*                            if expression <> ''
+  1151 *-*                             then
+       *-*                             do
+  1152 *-*                              line = expression
+  1153 *-*                              call c0300ParseRemaining /* handle references in expression */
+  1155 *-*                              if statement <> ''
+  1156 *-*                               then
+       *-*                               do
+  1157 *-*                                line = statement
+  1158 *-*                                call c0100ParseStatement /* recursive call to ourselves */
+  1159 *-*                               end
+  1160 *-*                             end
+  1161 *-*                            return
+  1162 *-*                           end
+  1163 *-*                          else
+       *-*                           if rexxStmt = 'UPPER'
+  1164 *-*                            then
+       *-*                            do
+  1165 *-*                             parse var line . template /* get template */
+  1166 *-*                             if template <> ''
+  1167 *-*                              then
+       *-*                              call c0325TemplateAssignments /* handle parse template */
+  1168 *-*                             return
+  1169 *-*                            end
+  1170 *-*                           else
+       *-*                            if rexxStmt = 'WHEN'
+  1171 *-*                             then
+       *-*                             do
+  1172 *-*                              parse var line . line /* remove 'when' from line */
+  1173 *-*                              if line <> ''
+  1174 *-*                               then
+       *-*                               call c0300ParseRemaining /* handle references in expression */
+  1175 *-*                              return
+  1176 *-*                             end
+  1177 *-*                            else
+       *-*                             if rexxStmt = 'OTHERWISE'
+  1178 *-*                              then
+       *-*                              return /* trace 's' puts 'select' by itself.  "when expression" by itself. "otherwise" by i
+tself. */
+  1179 *-*                             else
+       *-*                              if rexxStmt = 'SIGNAL'
+  1180 *-*                               then
+       *-*                               do
+  1181 *-*                                parse var line . line      /* remove 'signal' from line */
+  1182 *-*                                parse var line word1 word2 word3 word4 word5
+  1183 *-*                                if word1 = 'VALUE'
+  1184 *-*                                 then
+       *-*                                 do
+  1185 *-*                                  parse var line . line /* remove 'value' */
+  1186 *-*                                  call c0300ParseRemaining /* handle references in expression */
+  1187 *-*                                  return
+  1188 *-*                                 end
+  1189 *-*                                if word1 = 'OFF'
+  1190 *-*                                 then
+       *-*                                 do
+  1191 *-*                                  parse var line . sType . /* sType will = ERROR, FAILURE, HALT, NOVALUE or SYNTAX */
+  1192 *-*                                  varX = sType '(SIGNAL OFF' stype')'
+  1193 *-*                                  call c0430SignalReference
+  1194 *-*                                  return
+  1195 *-*                                 end
+  1196 *-*                                if word1 = 'ON'
+  1197 *-*                                 then
+       *-*                                 do
+  1198 *-*                                  /* sType will = ERROR, FAILURE, HALT, NOVALUE or SYNTAX */
+  1199 *-*                                  /* if namex and/or trapname not null; then NAMEX=NAME and trapname will be routine for
+sType */
+  1200 *-*                                  parse var line . sType namex trapname
+  1201 *-*                                  if namex = 'NAME' & trapname <> ''
+  1202 *-*                                   then
+       *-*                                   do
+  1203 *-*                                    varx = trapname '(SIGNAL ON' stype trapname')'
+  1204 *-*                                    call c0430SignalReference
+  1205 *-*                                   end
+  1206 *-*                                  else
+       *-*                                   do
+  1207 *-*                                    varx = stype '(SIGNAL ON' stype')'
+  1208 *-*                                    call c0430SignalReference
+  1209 *-*                                   end
+  1210 *-*                                  return
+  1211 *-*                                 end
+  1212 *-*                                 /* line has label */
+  1213 *-*                                parse var line varx .
+  1214 *-*                                if varx <> ''
+  1215 *-*                                 then
+       *-*                                 call c0430SignalReference /* generate reference for: signal labelname */
+  1216 *-*                                return
+  1217 *-*                               end
+  1218 *-*                              else
+       *-*                               if rexxStmt = 'TRACE'
+  1219 *-*                                then
+       *-*                                return
+  1220 *-*  end /* end of handling rexx commands */
+  1222 *-*  /* anything else is just an expression/command for the enviornment */
+  1223 *-* call c0300ParseRemaining
+  1224 *-* return
+  1226 *-* c0300ParseRemaining:
+  1227 *-* /* this is an expression */
+  1228 *-* /*    1.  let's remove operators  */
+  1229 *-* /*    2.  let's remove functions  */
+  1230 *-* /*    3.  let's remove literals   */
+  1231 *-* /* then look for variables and reference them */
+  1233 *-* /* remove the "easy" operators to remove */
+  1234 *-* line = translate(line,'            ','+-*/%=<>,|&¬\;)')
+  1235 *-* /*   say 'rexxline='rexxline 'line="'line'"' */
+  1237 *-* /* now, (easier) find and remove literals and (literal)functions */
+  1238 *-* /*   while removing 'LIT### or 'FUN### from expression           */
+  1239 *-* /* ------------------------------------------------------------- */
+  1240 *-* do while pos("'",line) > 0
+  1242 *-*  /* starting at "'" get LIT### or FUN### */
+  1243 *-*  /* ...and remove it from 'line'         */
+  1244 *-*  parse var line leftLine "'" litFun rightline
+  1245 *-*  line = leftLine rightLine
+  1247 *-*  /* either LIT### or FUN### */
+  1248 *-*  if left(litFun,3) = 'LIT'
+  1249 *-*   then
+       *-*   iterate
+  1251 *-*   /* FUN### */
+  1252 *-*  parse var litfun . 4 functionNum .
+  1253 *-*  varx = litValue.functionNum /* reference the function name */
+  1254 *-*  call c0415FunctionReference
+  1255 *-* end
+  1257 *-* /* now, find variable/stem and/or built=in or internal functions */
+  1258 *-* /* ------------------------------------------------------------- */
+  1259 *-* line = strip(line)
+  1260 *-* do forever
+  1261 *-*  if line = ''
+  1262 *-*   then
+       *-*   return
+  1264 *-*  line = strip(line)
+  1265 *-*  if left(line,1) = '('
+  1266 *-*   then
+       *-*   do
+  1267 *-*    line = strip(substr(line,2))
+  1268 *-*    iterate
+  1269 *-*   end
+  1271 *-*  x = min(pos(' ',line' '),pos('(',line'('))
+  1272 *-*  if substr(line,x,1) = '('
+  1273 *-*   then
+       *-*   do                            /* token(something*/
+  1274 *-*    token = left(line,x)            /* token = token( */
+  1275 *-*    line  = strip(substr(line,x+1)) /* line  = something */
+  1276 *-*   end
+  1277 *-*  else
+       *-*   parse var line token line     /* token something*/
+  1279 *-*  if right(token,1) = '('
+  1280 *-*   then
+       *-*   do
+  1281 *-*    /* potential built-in and/or internal function */
+  1282 *-*    varX = substr(token,1,length(token)-1)
+  1283 *-*    if f9920VerifyRexxSymbol(varX,'S') = 1   /* valid symbol */
+  1284 *-*     then
+       *-*     do
+  1285 *-*      /* token looks good */
+  1286 *-*      if pos('.',varX) = 0
+  1287 *-*       then
+       *-*       do
+  1288 *-*        /* we have a built-in or internal function call */
+  1289 *-*        varx = substr(token,1,length(token)-1)
+  1290 *-*        call c0415FunctionReference
+  1291 *-*        line = strip(line)
+  1292 *-*        iterate
+  1293 *-*       end
+  1294 *-*       /* we have a stem variable followed by a ( paren */
+  1295 *-*       /* ... just ignore paren and handle stem         */
+  1296 *-*      call c0510AddVarStemReference
+  1297 *-*      line = strip(line)
+  1298 *-*      iterate
+  1299 *-*     end
+  1301 *-*    iterate
+  1302 *-*   end
+  1305 *-*   /* if token is a valid variable/stem then reference it */
+  1306 *-*   /* --------------------------------------------------- */
+  1307 *-*  varX = token
+  1308 *-*  if f9920VerifyRexxSymbol(varX,'S') = 1   /* valid symbol */
+  1309 *-*   then
+       *-*   do
+  1310 *-*    call c0510AddVarStemReference /* add reference */
+  1311 *-*    line = strip(line)
+  1312 *-*    iterate
+  1313 *-*   end
+  1315 *-*  iterate
+  1316 *-* end
+  1318 *-* return
+  1320 *-* c0325TemplateAssignments:
+       *-* /* these variables are assigned values */
+  1321 *-* /* this is an template   */
+  1322 *-* /*    1.  let's remove operators  */
+  1323 *-* /*    2.  let's remove literals   */
+  1324 *-* /* then look for variables and reference them */
+  1326 *-* /* remove the operators (but not parens) */
+  1327 *-* template = translate(template,'              ','+-*/%=<>,|&;,')
+  1329 *-* /* look for and remove (var) */
+  1330 *-* /* these are references, not assignments */
+  1331 *-* do while pos('(',template) > 0
+  1332 *-*  parse var template leftTemplate '(' expression ')' rightTemplate
+  1333 *-*  template = leftTemplate rightTemplate
+  1335 *-*  do while expression <> ''
+  1336 *-*   parse var expression word1 expression
+  1337 *-*   if left(word1,1) = "'"
+  1338 *-*    then
+       *-*    iterate
+  1340 *-*   if f9920VerifyRexxSymbol(word1,'S') = 1 /* valid symbol? */
+  1341 *-*    then
+       *-*    do
+  1342 *-*     varX = word1
+  1343 *-*     call c0510AddVarStemReference /* reference var */
+  1344 *-*    end
+  1345 *-*  end
+  1346 *-* end
+  1348 *-* /* we turned literals into 'LIT just ignore those */
+  1349 *-* do while template <> ''
+  1350 *-*  parse var template word1 template
+  1351 *-*  if left(word1,1) = "'"
+  1352 *-*   then
+       *-*   iterate
+  1353 *-*  if f9920VerifyRexxSymbol(word1,'S') = 1 /* valid symbol */
+  1354 *-*   then
+       *-*   do
+  1355 *-*    /* we have a variable / stem reference */
+  1356 *-*    varX = word1
+  1357 *-*    call c0500AddVarStemAssignment /* this is assigned a value */
+  1358 *-*   end
+  1359 *-* end
+  1360 *-* return
+  1362 *-* c0326TemplateList:
+       *-* /* these variables are referenced */
+  1363 *-* /* this is an template   */
+  1364 *-* /*    1.  let's remove operators  */
+  1365 *-* /*    2.  let's remove literals   */
+  1366 *-* /* then look for variables and reference them */
+  1368 *-* /* remove the operators */
+  1369 *-* template = translate(template,'                ','+-*/%=<>,|&;,()')
+  1372 *-* /* we turned literals into 'LIT just ignore those */
+  1373 *-* do while template <> ''
+  1374 *-*  parse var template word1 template
+  1375 *-*  if left(word1,1) = "'"
+  1376 *-*   then
+       *-*   iterate
+  1377 *-*  if f9920VerifyRexxSymbol(word1,'S') = 1 /* valid symbol */
+  1378 *-*   then
+       *-*   do
+  1379 *-*    /* we have a variable / stem reference */
+  1380 *-*    varX = word1
+  1381 *-*    call c0510AddVarStemReference  /* this variable is being referenced */
+  1382 *-*   end
+  1383 *-* end
+  1384 *-* return
+  1386 *-* /* these routine handle references to a varx subroutine:  CALL varx        */
+  1387 *-* /*                                 to a varx function:    varx()           */
+  1388 *-* /*                                 to a signal:           SIGNAL varx      */
+  1389 *-* /*                                 to a signal on:        SIGNAL ON  varx  */
+  1390 *-* /*                                 to a signal off:       SIGNAL OFF varx  */
+  1391 *-* /*                   or defining a label                                   */
+  1393 *-* c0400CallReference:
+  1394 *-* /* make a reference for:  call varx */
+  1395 *-* labelRefx = 'C('rexxline')'
+  1396 *-* call c0450LabelReference
+  1397 *-* return
+  1399 *-* c0415FunctionReference:
+  1400 *-* /* make a reference for function:  varx() */
+  1401 *-* LabelRefx = 'F('rexxline')'
+  1402 *-* call c0450LabelReference
+  1403 *-* return
+  1405 *-* c0430SignalReference:
+  1406 *-* /* make a reference for signal  :  varx   */
+  1407 *-* labelRefx = 'S('rexxline')'
+  1408 *-* call c0450LabelReference
+  1409 *-* return
+  1411 *-* c0450LabelReference:
+  1412 *-* /* code to update label references for calls, functions and/or signals */
+  1413 *-* varX = strip(varX)
+  1414 *-* upper varX
+  1416 *-* /* note:  all valid symbols including numbers, periods, etc, are used "as is" */
+  1417 *-* /* this is a simple variable (label)*/
+  1418 *-* if variablesIndx.varX = 0
+  1419 *-*  then
+       *-*  do /* we need to add variable */
+  1420 *-*   variable = variable + 1
+  1421 *-*   variable.variable = varX
+  1422 *-*   variableLabelRef.variable = labelRefx
+  1423 *-*   /* we need to define quick lookup (index) to find this entry */
+  1424 *-*   variablesIndx.varX = variable        /* create quick index .Varx to # (variable) */
+  1426 *-*   if debug = 'ON'
+  1427 *-*    then
+       *-*    say 'debug:  c0450LabelReference: ('labelRefx') label='varx
+  1429 *-*  end
+  1430 *-* else
+       *-*  do
+  1431 *-*   /* known simple var re-referenced */
+  1432 *-*   /*    this is illegal, but reference it anyway */
+  1433 *-*   /*    this is illegal, but reference it anyway */
+  1434 *-*   indx = variablesINdx.varX
+  1436 *-*   /* make sure we only add one RexxLine reference */
+  1437 *-*   if wordpos(labelRefx,variableLabelRef.indx) = 0
+  1438 *-*    then
+       *-*    do
+  1439 *-*     variableLabelRef.indx = variableLabelRef.indx labelRefx
+  1441 *-*     if debug = 'ON'
+  1442 *-*      then
+       *-*      say 'debug:  c0450LabelReference: ('labelRefx') label='varx
+  1443 *-*    end
+  1444 *-*  end
+  1445 *-* return
+  1447 *-* c0470LabelDefine:
+  1448 *-* /* code to define a label used in the rexx code */
+  1449 *-* varX = strip(varX)
+  1450 *-* upper varX
+  1451 *-* if datatype(varX,'S') <> 1
+  1452 *-*  then
+       *-*  return /* if not a symbol, return */
+  1454 *-*  /* but all symbols including .123 or X.Y.Z etc are allowed */
+  1455 *-*  /* this is a simple variable (label)*/
+  1456 *-* if variablesIndx.varX = 0
+  1457 *-*  then
+       *-*  do /* we need to add variable */
+  1458 *-*   variable = variable + 1
+  1459 *-*   variable.variable = varX             /* remember label */
+  1460 *-*   variableLabelDef.variable= rexxline  /* remember where defined          */
+  1461 *-*   /* we need to define quick lookup (index) to find this entry */
+  1462 *-*   variablesIndx.varX = variable        /* create quick index .Varx to # (variable) */
+  1464 *-*   if debug = 'ON'
+  1465 *-*    then
+       *-*    say 'debug:  c0470LabelDefine: ('rexxline') label='varx
+  1466 *-*  end
+  1467 *-* else
+       *-*  do
+  1468 *-*   /* known simple var re-referenced */
+  1469 *-*   /*    it can be defined multiple times, but only first label used in call/function/signal */
+  1470 *-*   /*    will actually be used.                                                              */
+  1471 *-*   indx = variablesINdx.varX
+  1473 *-*   /* make sure we only add one RexxLine reference */
+  1474 *-*   if wordpos(rexxline,variableLabelDef.indx) = 0
+  1475 *-*    then
+       *-*    do
+  1476 *-*     if words(variableLabelDef.indx) = 1
+  1477 *-*      then
+       *-*      do
+  1478 *-*       /* start of (potentially) many duplicate labels */
+  1479 *-*       variableLabelDef.indx = variableLabelDef.indx ,                                     '///Dup. IGNORED LABEL def''s:
+'
+  1481 *-*      end
+  1482 *-*     variableLabelDef.indx = variableLabelDef.indx rexxline
+  1484 *-*     if debug = 'ON'
+  1485 *-*      then
+       *-*      say 'debug:  c0470LabelDefine: ('rexxline') label='varx
+  1486 *-*    end
+  1487 *-*  end
+  1488 *-* return
+  1491 *-* c0500AddVarStemAssignment:
+  1492 *-* /* this could be a "simple" variable in varx or a "stem" variable being set */
+  1493 *-* /* ... we need to keep track of assignments (and in case of a stem, also    */
+  1494 *-* /* ... variables and/or constants referenced in the stem).                  */
+  1495 *-* /* */
+  1496 *-* varX = strip(varX)
+  1497 *-* upper varX
+  1498 *-* if pos('.',varX) = 0
+  1499 *-*  then
+       *-*  do
+  1500 *-*   /* this is a simple variable */
+  1501 *-*   if variablesIndx.varX = 0
+  1502 *-*    then
+       *-*    do /* we need to add variable */
+  1503 *-*     variable = variable + 1
+  1504 *-*     variable.variable = varX        /* remember variable name */
+  1505 *-*     variableSet.variable = rexxLine /* remember where it was set */
+  1506 *-*     /* we need to define quick lookup (index) to find this entry */
+  1507 *-*     variablesIndx.varX = variable        /* create quick index .Varx to # (variable) */
+  1509 *-*     if debug = 'ON'
+  1510 *-*      then
+       *-*      say 'debug:  c0500AddVarStemAssignment: ('rexxline') var='varx
+  1511 *-*    end
+  1512 *-*   else
+       *-*    do
+  1513 *-*     /* known simple var re-referenced */
+  1514 *-*     indx = variablesINdx.varX
+  1516 *-*     /* make sure we only add one RexxLine reference */
+  1517 *-*     if wordpos(rexxLine,variableSet.indx) = 0
+  1518 *-*      then
+       *-*      do
+  1519 *-*       variableSet.indx = variableSet.indx rexxline
+  1521 *-*       if debug = 'ON'
+  1522 *-*        then
+       *-*        say 'debug:  c0500AddVarStemAssignment: ('rexxline') var='varx
+  1523 *-*      end
+  1524 *-*    end
+  1525 *-*   return
+  1526 *-*  end
+  1528 *-*  /* this is a stem variable */
+  1529 *-* periods = 0
+  1530 *-* pPos = pos('.',varX)
+  1531 *-* do while pPos <> 0
+  1532 *-*  periods = periods + 1
+  1533 *-*  pPos = pos('.',varX,pPos+1)
+  1534 *-* end
+  1536 *-* /* if part of stem is a hard coded # (other than zero), replace with # sign*/
+  1537 *-* parse var varx psuedoVar '.' rest
+  1538 *-* do while rest <> ''
+  1539 *-*  psuedoVar = psuedoVar'.'
+  1540 *-*  parse var rest stemPortion '.' rest
+  1541 *-*  if datatype(stemPortion,'W')
+  1542 *-*   then
+       *-*   if stemPortion == '0'
+  1543 *-*    then
+       *-*    psuedoVar = psuedoVar || '0'
+  1544 *-*   else
+       *-*    psuedoVar = psuedoVar || '#'
+  1545 *-*  else
+       *-*   psuedoVar = psuedoVar || stemPortion
+  1546 *-* end
+  1547 *-* if right(varx,1) = '.'
+  1548 *-*  then
+       *-*  psuedoVar = psuedoVar'.'
+  1550 *-*  /* define psuedoVar for tracking stems */
+  1551 *-* if stemIndx.psuedoVar = 0
+  1552 *-*  then
+       *-*  do
+  1553 *-*   /* add to stem variables */
+  1554 *-*   stem = stem + 1
+  1555 *-*   stemVariable.stem = psuedoVar
+  1556 *-*   stemPeriods.stem  = periods
+  1557 *-*   stemRef.stem= ''
+  1558 *-*   StemAsg.stem= RexxLine
+  1559 *-*   /* we need to define quick lookup (index) to find this psuedoVar */
+  1560 *-*   stemIndx.psuedoVar = stem
+  1562 *-*   if debug = 'ON'
+  1563 *-*    then
+       *-*    say 'debug:  c0500AddVarStemAssignment: ('rexxline') var='psuedoVar
+  1564 *-*  end
+  1565 *-* else
+       *-*  do
+  1566 *-*   /* known stem var re-referenced */
+  1567 *-*   indx = stemIndx.psuedoVar
+  1569 *-*   /* only one RexxLine assignment needed */
+  1570 *-*   if wordpos(rexxLine,stemAsg.indx) = 0
+  1571 *-*    then
+       *-*    do
+  1572 *-*     stemAsg.indx= stemAsg.indx rexxLine
+  1574 *-*     if debug = 'ON'
+  1575 *-*      then
+       *-*      say 'debug:  c0500AddVarStemAssignment: ('rexxline') var='psuedoVar
+  1576 *-*    end
+  1577 *-*  end
+  1579 *-* /* now go thru stem's and "reference" those vars */
+  1580 *-* parse var varX . '.' varX /* throw away top level */
+  1581 *-* do while varX <> ''
+  1582 *-*  parse var varX simpleVar '.' varX /* get next potential stem var */
+  1583 *-*  if f9920VerifyRexxSymbol(simpleVar,'S') = 1 /* if a symbol and not a digit */
+  1584 *-*   then
+       *-*   do
+  1585 *-*    /* add simple variable reference's from the stem */
+  1586 *-*    if variablesIndx.simpleVar = 0
+  1587 *-*     then
+       *-*     do /* we need to add variable */
+  1588 *-*      variable = variable + 1
+  1589 *-*      variable.variable     = simpleVar   /* remember the name */
+  1590 *-*      variableStemSet.variable = rexxline /* remember where it was used to help set stem var */
+  1591 *-*      /* we need to define quick lookup (index) to find this simpleVar */
+  1592 *-*      variablesIndx.simpleVar = variable
+  1594 *-*      if debug = 'ON'
+  1595 *-*       then
+       *-*       say 'debug:  (VarRef In stem) c0500AddVarStemAssignment: ('rexxline') var='simpleVar
+  1596 *-*     end
+  1597 *-*    else
+       *-*     do
+  1598 *-*      /* known simple var re-referenced */
+  1599 *-*      indx = variablesINdx.simpleVar
+  1601 *-*      /* make sure we only add one RexxLine reference */
+  1602 *-*      if wordpos(rexxLine,variableStemRef.indx) = 0
+  1603 *-*       then
+       *-*       do
+  1604 *-*        variableStemSet.indx = variableStemSet.indx rexxline
+  1606 *-*        if debug = 'ON'
+  1607 *-*         then
+       *-*         say 'debug:  (VarRef in stem) c0500AddVarStemAssignment: ('rexxline') var='simpleVar
+  1608 *-*       end
+  1609 *-*     end
+  1610 *-*   end
+  1611 *-* end
+  1612 *-* return
+  1615 *-* c0510AddVarStemReference:
+  1616 *-* /* this could be a "simple" variable in varx or a "stem" variable reference */
+  1617 *-* /* ... we need to keep track of references  (and in case of a stem, also    */
+  1618 *-* /* ... variables and/or constants referenced in the stem).                  */
+  1619 *-* /* */
+  1620 *-* varX = strip(varX)
+  1621 *-* upper varX
+  1622 *-* if pos('.',varX) = 0
+  1623 *-*  then
+       *-*  do
+  1624 *-*   /* this is a simple variable */
+  1625 *-*   if variablesIndx.varX = 0
+  1626 *-*    then
+       *-*    do /* we need to add variable */
+  1627 *-*     variable = variable + 1
+  1628 *-*     variable.variable = varX              /* remember the name */
+  1629 *-*     if exposeRef = 1
+  1630 *-*      then
+       *-*      variableExposeRef.variable = rexxLine /* remember line # in reference */
+  1631 *-*     else
+       *-*      variableRef.variable       = rexxLine /* remember line # in reference */
+  1632 *-*     /* we need to define quick lookup (index) to find this entry */
+  1633 *-*     variablesIndx.varX = variable        /* create quick index .Varx to # (variable) */
+  1635 *-*     if debug = 'ON'
+  1636 *-*      then
+       *-*      say 'debug:  (Var.Ref) c0510AddVarStemReference: ('rexxline') var='varx
+  1637 *-*    end
+  1638 *-*   else
+       *-*    do
+  1639 *-*     /* known simple var re-referenced */
+  1640 *-*     indx = variablesINdx.varX
+  1642 *-*     /* make sure we only add one RexxLine reference */
+  1643 *-*     if exposeref = 1
+  1644 *-*      then
+       *-*      do
+  1645 *-*       if wordpos(rexxLine,variableExposeRef.indx) = 0
+  1646 *-*        then
+       *-*        do
+  1647 *-*         variableExposeRef.indx = variableExposeRef.indx rexxline
+  1649 *-*         if debug = 'ON'
+  1650 *-*          then
+       *-*          say 'debug:  (Var.Ref) c0510AddVarStemReference: ('rexxline') var='varx
+  1651 *-*        end
+  1652 *-*      end
+  1653 *-*     else
+       *-*      do
+  1654 *-*       if wordpos(rexxLine,variableRef.indx) = 0
+  1655 *-*        then
+       *-*        do
+  1656 *-*         variableRef.indx = variableRef.indx rexxline
+  1658 *-*         if debug = 'ON'
+  1659 *-*          then
+       *-*          say 'debug:  (Var.Ref) c0510AddVarStemReference: ('rexxline') var='varx
+  1660 *-*        end
+  1661 *-*      end
+  1662 *-*    end
+  1663 *-*   return
+  1664 *-*  end
+  1666 *-*  /* this is a stem variable */
+  1667 *-* periods = 0
+  1668 *-* pPos = pos('.',varX)
+  1669 *-* do while pPos <> 0
+  1670 *-*  periods = periods + 1
+  1671 *-*  pPos = pos('.',varX,pPos+1)
+  1672 *-* end
+  1674 *-* /* if part of stem is a hard coded # (other than zero), replace with # sign*/
+  1675 *-* parse var varx psuedoVar '.' rest
+  1676 *-* do while rest <> ''
+  1677 *-*  psuedoVar = psuedoVar'.'
+  1678 *-*  parse var rest stemPortion '.' rest
+  1679 *-*  if datatype(stemPortion,'W')
+  1680 *-*   then
+       *-*   if stemPortion == '0'
+  1681 *-*    then
+       *-*    psuedoVar = psuedoVar || '0'
+  1682 *-*   else
+       *-*    psuedoVar = psuedoVar || '#'
+  1683 *-*  else
+       *-*   psuedoVar = psuedoVar || stemPortion
+  1684 *-* end
+  1685 *-* if right(varx,1) = '.'
+  1686 *-*  then
+       *-*  psuedoVar = psuedoVar'.'
+  1688 *-*  /* define psuedoVar for tracking stems */
+  1689 *-* if stemIndx.psuedoVar = 0
+  1690 *-*  then
+       *-*  do
+  1691 *-*   /* add to stem variables */
+  1692 *-*   stem = stem + 1
+  1693 *-*   stemVariable.stem = psuedoVar
+  1694 *-*   stemPeriods.stem  = periods
+  1695 *-*   if exposeRef = 1
+  1696 *-*    then
+       *-*    stemExposeRef.stem = RexxLine
+  1697 *-*   else
+       *-*    stemRef.stem       = RexxLine
+  1698 *-*   /* we need to define quick lookup (index) to find this psuedoVar */
+  1699 *-*   stemIndx.psuedoVar = stem
+  1701 *-*   if debug = 'ON'
+  1702 *-*    then
+       *-*    say 'debug:  (StemRef) c0510AddVarStemReference: ('rexxline') var='psuedoVar
+  1703 *-*  end
+  1704 *-* else
+       *-*  do
+  1705 *-*   /* known stem var re-referenced */
+  1706 *-*   indx = stemIndx.psuedoVar
+  1708 *-*   /* only one RexxLine reference needed */
+  1709 *-*   if exposeRef = 1
+  1710 *-*    then
+       *-*    do
+  1711 *-*     if wordpos(rexxLine,stemExposeRef.indx) = 0
+  1712 *-*      then
+       *-*      do
+  1713 *-*       stemExposeRef.indx= stemExposeRef.indx rexxLine
+  1715 *-*       if debug = 'ON'
+  1716 *-*        then
+       *-*        say 'debug:  (StemRef) c0510AddVarStemReference: ('rexxline') var='psuedoVar
+  1717 *-*      end
+  1718 *-*    end
+  1719 *-*   else
+       *-*    do
+  1720 *-*     if wordpos(rexxLine,stemRef.indx) = 0
+  1721 *-*      then
+       *-*      do
+  1722 *-*       stemRef.indx= stemRef.indx rexxLine
+  1724 *-*       if debug = 'ON'
+  1725 *-*        then
+       *-*        say 'debug:  (StemRef) c0510AddVarStemReference: ('rexxline') var='psuedoVar
+  1726 *-*      end
+  1727 *-*    end
+  1728 *-*  end
+  1730 *-* /* now go thru stem's and "reference" those vars */
+  1731 *-* parse var varX . '.' varX /* throw away top level */
+  1732 *-* do while varX <> ''
+  1733 *-*  parse var varX simpleVar '.' varX /* get next potential stem var */
+  1734 *-*  if f9920VerifyRexxSymbol(simpleVar,'S') = 1 /* if a symbol and not a digit */
+  1735 *-*   then
+       *-*   do
+  1736 *-*    /* add simple variable reference's from the stem */
+  1737 *-*    if variablesIndx.simpleVar = 0
+  1738 *-*     then
+       *-*     do /* we need to add variable */
+  1739 *-*      variable = variable + 1
+  1740 *-*      variable.variable     = simpleVar    /* remember the name */
+  1741 *-*      variableStemRef.variable = rexxline  /* used in stem */
+  1742 *-*      /* we need to define quick lookup (index) to find this simpleVar */
+  1743 *-*      variablesIndx.simpleVar = variable
+  1745 *-*      if debug = 'ON'
+  1746 *-*       then
+       *-*       say 'debug:  (varRef in stem) c0510AddVarStemReference: ('rexxline') var='simpleVar
+  1747 *-*     end
+  1748 *-*    else
+       *-*     do
+  1749 *-*      /* known simple var re-referenced */
+  1750 *-*      indx = variablesINdx.simpleVar
+  1752 *-*      /* make sure we only add one RexxLine reference */
+  1753 *-*      if wordpos(rexxLine,variableStemRef.indx) = 0
+  1754 *-*       then
+       *-*       do
+  1755 *-*        variableStemRef.indx = variableStemRef.indx rexxline
+  1757 *-*        if debug = 'ON'
+  1758 *-*         then
+       *-*         say 'debug:  (varRef in stem) C0510AddVarStemReference: ('rexxline') var='simpleVar
+  1759 *-*       end
+  1760 *-*     end
+  1761 *-*   end
+  1762 *-* end
+  1763 *-* return
+  1765 *-* c9900OutputResults:
+  1766 *-* if debug = 'ON'
+  1767 *-*  then
+       *-*  say 'debug:  before variable sort'
+  1768 *-* maxVarLength = 0
+  1769 *-* do sortedVariable = 1 by 1 for variable
+  1770 *-*  sortedVariable.sortedVariable = variable.sortedVariable /* copy variable name */
+  1771 *-*  if length(sortedVariable.sortedVariable) > maxVarLength
+  1772 *-*   then
+       *-*   maxVarLength = length(sortedVariable.sortedVariable)
+  1773 *-*  if debug = 'ON'
+  1774 *-*   then
+       *-*   say 'debug:  sortedVariable.'sortedVariable'='sortedVariable.sortedVariable
+  1775 *-* end
+  1776 *-* sortedVariable.0 = variable
+  1778 *-* /* sort variables for xref listing */
+  1779 *-* /* ------------------------------- */
+  1780 *-* if omvsSeg = 1
+  1781 *-*  then
+       *-*  y2=      BPXWUNIX('sort','sortedVariable.','sortedVariable.') /* fast omvs sort */
+  1782 *-* else
+       *-*  y2= f9910SlowSort('sort','sortedVariable.','sortedVariable.') /* slow rexx sort */
+  1784 *-* if y2<> 0
+       *-*  then
+       *-*  say 'error:  stemsort returned y2='y2'; omvsSeg='omvsSeg
+  1785 *-* if debug = 'ON'
+  1786 *-*  then
+       *-*  do
+  1787 *-*   say ' '
+  1788 *-*   say 'debug:  after variable sort'
+  1789 *-*   do sortedVariable = 1 by 1 for variable
+  1790 *-*    say 'debug:  SortedVariable.'sortedVariable'='SortedVariable.sortedVariable
+  1791 *-*   end
+  1792 *-*   say ' '
+  1793 *-*  end
+  1795 *-* if debug = 'ON'
+  1796 *-*  then
+       *-*  say 'debug:  before stem sort'
+  1797 *-* maxStemLength = 0
+  1798 *-* do sortedStemVariable = 1 by 1 for stem
+  1799 *-*  sortedStemVariable.sortedStemVariable = StemVariable.sortedStemVariable /* copy stem name */
+  1800 *-*  if length(sortedStemVariable.sortedStemVariable) > maxStemLength
+  1801 *-*   then
+       *-*   maxStemLength = length(sortedStemVariable.sortedStemVariable)
+  1802 *-*  if debug = 'ON'
+  1803 *-*   then
+       *-*   say 'debug:  sortedStemVariable.'sortedStemVariable'='sortedStemVariable.sortedStemVariable
+  1804 *-* end
+  1805 *-* sortedStemVariable.0 = stem
+  1807 *-* /* sort stem variables for xref listing */
+  1808 *-* /* ------------------------------------ */
+  1809 *-* if omvsSeg = 1
+  1810 *-*  then
+       *-*  y3=      BPXWUNIX('sort','sortedStemVariable.','sortedStemVariable.') /* fast omvs sort */
+  1811 *-* else
+       *-*  y3= f9910SlowSort('sort','sortedStemVariable.','sortedStemVariable.') /* slow rexx sort */
+  1813 *-* if y3<> 0
+       *-*  then
+       *-*  say 'error:  stemsort returned y3='y3'; omvsSeg='omvsSeg
+  1814 *-* if debug = 'ON'
+  1815 *-*  then
+       *-*  do
+  1816 *-*   say ' '
+  1817 *-*   say 'debug:  after stem sort'
+  1818 *-*   do sortedStemVariable = 1 by 1 for stem
+  1819 *-*    say 'debug:  SortedStemVariable.'sortedStemVariable'='SortedStemVariable.sortedStemVariable
+  1820 *-*   end
+  1821 *-*   say ' '
+  1822 *-*  end
+  1824 *-* out = 0
+  1825 *-* x = f9970Card(' ')
+  1826 *-* x = f9970Card(' ')
+  1827 *-* x = f9970Card(' ------------ now xreference begins -----------------------')
+  1828 *-* x = f9970Card(' ------------ now xreference begins -----------------------')
+  1829 *-* x = f9970Card(' ')
+  1830 *-* x = f9970Card('                                                                 ')
+  1831 *-* x = f9970Card('    xref (1 of 2) section 1 is for variables (not stem.''s)       ')
+  1832 *-* x = f9970Card('    xref (1 of 2) section 1 is for variables (not stem.''s)       ')
+  1833 *-* x = f9970Card('    ----------------------------------------------------------   ')
+  1834 *-* x = f9970Card('                                                                 ')
+  1835 *-* x = f9970Card('       variables/labels are in "upperCase" if variable was never ')
+  1836 *-* x = f9970Card('                       assigned a value.                         ')
+  1837 *-* x = f9970Card('                                                                 ')
+  1838 *-* x = f9970Card('                        they are in "lowercase", otherwise.      ')
+  1839 *-* x = f9970Card('                                                                 ')
+  1840 *-* x = f9970Card('       variables/stems set via a command, like EXECIO for        ')
+  1841 *-* x = f9970Card('                       example, where the stem is within quotes  ')
+  1842 *-* x = f9970Card('                       will not be shown in the xref as either   ')
+  1843 *-* x = f9970Card('                       an assignment or a reference.             ')
+  1844 *-* x = f9970Card('                                                                 ')
+  1845 *-* x = f9970Card('       Note special variables like:  RC, SIGL, can be assigned   ')
+  1846 *-* x = f9970Card('                       values explictly.  But rexx can set them  ')
+  1847 *-* x = f9970Card('                       as well implicitly.  Implicit assignments ')
+  1848 *-* x = f9970Card('                       are not in the xref.                      ')
+  1849 *-* x = f9970Card('    ----------------------------------------------------------   ')
+  1850 *-* x = f9970Card('                                                                 ')
+  1851 *-* x = f9970Card(' ')
+  1852 *-* x = f9970Card(' ')
+  1853 *-* /* variables used as constants */
+  1854 *-* maxOutputVar = min(DefaultMaxOutputVar,maxVarLength+5) /* maxoutputvar was 30, 40 or 50 */
+  1855 *-* do indx2 = 1 by 1 for variable
+  1856 *-*  /* get next sorted variable, then report it's information */
+  1857 *-*  sortedVariable =  SortedVariable.indx2
+  1858 *-*  indx = variablesIndx.sortedVariable /* use indx to info for this variable */
+  1860 *-*  if variableSet.indx <> ''     /* if assigned a value, make variable name "lowerCase */
+  1861 *-*   then
+       *-*   tempname = translate(variable.indx,'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+  1862 *-*  else
+       *-*   tempname = variable.indx /* else, keep upper case */
+  1864 *-*  if specialVar.sortedVariable > 0
+  1865 *-*   then
+       *-*   do
+  1867 *-*    if variableSet.indx <> ''       , /* if special variable used in rexx somehow; mention it's special attributes */
+      | variableRef.indx <> ''       , /* if special variable used in rexx somehow; mention it's special attributes */          | v
+ariableExposeRef.indx <> '' , /* if special variable used in rexx somehow; mention it's special attributes */          | variableSt
+emSet.indx   <> '' , /* if special variable used in rexx somehow; mention it's special attributes */          | variableStemRef.ind
+x   <> ''   /* if special variable used in rexx somehow; mention it's special attributes */
+  1872 *-*     then
+       *-*     x = f9930OutputVarInfo('SpecialVar(set no-XREF)',tempName,' *Special:',' No xref; set w/ADDR env cmd and/or REXX its
+elf')
+  1874 *-*    if variableSet.indx <> ''
+  1875 *-*     then
+       *-*     x = f9930OutputVarInfo('SpecialVar(set w/ code)',tempName,'Assigned :',variableSet.indx)
+  1877 *-*    if variableRef.indx <> ''
+  1878 *-*     then
+       *-*     x = f9930OutputVarInfo('SpecialVar(used w/rexx)',tempName,'Reference:',variableRef.indx)
+  1880 *-*    if variableExposeRef.indx <> ''
+  1881 *-*     then
+       *-*     x = f9930OutputVarInfo('SpecialVar(used w/rexx)',tempName,'Expose Ref:',variableExposeRef.indx)
+  1883 *-*    if variableStemSet.indx   <> ''
+  1884 *-*     then
+       *-*     x = f9930OutputVarInfo('SpecialVar(w/stem set):',tempName,'w/Stem set',variableStemSet.indx)
+  1886 *-*    if variableStemRef.indx   <> ''
+  1887 *-*     then
+       *-*     x = f9930OutputVarInfo('SpecialVar(w/stem ref):',tempName,'W/Stem ref',variableStemRef.indx)
+  1889 *-*    if variableLabelDef.indx  <> ''
+  1890 *-*     then
+       *-*     x = f9930OutputVarInfo('Label (internal label) ',variable.indx,'Defined  :',variableLabelDef.indx)
+  1892 *-*    if variableLabelRef.indx  <> '' & variableLabelDef.indx <> ''
+  1893 *-*     then
+       *-*     x = f9930OutputVarInfo('Label (int. label ref) ',variable.indx,'Reference:',variableLabelRef.indx)
+  1895 *-*    if variableLabelRef.indx  <> '' & variableLabelDef.indx = ''
+  1896 *-*     then
+       *-*     x = f9930OutputVarInfo('BuiltoIn+/External use ',variable.indx,'Reference:',variableLabelRef.indx)
+  1898 *-*    iterate
+  1900 *-*   end
+  1902 *-*   /* if not assigned a value... but referenced "as a variable" in rexx code... report it */
+  1903 *-*  if variableSet.indx = '' ,         & ( variableRef.indx <> '' | variableStemSet.indx   <> '' | variableStemRef.indx   <
+> '' ,                |variableExposeRef.indx <> '')
+  1906 *-*   then
+       *-*   x = f9930OutputVarInfo('Variable (NEVER SET)   ',tempName,'Not Assgn:',' EITHER used as upper case value OR set via cm
+d')
+  1908 *-*   /* if assigned a value, report it */
+  1909 *-*  if variableSet.indx <> ''                                          /* assigned a value, report it */
+  1910 *-*   then
+       *-*   x = f9930OutputVarInfo('Variable (set w/rexx)  ',tempName,'Assigned :',variableSet.indx)
+  1912 *-*  if variableRef.indx       <> '' ,       | variableExposeRef.indx <> '' ,       | variableStemSet.indx   <> '' ,       |
+ variableStemRef.indx   <> ''
+  1916 *-*   then
+       *-*   do
+  1917 *-*    /* if variable refernce, report it*/
+  1918 *-*    if variableRef.indx <> ''
+  1919 *-*     then
+       *-*     x = f9930OutputVarInfo('Variable (used in/rexx)',tempName,'Reference:',variableRef.indx)
+  1921 *-*     /* if variable expose refernce, report it*/
+  1922 *-*    if variableExposeRef.indx <> ''
+  1923 *-*     then
+       *-*     x = f9930OutputVarInfo('Variable (used in/rexx)',tempName,'Expose Ref:',variableExposeRef.indx)
+  1925 *-*     /* if variable used in stem, report it */
+  1926 *-*    if variableStemSet.indx   <> ''
+  1927 *-*     then
+       *-*     x = f9930OutputVarInfo('Variable (in Stem Set) ',tempName,'Assigned :',variableStemSet.indx)
+  1929 *-*     /* if variable used in stem, report it */
+  1930 *-*    if variableStemRef.indx   <> ''
+  1931 *-*     then
+       *-*     x = f9930OutputVarInfo('Variable (in Stem Ref) ',tempName,'Reference:',variableStemRef.indx)
+  1932 *-*   end
+  1933 *-*  else
+       *-*   if variableSet.Indx <> '' /* if wasn't referenced, but it was assigned a value */
+  1934 *-*    then
+       *-*    x = f9930OutputVarInfo('Variable (NEVER USED)  ',tempName,'No Ref.  :',' If actually referenced, it must be via a cmd
+.')
+  1936 *-*    /* if it's an internal label, report it */
+  1937 *-*  if variableLabelDef.indx  <> ''
+  1938 *-*   then
+       *-*   x = f9930OutputVarInfo('Label (internal label) ',variable.indx,'Defined  :',variableLabelDef.indx)
+  1940 *-*   /* if label (internal or external) is used, report it */
+  1941 *-*  if variableLabelRef.indx  <> '' & variableLabelDef.Indx <> ''
+  1942 *-*   then
+       *-*   x = f9930OutputVarInfo('Label (int. label ref) ',variable.indx,'Reference:',variableLabelRef.indx)
+  1943 *-*  else
+       *-*   if variableLabelRef.indx  <> ''
+  1944 *-*    then
+       *-*    x = f9930OutputVarInfo('Built-In+/External use ',variable.indx,'Reference:',variableLabelRef.indx)
+  1946 *-* end
+  1948 *-* 'EXECIO' out 'DISKW RESULTS (STEM OUT.'
+  1949 *-* if rc <> 0
+  1950 *-*  then
+       *-*  do
+  1951 *-*   say 'error writing to RESULTS ddname; rc='rc
+  1952 *-*   say 'exit 8'
+  1953 *-*   'EXECIO 0 DISKW RESULTS (FINIS'
+  1954 *-*   exit 8
+  1955 *-*  end
+  1957 *-*  /* variables used as variables */
+  1958 *-* out = 0
+  1959 *-* x = f9970Card('    xref (1 of 2) ends here                                      ')
+  1960 *-* x = f9970Card('    xref (1 of 2) ends here                                      ')
+  1961 *-* x = f9970Card('    -----------------------                                      ')
+  1962 *-* x = f9970Card('                                                                 ')
+  1963 *-* x = f9970Card('    xref (2 of 2) section 2 is for stem variable xreference.     ')
+  1964 *-* x = f9970Card('    xref (2 of 2) section 2 is for stem variable xreference.     ')
+  1965 *-* x = f9970Card('    ----------------------------------------------------------   ')
+  1966 *-* x = f9970Card('       note:     Assignments/references to rexx stems            ')
+  1967 *-* x = f9970Card('              is only for stem references in rexx code           ')
+  1968 *-* x = f9970Card('              itself.                                            ')
+  1969 *-* x = f9970Card('                                                                 ')
+  1970 *-* x = f9970Card('                 Therefore, references to stem variables         ')
+  1971 *-* x = f9970Card('              that are made INSIDE of quotes, say as             ')
+  1972 *-* x = f9970Card('              part of an EXECIO command, will NOT show           ')
+  1973 *-* x = f9970Card('              up in the XREF as they are part of a "string       ')
+  1974 *-* x = f9970Card('              constant" and not used as a rexx variable or       ')
+  1975 *-* x = f9970Card('              rexx stem directly.                                ')
+  1976 *-* x = f9970Card('                                                                 ')
+  1977 *-* x = f9970Card('                 This is because it often may not be obvious     ')
+  1978 *-* x = f9970Card('              which address environment a command may (or may    ')
+  1979 *-* x = f9970Card('              not) be valid in.  Or for us to know all the       ')
+  1980 *-* x = f9970Card('              ways a rexx stem might be used.                    ')
+  1981 *-* x = f9970Card('                                                                 ')
+  1982 *-* x = f9970Card('    ----------------------------------------------------------   ')
+  1983 *-* x = f9970Card('                                                                 ')
+  1984 *-* x = f9970Card(' ')
+  1985 *-* x = f9970Card(' ')
+  1986 *-* x = f9970Card(' ')
+  1987 *-* x = f9970Card(' ')
+  1988 *-* x = f9970Card(' ')
+  1989 *-* maxOutputVar = min(defaultMaxOutputVar,maxStemLength+5)
+  1990 *-* do indx2 = 1 by 1 for stem
+  1991 *-*  /* get next sorted stem variable, then report it's information */
+  1992 *-*  sortedStemVariable =  SortedStemVariable.indx2
+  1993 *-*  indx = stemIndx.sortedStemVariable /* use indx to info for this variable */
+  1995 *-*  /* now report on it */
+  1996 *-*  tempname = stemVariable.indx /* get name of stem variable w/all variables*/
+  1997 *-*  parse var tempname buildname '.' rest
+  1998 *-*  stemName = buildName
+  1999 *-*  do while rest <> ''
+  2000 *-*   parse var rest tempname '.' rest
+  2001 *-*   x = variablesIndx.tempname
+  2002 *-*   if variableSet.x <> '' | specialVar.tempname = 1 /* upper case to lower case */
+  2003 *-*    then
+       *-*    tempname = translate(tempname,'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+  2004 *-*   buildname = buildname'.'tempname
+  2005 *-*  end
+  2006 *-*  if substr(stemVariable.indx,length(stemVariable.indx),1) = '.'
+  2007 *-*   then
+       *-*   buildname = buildname'.'
+  2009 *-*  if specialStem.stemName
+  2010 *-*   then
+       *-*   x = f9930OutputVarInfo('Stem-'stemPeriods.indx,buildname,' *Special:',' Assigned via an ADDR env cmd and/or REXX itsel
+f')
+  2012 *-*  if stemAsg.indx <> ' '
+  2013 *-*   then
+       *-*   x = f9930OutputVarInfo('Stem-'stemPeriods.indx,buildname,'Assigned :',stemAsg.indx)
+  2015 *-*  if stemRef.indx <>  ' '
+  2016 *-*   then
+       *-*   x = f9930OutputVarInfo('Stem-'stemPeriods.indx,buildname,'Reference:',stemRef.indx)
+  2018 *-*  if stemExposeRef.indx <>  ' '
+  2019 *-*   then
+       *-*   x = f9930OutputVarInfo('Stem-'stemPeriods.indx,buildname,'Expose Ref:',stemExposeRef.indx)
+  2021 *-*  if out > 99
+  2022 *-*   then
+       *-*   do
+  2023 *-*    'EXECIO' out 'DISKW RESULTS (STEM OUT.'
+  2024 *-*    if rc <> 0
+  2025 *-*     then
+       *-*     do
+  2026 *-*      say 'error writing to ddname= RESULTS; rc='rc
+  2027 *-*      say 'exit 8'
+  2028 *-*      'EXECIO 0 DISKW RESULTS (FINIS'
+  2029 *-*      exit 8
+  2030 *-*     end
+  2031 *-*    out = 0
+  2032 *-*   end
+  2033 *-* end
+  2034 *-* 'EXECIO' out 'DISKW RESULTS (STEM OUT.'
+  2035 *-* out = 0
+  2036 *-* x = f9970Card('    xref (2 of 2) ends here                                      ')
+  2037 *-* x = f9970Card('    xref (2 of 2) ends here                                      ')
+  2038 *-* x = f9970Card('    -----------------------                                      ')
+  2039 *-* x = f9970Card(' ')
+  2040 *-* x = f9970Card(' ')
+  2041 *-* x = f9970Card(' ------------ tips for label references ----------------------------')
+  2042 *-* x = f9970Card(' ------------ tips for label references ----------------------------')
+  2043 *-* x = f9970Card('     tip:  c# is a ref to CALL stmt to this   internal/external name')
+  2044 *-* x = f9970Card('     tip:  f# is a ref to FUNCTION call to    internal/external function')
+  2045 *-* x = f9970Card('     tip:  s# is a ref to SIGNAL stmt to this internal label     ')
+  2046 *-* x = f9970Card(' ')
+  2047 *-* x = f9970Card(' ')
+  2048 *-* x = f9970Card(' ------------ now xreference for stem variables (tips) -------------')
+  2049 *-* x = f9970Card(' ------------ now xreference for stem variables (tips) -------------')
+  2050 *-* x = f9970Card('     tip:     Note:- stem variables (after 1st period) are in lower case  ')
+  2051 *-* x = f9970Card('     tip:          - stem "constants" (will be shown in UPPER case)       ')
+  2052 *-* x = f9970Card('     tip:          - stem "constants" that are whole numbers (and not 0)  ')
+  2053 *-* x = f9970Card('     tip:               will be summarized as a # sign (in place of       ')
+  2054 *-* x = f9970Card('     tip:               individual digits/numbers) so it summarizes them. ')
+  2055 *-* x = f9970Card('     tip:     What XREF for stems can help you fix:                       ')
+  2056 *-* x = f9970Card('     tip:     -------------------------------------                       ')
+  2057 *-* x = f9970Card('     tip:      - seeing a variable (lower case) used in a stem where you  ')
+  2058 *-* x = f9970Card('     tip:       EXPECTED it to always be a constant.                      ')
+  2059 *-* x = f9970Card('     tip:      - seeing a constant (upper case) used in a stem where you  ')
+  2060 *-* x = f9970Card('     tip:       EXPECTED it to be a variable (maybe it was misspelled).   ')
+  2061 *-* x = f9970Card('     tip:                                              )                  ')
+  2062 *-* x = f9970Card('     tip:line sample rexx code (followed by sample xref)                  ')
+  2063 *-* x = f9970Card('     tip:---- ------------                                                ')
+  2064 *-* x = f9970Card('     tip:  1     x = "Richard"                                            ')
+  2065 *-* x = f9970Card('     tip:  2     firstName.y.x.1 = "Hi"                                   ')
+  2066 *-* x = f9970Card('     tip:  3     firstName.y.x.2 = "Buddy"                                ')
+  2067 *-* x = f9970Card('     tip:  4     firstName.y.x.0 = 2                                      ')
+  2068 *-* x = f9970Card('     tip:                                                                 ')
+  2069 *-* x = f9970Card('     tip:sample xref listing                                              ')
+  2070 *-* x = f9970Card('     tip:-----------                                                      ')
+  2071 *-* x = f9970Card('     tip:  --xref section 1 (variables)                                   ')
+  2072 *-* x = f9970Card('     tip:  --xref section 1 (variables)                                   ')
+  2073 *-* x = f9970Card('     tip:                                                         ')
+  2074 *-* x = f9970Card('     tip:Variable (set)         X               Assigned : 1      ')
+  2075 *-* x = f9970Card('     tip:Variable(w/ stem use): X               Reference: 2 3 4  ')
+  2076 *-* x = f9970Card('     tip:Constant(w/ stem use): Y               Reference: 2 3 4  ')
+  2077 *-* x = f9970Card('     tip:                                                         ')
+  2078 *-* x = f9970Card('     tip:  --xref section 2 (stem variables)                              ')
+  2079 *-* x = f9970Card('     tip:  --xref section 2 (stem variables)                              ')
+  2080 *-* x = f9970Card('     tip:                                                         ')
+  2081 *-* x = f9970Card('     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3    ')
+  2082 *-* x = f9970Card('     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4      ')
+  2083 *-* x = f9970Card('     tip:                                       Reference: 2 3 4  ')
+  2084 *-* x = f9970Card('     tip:     note:  Stem-3 refers to # of periods in the stem.           ')
+  2085 *-* x = f9970Card('     tip:                                                                 ')
+  2086 *-* x = f9970Card('     tip:  rexx tip: remember stem value on the right is "tricky":        ')
+  2087 *-* x = f9970Card('     tip:        Given following rexx code:                               ')
+  2088 *-* x = f9970Card('     tip:             x = "RICHARD.HUMPHRIS"                              ')
+  2089 *-* x = f9970Card('     tip:             y = "RICHARD"                                       ')
+  2090 *-* x = f9970Card('     tip:             z = "HUMPHRIS"                                      ')
+  2091 *-* x = f9970Card('     tip:        References to a stem variable, as shown below, are       ')
+  2092 *-* x = f9970Card('     tip:          referring to the SAME stem variable:                   ')
+  2093 *-* x = f9970Card('     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS          ')
+  2094 *-* x = f9970Card('     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS          ')
+  2095 *-* x = f9970Card('     tip:        This is because x contains a period.  And because      ')
+  2096 *-* x = f9970Card('     tip:          everything to the right of the first period is evaluated')
+  2097 *-* x = f9970Card('     tip:          first.  Then the stem variable is "looked up".         ')
+  2098 *-* x = f9970Card('     tip:                                                                 ')
+  2099 *-* x = f9970Card('     tip:   rexx tip:  referencing pgm above, if you set variable "a"     ')
+  2100 *-* x = f9970Card('     tip:         to a upper/lower case value.  The stem will NOT upper   ')
+  2101 *-* x = f9970Card('     tip:         case it.                                                ')
+  2102 *-* x = f9970Card('     tip:        So if assignment statement set "a" to "richard"          ')
+  2103 *-* x = f9970Card('     tip:         then stem.y is NOT the same as stem.a                   ')
+  2104 *-* x = f9970Card('     tip:        Because stem.y    refers to STEM.RICHARD                 ')
+  2105 *-* x = f9970Card('     tip:        and     stem.a    refers to STEM.richard                 ')
+  2106 *-* x = f9970Card('     tip:                                                                 ')
+  2107 *-* 'EXECIO' out 'DISKW RESULTS (STEM OUT. FINIS'
+  2108 *-* if rc <> 0
+  2109 *-*  then
+       *-*  do
+  2110 *-*   say 'error writing/closing ddname= RESULTS; rc='rc
+  2111 *-*   say 'exit 8'
+  2112 *-*   'EXECIO 0 DISKW RESULTS (FINIS'
+  2113 *-*   exit 8
+  2114 *-*  end
+  2115 *-* return
+  2117 *-* f9910SlowSort:
+  2118 *-* /* x = f9910SlowSort('sort','unsortedVariable.','sortedVariable.') */ /* slow rexx sort */
+  2119 *-* /* ... */
+  2120 *-* /* we don't have an omvs segment... so we have to do sort (slowly) using rexx code instead*/
+  2121 *-* /* ---------------------------------------------------------------------------------------*/
+  2123 *-* parse upper arg f9910_sort . , f9910_Stem1 . , f9910_Stem2 .
+  2125 *-* /* need to verify 1st parm is "SORT" */
+  2126 *-* /* --------------------------------- */
+  2127 *-* if f9910_sort <> 'SORT'
+  2128 *-*  then
+       *-*  return 1  /* error, 1st parm must be "sort" */
+  2130 *-*  /* need to verify f9910_stem1 is not null */
+  2131 *-*  /* -------------------------------------- */
+  2132 *-* if f9910_Stem1 = ''
+  2133 *-*  then
+       *-*  return 2  /* error, 2nd parm must be specified */
+  2135 *-*  /* need to verify f9910_stem1 is a valid symbol */
+  2136 *-*  /* -------------------------------------------- */
+  2137 *-* if f9920VerifyRexxSymbol(f9910_Stem1,'S') <> 1
+  2138 *-*  then
+       *-*  return 3                    /* invalid symbol */
+  2140 *-*  /* default stem2 and/or verify it's a symbol */
+  2141 *-*  /* ----------------------------------------- */
+  2142 *-* if f9910_stem2 = ''
+  2143 *-*  then
+       *-*  f9910_stem2 = f9910_stem1 /* default to stem1 */
+  2144 *-* else
+       *-*  do
+  2145 *-*   /* need to verify f9910_stem2 is a valid symbol */
+  2146 *-*   /* -------------------------------------------- */
+  2147 *-*   if f9920VerifyRexxSymbol(f9910_Stem2,'S') <> 1
+  2148 *-*    then
+       *-*    return 3                    /* invalid symbol */
+  2149 *-*  end
+  2151 *-* /* verify stem1.0 coutains a valid whole number >= 0 */
+  2152 *-* /* ------------------------------------------------- */
+  2153 *-* if value(f9910_stem1||'0') = ''
+  2154 *-*  then
+       *-*  return 4
+  2155 *-* if datatype(value(f9910_Stem1 || '0'),'W') = 0 | value(f9910_Stem1 || '0') < 0
+  2156 *-*  then
+       *-*  return 4  /* error, stem 0 must be numeric and a whole number*/
+  2158 *-*  /* anything to sort? */
+  2159 *-*  /* ----------------- */
+  2160 *-* if value(f9910_Stem1 || '0') = 0
+  2161 *-*  then
+       *-*  do
+  2162 *-*   /* nothing to sort, return 0 */
+  2163 *-*   if f9910_Stem2 <> f9910_Stem1
+  2164 *-*    then
+       *-*    x = value(f9910_Stem2 || '0','0') /* set f9910_stem2.0 = 0 */
+  2165 *-*   return 0
+  2166 *-*  end
+  2168 *-*  /* time to sort stems */
+  2169 *-*  /* ------------------ */
+  2170 *-* top = value(f9910_Stem1||'0')
+  2171 *-* if f9910_Stem2 <> f9910_Stem1
+  2172 *-*  then
+       *-*  do
+  2173 *-*   /* 1st copy stem1 into stem2; as stem2 should get sorted output */
+  2174 *-*   do f9910_k = 0 by 1 while f9910_k <= top
+  2175 *-*    x = value(f9910_stem2||f9910_k,value(f9910_stem1||f9910_k))
+  2176 *-*   end
+  2177 *-*  end
+  2179 *-*  /* now sort stems in output stem f9910_stem2 */
+  2180 *-*  /* ----------------------------------------- */
+  2181 *-* f9910_varX = top /* all stem rows need to be checked */
+  2182 *-* do until f9910_varX < 2
+  2183 *-*  f9910_LastSwap = 1 /* set to 1, if never changed it's all sorted */
+  2184 *-*  f9910_varX_minus1 = f9910_varX - 1
+  2185 *-*  do f9910_VarY = 1 until f9910_VarY >= f9910_VarX_minus1
+  2186 *-*   if value(f9910_Stem2||f9910_VarY) > value(f9910_Stem2||f9910_VarY+1)
+  2187 *-*    then
+       *-*    do
+  2188 *-*     swap = value(f9910_Stem2||f9910_VarY+1,value(f9910_Stem2||f9910_VarY))
+  2189 *-*     x    = value(f9910_Stem2||f9910_VarY,swap)
+  2190 *-*     f9910_LastSwap = f9910_VarY /* last swap occured here */
+  2191 *-*    end
+  2192 *-*  end
+  2193 *-*  f9910_VarX = f9910_LastSwap /* next loop, only have to check from 1 to here */
+  2194 *-* end
+  2195 *-* return 0
+  2197 *-* f9920VerifyRexxSymbol:
+  2198 *-* /* datatype(var,'s') returns a 1 even for numeric symbols starting with 0-9 or a period */
+  2199 *-* /*            ... so we need to consistently check if numeric (and if truly a symbol).  */
+  2201 *-* arg f9920_symbol . , f9920_option .
+  2203 *-* if f9920_option <> 'S'
+  2204 *-*  then
+       *-*  do
+  2205 *-*   say "someone called function f9920VerifyRexxSymbol without the 'S' option"
+  2206 *-*   say 'function called from line' sigl
+  2207 *-*   say 'f9920_option = "'f9920_option'" expected "S"'
+  2208 *-*   say 'exiting w/rc=12'
+  2209 *-*   exit 12
+  2210 *-*  end
+  2212 *-* if f9920_symbol = ''
+  2213 *-*  then
+       *-*  return 0 /* not a symbol, return 0 */
+  2215 *-* if datatype(f9920_symbol,'S') = 0
+  2216 *-*  then
+       *-*  return 0 /* not a symbol, return 0 */
+  2218 *-* if pos(left(f9920_symbol,1),'0123456789.') > 0
+  2219 *-*  then
+       *-*  return 0 /* not a symbol (looks numeric), return 0 */
+  2220 *-* return 1      /* this is a real rexx symbol */
+  2222 *-* f9930OutputVarInfo:
+  2223 *-* parse arg f9930LHS, f9930Var, f9930RHS, f9930Ref
+  2225 *-* if firstTime = 'FIRSTTIME'
+  2226 *-*  then
+       *-*  do
+  2227 *-*   parse upper var f9930Var lastF9930Var '.' .
+  2228 *-*   firstTime = ''
+  2229 *-*  end
+  2231 *-* if blankOption = 'BYVAR'
+  2232 *-*  then
+       *-*  do
+  2233 *-*   parse upper var f9930Var leftSide '.' .
+  2234 *-*   if leftSide <> lastF9930Var
+  2235 *-*    then
+       *-*    do /* add a blank line between variables */
+  2236 *-*     out = out + 1.
+  2237 *-*     out.out = ' '
+  2238 *-*     lastF9930Var = leftSide
+  2239 *-*    end
+  2240 *-*  end
+  2242 *-* if length(f9930Var) > maxOutputVar
+  2243 *-*  then
+       *-*  do  /* have var and contents on seperate lines */
+  2244 *-*   out = out + 1 /* output variable, of any length */
+  2245 *-*   out.out = f9930LHS f9930Var /* output long variable name */
+  2246 *-*   f9930Lhs = left('',length(f9930LHS))
+  2247 *-*   f9930Var = left('...',maxoutputvar)
+  2248 *-*  end
+  2249 *-* else
+       *-*  f9930var = left(f9930Var,maxoutputvar)
+  2251 *-* spaceremaining = width - length(f9930lhs f9930var f9930rhs) - 3
+  2253 *-* if length(f9930ref) < spaceRemaining
+  2254 *-*  then
+       *-*  wordx = words(f9930ref)
+  2255 *-* else
+       *-*  wordx = words(left(f9930ref,spaceRemaining)) - 1
+  2257 *-* if wordx < 1
+  2258 *-*  then
+       *-*  wordx = 1
+  2260 *-* leftwords = subword(f9930ref,1,wordx)
+  2261 *-* f9930ref  = subword(f9930ref,wordx+1)
+  2263 *-* out = out+1 /* output 1st (or 2nd) line */
+  2264 *-* out.out = f9930LHS f9930var f9930rhs leftwords
+  2266 *-* f9930Lhs = left('',length(f9930LHS))
+  2267 *-* f9930Var = left('...',maxoutputvar)
+  2268 *-* f9930Rhs = left('',length(f9930RHS))
+  2269 *-* spaceremaining = width - length(f9930lhs f9930var f9930rhs) - 3
+  2271 *-* do while f9930ref <> ''
+  2272 *-*  if length(f9930ref) < spaceRemaining
+  2273 *-*   then
+       *-*   wordx = words(f9930ref)
+  2274 *-*  else
+       *-*   wordx = words(left(f9930ref,spaceRemaining)) - 1
+  2276 *-*  if wordx < 1
+  2277 *-*   then
+       *-*   wordx = 1
+  2279 *-*  leftwords = subword(f9930ref,1,wordx)
+  2280 *-*  f9930ref  = subword(f9930ref,wordx+1)
+  2282 *-*  out = out+1 /* output continuation lines*/
+  2283 *-*  out.out = f9930LHS f9930var f9930rhs leftwords
+  2284 *-* end
+  2286 *-* return 0
+  2289 *-* f9970Card:
+  2290 *-* /* just output info */
+  2291 *-* parse arg cardx
+  2292 *-* /* we only need one out.out stem created for this call */
+  2293 *-* out = out + 1
+  2294 *-* out.out = cardx
+  2295 *-* return 0
+  2297 *-* logicMsg:
+  2298 *-* parse arg logicMsg1
+  2299 *-* say 'LogicMsg001I line('sigl')' logicMsg1 /* give logic message w/line + msg */
+  2300 *-* return
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Variable (set w/rexx)   addressspace                   Assigned : 104
+Variable (used in/rexx) addressspace                   Reference: 105
+
+Variable (set w/rexx)   blankoption                    Assigned : 207 212 216
+Variable (used in/rexx) blankoption                    Reference: 2231
+
+Built-In+/External use  BPXWUNIX                       Reference: F(1781) F(1810)
+
+Variable (set w/rexx)   buildname                      Assigned : 1997 2004 2007
+Variable (used in/rexx) buildname                      Reference: 1998 2004 2007 2010 2013 2016 2019
+
+Label (internal label)  C0050PASS1                     Defined  : 309
+Label (int. label ref)  C0050PASS1                     Reference: C(305)
+
+Label (internal label)  C0070PARSELINEPASS1            Defined  : 452
+Label (int. label ref)  C0070PARSELINEPASS1            Reference: C(411) C(420) C(447)
+
+Label (internal label)  C0100PARSESTATEMENT            Defined  : 735
+Label (int. label ref)  C0100PARSESTATEMENT            Reference: C(732) C(1158)
+
+Label (internal label)  C0300PARSEREMAINING            Defined  : 1226
+Label (int. label ref)  C0300PARSEREMAINING            Reference: C(782) C(797) C(819) C(870) C(887) C(897) C(938) C(958) C(978) C(986) C(994)
+                        ...                                       C(1001) C(1007) C(1013) C(1023) C(1029) C(1035) C(1053) C(1076) C(1086) C(1123)
+                        ...                                       C(1130) C(1137) C(1144) C(1153) C(1174) C(1186) C(1223)
+
+Label (internal label)  C0325TEMPLATEASSIGNMENTS       Defined  : 1320
+Label (int. label ref)  C0325TEMPLATEASSIGNMENTS       Reference: C(825) C(1068) C(1078) C(1088) C(1116) C(1167)
+
+Label (internal label)  C0326TEMPLATELIST              Defined  : 1362
+Label (int. label ref)  C0326TEMPLATELIST              Reference: C(1105)
+
+Label (internal label)  C0400CALLREFERENCE             Defined  : 1393
+Label (int. label ref)  C0400CALLREFERENCE             Reference: C(847) C(852) C(868)
+
+Label (internal label)  C0415FUNCTIONREFERENCE         Defined  : 1399
+Label (int. label ref)  C0415FUNCTIONREFERENCE         Reference: C(1254) C(1290)
+
+Label (internal label)  C0430SIGNALREFERENCE           Defined  : 1405
+Label (int. label ref)  C0430SIGNALREFERENCE           Reference: C(1193) C(1204) C(1208) C(1215)
+
+Label (internal label)  C0450LABELREFERENCE            Defined  : 1411
+Label (int. label ref)  C0450LABELREFERENCE            Reference: C(1396) C(1402) C(1408)
+
+Label (internal label)  C0470LABELDEFINE               Defined  : 1447
+Label (int. label ref)  C0470LABELDEFINE               Reference: C(715)
+
+Label (internal label)  C0500ADDVARSTEMASSIGNMENT      Defined  : 1491
+Label (int. label ref)  C0500ADDVARSTEMASSIGNMENT      Reference: C(778) C(793) C(929) C(1357)
+
+Label (internal label)  C0510ADDVARSTEMREFERENCE       Defined  : 1615
+Label (int. label ref)  C0510ADDVARSTEMREFERENCE       Reference: C(1296) C(1310) C(1343) C(1381)
+
+Label (internal label)  C9900OUTPUTRESULTS             Defined  : 1765
+Label (int. label ref)  C9900OUTPUTRESULTS             Reference: C(306)
+
+Variable (set w/rexx)   cardx                          Assigned : 2291
+Variable (used in/rexx) cardx                          Reference: 2294
+
+Variable (set w/rexx)   cmd                            Assigned : 408 432
+Variable (used in/rexx) cmd                            Reference: 409 433
+
+Variable (set w/rexx)   commentnested                  Assigned : 490 515 520 553
+Variable (used in/rexx) commentnested                  Reference: 515 520 522
+
+Variable (set w/rexx)   commentstart                   Assigned : 491 536 543 554
+Variable (used in/rexx) commentstart                   Reference: 508 530 540 541 542
+
+Built-In+/External use  DATATYPE                       Reference: F(174) F(186) F(409) F(433) F(612) F(638) F(713) F(1451) F(1541) F(1679) F(2155)
+                        ...                                       F(2215)
+
+Variable (set w/rexx)   debug                          Assigned : 157 169 170
+Variable (used in/rexx) debug                          Reference: 171 481 751 1426 1441 1464 1484 1509 1521 1562 1574 1594 1606 1635 1649 1658
+                        ...                                       1701 1715 1724 1745 1757 1766 1773 1785 1795 1802 1814
+
+Variable (set w/rexx)   defaultmaxoutputvar            Assigned : 190 196 201
+Variable (used in/rexx) defaultmaxoutputvar            Reference: 1854 1989
+
+Variable (set w/rexx)   dokeyword                      Assigned : 942 964
+Variable (used in/rexx) dokeyword                      Reference: 946 948 950 964 968 969 970
+
+Variable (set w/rexx)   doline                         Assigned : 876 907 909
+Variable (used in/rexx) doline                         Reference: 878 881 885 891 895 903 904 907 909 914
+
+Variable (set w/rexx)   dorest                         Assigned : 918 943 965 974
+Variable (used in/rexx) dorest                         Reference: 919 932 934 936 942 943 947 949 951 952 954 956 964 965 968 969 970 974 976
+
+Built-In+/External use  ERRORTEXT                      Reference: F(135)
+
+Variable (set w/rexx)   execname                       Assigned : 134
+Variable (used in/rexx) execname                       Reference: 135
+
+Variable (set w/rexx)   exposeref                      Assigned : 358 1103 1106
+Variable (used in/rexx) exposeref                      Reference: 1629 1643 1695 1709
+
+Variable (set w/rexx)   expression                     Assigned : 856 1074 1149 1332 1336
+Variable (used in/rexx) expression                     Reference: 861 1075 1150 1152 1335 1336
+
+Label (internal label)  F9910SLOWSORT                  Defined  : 2117
+Label (int. label ref)  F9910SLOWSORT                  Reference: F(1782) F(1811)
+
+Variable (set w/rexx)   f9910_k                        Assigned : 2174
+Variable (used in/rexx) f9910_k                        Reference: 2174 2175
+
+Variable (set w/rexx)   f9910_lastswap                 Assigned : 2183 2190
+Variable (used in/rexx) f9910_lastswap                 Reference: 2193
+
+Variable (set w/rexx)   f9910_sort                     Assigned : 2123
+Variable (used in/rexx) f9910_sort                     Reference: 2127
+
+Variable (set w/rexx)   f9910_stem1                    Assigned : 2123
+Variable (used in/rexx) f9910_stem1                    Reference: 2132 2137 2143 2153 2155 2160 2163 2170 2171 2175
+
+Variable (set w/rexx)   f9910_stem2                    Assigned : 2123 2143
+Variable (used in/rexx) f9910_stem2                    Reference: 2142 2147 2163 2164 2171 2175 2186 2188 2189
+
+Variable (set w/rexx)   f9910_varx                     Assigned : 2181 2193
+Variable (used in/rexx) f9910_varx                     Reference: 2182 2184
+
+Variable (set w/rexx)   f9910_varx_minus1              Assigned : 2184
+Variable (used in/rexx) f9910_varx_minus1              Reference: 2185
+
+Variable (set w/rexx)   f9910_vary                     Assigned : 2185
+Variable (used in/rexx) f9910_vary                     Reference: 2185 2186 2188 2189 2190
+
+Label (internal label)  F9920VERIFYREXXSYMBOL          Defined  : 2197
+Label (int. label ref)  F9920VERIFYREXXSYMBOL          Reference: F(919) F(1283) F(1308) F(1340) F(1353) F(1377) F(1583) F(1734) F(2137) F(2147)
+
+Variable (set w/rexx)   f9920_option                   Assigned : 2201
+Variable (used in/rexx) f9920_option                   Reference: 2203 2207
+
+Variable (set w/rexx)   f9920_symbol                   Assigned : 2201
+Variable (used in/rexx) f9920_symbol                   Reference: 2212 2215 2218
+
+Variable (set w/rexx)   f9930lhs                       Assigned : 2223 2246 2266
+Variable (used in/rexx) f9930lhs                       Reference: 2245 2246 2251 2264 2266 2269 2283
+
+Label (internal label)  F9930OUTPUTVARINFO             Defined  : 2222
+Label (int. label ref)  F9930OUTPUTVARINFO             Reference: F(1872) F(1875) F(1878) F(1881) F(1884) F(1887) F(1890) F(1893) F(1896) F(1906)
+                        ...                                       F(1910) F(1919) F(1923) F(1927) F(1931) F(1934) F(1938) F(1942) F(1944) F(2010)
+                        ...                                       F(2013) F(2016) F(2019)
+
+Variable (set w/rexx)   f9930ref                       Assigned : 2223 2261 2280
+Variable (used in/rexx) f9930ref                       Reference: 2253 2254 2255 2260 2261 2271 2272 2273 2274 2279 2280
+
+Variable (set w/rexx)   f9930rhs                       Assigned : 2223 2268
+Variable (used in/rexx) f9930rhs                       Reference: 2251 2264 2268 2269 2283
+
+Variable (set w/rexx)   f9930var                       Assigned : 2223 2247 2249 2267
+Variable (used in/rexx) f9930var                       Reference: 2227 2233 2242 2245 2249 2251 2264 2269 2283
+
+Label (internal label)  F9970CARD                      Defined  : 2289
+Label (int. label ref)  F9970CARD                      Reference: F(1825) F(1826) F(1827) F(1828) F(1829) F(1830) F(1831) F(1832) F(1833) F(1834)
+                        ...                                       F(1835) F(1836) F(1837) F(1838) F(1839) F(1840) F(1841) F(1842) F(1843) F(1844)
+                        ...                                       F(1845) F(1846) F(1847) F(1848) F(1849) F(1850) F(1851) F(1852) F(1959) F(1960)
+                        ...                                       F(1961) F(1962) F(1963) F(1964) F(1965) F(1966) F(1967) F(1968) F(1969) F(1970)
+                        ...                                       F(1971) F(1972) F(1973) F(1974) F(1975) F(1976) F(1977) F(1978) F(1979) F(1980)
+                        ...                                       F(1981) F(1982) F(1983) F(1984) F(1985) F(1986) F(1987) F(1988) F(2036) F(2037)
+                        ...                                       F(2038) F(2039) F(2040) F(2041) F(2042) F(2043) F(2044) F(2045) F(2046) F(2047)
+                        ...                                       F(2048) F(2049) F(2050) F(2051) F(2052) F(2053) F(2054) F(2055) F(2056) F(2057)
+                        ...                                       F(2058) F(2059) F(2060) F(2061) F(2062) F(2063) F(2064) F(2065) F(2066) F(2067)
+                        ...                                       F(2068) F(2069) F(2070) F(2071) F(2072) F(2073) F(2074) F(2075) F(2076) F(2077)
+                        ...                                       F(2078) F(2079) F(2080) F(2081) F(2082) F(2083) F(2084) F(2085) F(2086) F(2087)
+                        ...                                       F(2088) F(2089) F(2090) F(2091) F(2092) F(2093) F(2094) F(2095) F(2096) F(2097)
+                        ...                                       F(2098) F(2099) F(2100) F(2101) F(2102) F(2103) F(2104) F(2105) F(2106)
+
+Variable (set w/rexx)   firsttime                      Assigned : 2228
+Variable (used in/rexx) firsttime                      Reference: 2225
+
+Variable (set w/rexx)   functionnum                    Assigned : 1252
+Variable (in Stem Ref)  functionnum                    Reference: 1253
+
+Variable (set w/rexx)   in                             Assigned : 362 364 372
+Variable (used in/rexx) in                             Reference: 364 365
+Variable (in Stem Ref)  in                             Reference: 408 418 425 432
+
+Variable (set w/rexx)   indx                           Assigned : 1434 1471 1514 1567 1599 1640 1706 1750 1858 1993
+Variable (in Stem Set)  indx                           Assigned : 1439 1479 1482 1519 1572 1604 1647 1656 1713 1722 1755
+Variable (in Stem Ref)  indx                           Reference: 1437 1439 1474 1476 1479 1482 1517 1519 1570 1572 1602 1604 1645 1647 1654 1656
+                        ...                                       1711 1713 1720 1722 1753 1755 1860 1861 1862 1867 1874 1875 1877 1878 1880 1881
+                        ...                                       1883 1884 1886 1887 1889 1890 1892 1893 1895 1896 1903 1909 1910 1912 1918 1919
+                        ...                                       1922 1923 1926 1927 1930 1931 1933 1937 1938 1941 1942 1943 1944 1996 2006 2010
+                        ...                                       2012 2013 2015 2016 2018 2019
+
+Variable (set w/rexx)   indx2                          Assigned : 1855 1990
+Variable (in Stem Ref)  indx2                          Reference: 1857 1992
+
+Variable (set w/rexx)   inrc                           Assigned : 311 374
+Variable (used in/rexx) inrc                           Reference: 312 315 368 375
+
+Variable (set w/rexx)   labelrefx                      Assigned : 1395 1401 1407
+Variable (used in/rexx) labelrefx                      Reference: 1422 1427 1437 1439 1442
+
+Variable (set w/rexx)   lastf9930var                   Assigned : 2227 2238
+Variable (used in/rexx) lastf9930var                   Reference: 2234
+
+Built-In+/External use  LEFT                           Reference: F(418) F(446) F(540) F(541) F(591) F(630) F(631) F(655) F(656) F(686) F(687)
+                        ...                                       F(691) F(692) F(759) F(763) F(815) F(831) F(833) F(840) F(857) F(865) F(919)
+                        ...                                       F(1248) F(1265) F(1274) F(1337) F(1351) F(1375) F(2218) F(2246) F(2247) F(2249)
+                        ...                                       F(2255) F(2266) F(2267) F(2268) F(2274)
+
+Variable (set w/rexx)   leftline                       Assigned : 1244
+Variable (used in/rexx) leftline                       Reference: 1245
+
+Variable (set w/rexx)   leftside                       Assigned : 2233
+Variable (used in/rexx) leftside                       Reference: 2234 2238
+
+Variable (set w/rexx)   lefttemplate                   Assigned : 1332
+Variable (used in/rexx) lefttemplate                   Reference: 1333
+
+Variable (set w/rexx)   leftwords                      Assigned : 2260 2279
+Variable (used in/rexx) leftwords                      Reference: 2264 2283
+
+Built-In+/External use  LENGTH                         Reference: F(141) F(143) F(445) F(446) F(593) F(625) F(632) F(651) F(657) F(672) F(677)
+                        ...                                       F(688) F(693) F(1282) F(1289) F(1771) F(1772) F(1800) F(1801) F(2006) F(2242)
+                        ...                                       F(2246) F(2251) F(2253) F(2266) F(2268) F(2269) F(2272)
+
+Variable (set w/rexx)   line                           Assigned : 359 413 422 425 436 446 488 533 540 591 623 630 649 655 670 675 686 691 705 716
+                        ...                                       722 780 795 814 816 830 861 866 885 895 936 956 976 982 992 999 1000 1006 1012
+                        ...                                       1022 1028 1034 1047 1048 1049 1050 1060 1063 1075 1085 1095 1099 1100 1121 1128
+                        ...                                       1135 1142 1152 1157 1172 1181 1185 1234 1245 1259 1264 1267 1275 1277 1291 1297
+                        ...                                       1311
+Variable (used in/rexx) line                           Reference: 425 445 446 480 487 495 500 501 502 503 533 540 550 576 578 591 593 596 612 623
+                        ...                                       630 631 638 649 655 656 668 670 675 684 686 691 701 705 706 708 711 722 723 754
+                        ...                                       759 762 763 772 773 780 781 785 787 788 795 796 814 815 816 818 824 830 831 833
+                        ...                                       835 856 864 865 866 876 886 896 937 957 977 983 992 993 999 1000 1006 1012 1022
+                        ...                                       1028 1034 1042 1047 1048 1049 1050 1060 1062 1063 1065 1067 1071 1074 1081 1084
+                        ...                                       1095 1097 1099 1100 1101 1104 1114 1121 1122 1128 1129 1135 1136 1142 1143 1149
+                        ...                                       1165 1172 1173 1181 1182 1185 1191 1200 1213 1234 1240 1244 1259 1261 1264 1265
+                        ...                                       1267 1271 1272 1274 1275 1277 1291 1297 1311
+
+Variable (set w/rexx)   literalstart                   Assigned : 492 575 592 626 633 658 679 695
+Variable (used in/rexx) literalstart                   Reference: 583 588 605 609 621 630 631 632 647 655 656 657 666 686 687 688 691 692 693
+
+Variable (set w/rexx)   litfun                         Assigned : 1244
+Variable (used in/rexx) litfun                         Reference: 1248 1252
+
+Variable (set w/rexx)   litnext                        Assigned : 494 584 617 643 663
+Variable (used in/rexx) litnext                        Reference: 584 591 617 623 624 625 630 631 632 643 649 650 651 655 656 657 663 670 671 672
+                        ...                                       675 676 677 686 687 688 691 692 693
+Variable (in Stem Set)  litnext                        Assigned : 585 618 644 664
+
+Variable (set w/rexx)   litnum                         Assigned : 842 859
+Variable (in Stem Ref)  litnum                         Reference: 843 860
+
+Variable (set w/rexx)   litquote                       Assigned : 576
+Variable (used in/rexx) litquote                       Reference: 578 583
+
+Variable (set w/rexx)   litvalue                       Assigned : 583 609 616 642
+Variable (used in/rexx) litvalue                       Reference: 585 616 618 642 644 664
+
+Label (internal label)  LOGICMSG                       Defined  : 2297
+Label (int. label ref)  LOGICMSG                       Reference: C(558) C(587)
+
+Variable (set w/rexx)   logicmsg1                      Assigned : 2298
+Variable (used in/rexx) logicmsg1                      Reference: 2299
+
+Variable (set w/rexx)   lowerline                      Assigned : 487 534 541 624 631 650 656 671 676 687 692
+Variable (used in/rexx) lowerline                      Reference: 534 541 583 609 624 631 650 656 671 676 687 692 753
+
+Built-In+/External use  MAX                            Reference: F(137)
+
+Variable (set w/rexx)   maxoutputvar                   Assigned : 1854 1989
+Variable (used in/rexx) maxoutputvar                   Reference: 2242 2247 2249 2267
+
+Variable (set w/rexx)   maxstemlength                  Assigned : 1797 1801
+Variable (used in/rexx) maxstemlength                  Reference: 1800 1989
+
+Variable (set w/rexx)   maxvarlength                   Assigned : 1768 1772
+Variable (used in/rexx) maxvarlength                   Reference: 1771 1854
+
+Built-In+/External use  MIN                            Reference: F(138) F(505) F(506) F(932) F(947) F(949) F(951) F(1271) F(1854) F(1989)
+
+Variable (set w/rexx)   name                           Assigned : 1084
+Variable (used in/rexx) name                           Reference: 1085
+
+Variable (set w/rexx)   namex                          Assigned : 835 856 918 1200
+Variable (used in/rexx) namex                          Reference: 857 859 919 928 1201
+
+Variable (set w/rexx)   omvsseg                        Assigned : 107 113 116
+Variable (used in/rexx) omvsseg                        Reference: 120 1780 1784 1809 1813
+
+Variable (set w/rexx)   onx                            Assigned : 835
+Variable (NEVER USED)   onx                            No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   originalline                   Assigned : 480
+Variable (used in/rexx) originalline                   Reference: 485
+
+Variable (set w/rexx)   out                            Assigned : 1824 1958 2031 2035 2236 2244 2263 2282 2293
+Variable (used in/rexx) out                            Reference: 1948 2021 2023 2034 2107 2236 2244 2263 2282 2293
+Variable (in Stem Set)  out                            Assigned : 2237 2245 2264 2283 2294
+
+Variable (set w/rexx)   pendingcmd                     Assigned : 408
+Variable (used in/rexx) pendingcmd                     Reference: 413 422
+
+Variable (set w/rexx)   periods                        Assigned : 1529 1532 1667 1670
+Variable (used in/rexx) periods                        Reference: 1532 1556 1670 1694
+
+Built-In+/External use  POS                            Reference: F(495) F(500) F(501) F(502) F(503) F(578) F(708) F(763) F(1240) F(1271) F(1286)
+                        ...                                       F(1331) F(1498) F(1530) F(1533) F(1622) F(1668) F(1671) F(2218)
+
+Variable (set w/rexx)   ppos                           Assigned : 1530 1533 1668 1671
+Variable (used in/rexx) ppos                           Reference: 1531 1533 1669 1671
+
+Variable (set w/rexx)   psuedovar                      Assigned : 1537 1539 1543 1544 1545 1548 1675 1677 1681 1682 1683 1686
+Variable (used in/rexx) psuedovar                      Reference: 1539 1543 1544 1545 1548 1555 1563 1575 1677 1681 1682 1683 1686 1693 1702 1716
+                        ...                                       1725
+Variable (in Stem Set)  psuedovar                      Assigned : 1560 1699
+Variable (in Stem Ref)  psuedovar                      Reference: 1551 1567 1689 1706
+
+SpecialVar(set no-XREF) RC                              *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RC                             Reference: 135 297 299 311 324 326 374 381 383 398 1949 1951 2024 2026 2108 2110
+
+Variable (set w/rexx)   repetitor                      Assigned : 914
+Variable (used in/rexx) repetitor                      Reference: 915 918 982
+
+Variable (set w/rexx)   rest                           Assigned : 432 711 1537 1540 1675 1678 1997 2000
+Variable (used in/rexx) rest                           Reference: 436 716 1538 1540 1676 1678 1999 2000
+
+Variable (set w/rexx)   rexxline                       Assigned : 412 432 437
+Variable (used in/rexx) rexxline                       Reference: 433 437 467 471 474 484 1395 1401 1407 1460 1465 1474 1482 1485 1505 1510 1517
+                        ...                                       1519 1522 1558 1563 1570 1572 1575 1590 1595 1602 1604 1607 1630 1631 1636 1645
+                        ...                                       1647 1650 1654 1656 1659 1696 1697 1702 1711 1713 1716 1720 1722 1725 1741 1746
+                        ...                                       1753 1755 1758
+
+Variable (set w/rexx)   rexxline2                      Assigned : 408
+Variable (used in/rexx) rexxline2                      Reference: 409 412
+
+Variable (set w/rexx)   rexxstmt                       Assigned : 261 262 263 264 265 266 267 268 269 270 271 272 273 274 275 276 277 278 279 280
+                        ...                                       281 282 283 284 285 286 287 288 289 758 804
+Variable (used in/rexx) rexxstmt                       Reference: 808 812 822 828 873 990 997 1004 1010 1016 1018 1020 1026 1032 1038 1040 1056
+                        ...                                       1058 1093 1112 1119 1126 1133 1140 1147 1163 1170 1177 1179 1218
+Variable (in Stem Set)  rexxstmt                       Assigned : 261 262 263 264 265 266 267 268 269 270 271 272 273 274 275 276 277 278 279 280
+                        ...                                       281 282 283 284 285 286 287 288 289
+
+Built-In+/External use  RIGHT                          Reference: F(135) F(141) F(143) F(445) F(1279) F(1547) F(1685)
+
+Variable (set w/rexx)   rightline                      Assigned : 1244
+Variable (used in/rexx) rightline                      Reference: 1245
+
+Variable (set w/rexx)   righttemplate                  Assigned : 1332
+Variable (used in/rexx) righttemplate                  Reference: 1333
+
+SpecialVar(set no-XREF) SIGL                            *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SIGL                           Reference: 135 137 138 140 2206 2299
+
+Variable (set w/rexx)   simplevar                      Assigned : 1582 1733
+Variable (used in/rexx) simplevar                      Reference: 1583 1589 1595 1607 1734 1740 1746 1758
+Variable (in Stem Set)  simplevar                      Assigned : 1592 1743
+Variable (in Stem Ref)  simplevar                      Reference: 1586 1599 1737 1750
+
+Variable (set w/rexx)   sortedstemvariable             Assigned : 1798 1818 1992
+Variable (used in/rexx) sortedstemvariable             Reference: 1803 1819
+Variable (in Stem Set)  sortedstemvariable             Assigned : 1799
+Variable (in Stem Ref)  sortedstemvariable             Reference: 1799 1800 1801 1803 1819 1993
+
+Variable (set w/rexx)   sortedvariable                 Assigned : 1769 1789 1857
+Variable (used in/rexx) sortedvariable                 Reference: 1774 1790
+Variable (in Stem Set)  sortedvariable                 Assigned : 1770
+Variable (in Stem Ref)  sortedvariable                 Reference: 1770 1771 1772 1774 1790 1858 1864
+
+Built-In+/External use  SOURCELINE                     Reference: F(138) F(141) F(143)
+
+Variable (set w/rexx)   spaceremaining                 Assigned : 2251 2269
+Variable (used in/rexx) spaceremaining                 Reference: 2253 2255 2272 2274
+
+Variable (set w/rexx)   special                        Assigned : 231 234 237 240 243 246 249
+Variable (in Stem Set)  special                        Assigned : 232 235 238 241 244 247 250
+
+Variable (NEVER SET)    SQLERRD                        Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SQLERRD                        Assigned : 253
+
+Variable (NEVER SET)    SQLWARN                        Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SQLWARN                        Assigned : 254
+
+Variable (set w/rexx)   startcmd                       Assigned : 360 435
+Variable (used in/rexx) startcmd                       Reference: 406 443
+
+Variable (set w/rexx)   startpos                       Assigned : 489 516 525 535 542 555 559 593 625 632 651 657 672 677 688 693
+Variable (used in/rexx) startpos                       Reference: 495 500 501 502 503
+
+Label (internal label)  STARTUP                        Defined  : 149
+Label (int. label ref)  STARTUP                        Reference: S(125)
+
+Variable (set w/rexx)   statement                      Assigned : 1149
+Variable (used in/rexx) statement                      Reference: 1155 1157
+
+Variable (set w/rexx)   stem                           Assigned : 348 1554 1692
+Variable (used in/rexx) stem                           Reference: 1554 1560 1692 1699 1798 1805 1818 1990
+Variable (in Stem Set)  stem                           Assigned : 1555 1556 1557 1558 1693 1694 1696 1697
+
+Variable (set w/rexx)   stemname                       Assigned : 1998
+Variable (in Stem Ref)  stemname                       Reference: 2009
+
+Variable (set w/rexx)   stemportion                    Assigned : 1540 1678
+Variable (used in/rexx) stemportion                    Reference: 1541 1542 1545 1679 1680 1683
+
+Built-In+/External use  STRIP                          Reference: F(409) F(412) F(433) F(437) F(533) F(534) F(623) F(624) F(649) F(650) F(670)
+                        ...                                       F(671) F(675) F(676) F(705) F(722) F(780) F(795) F(816) F(845) F(861) F(866)
+                        ...                                       F(919) F(936) F(956) F(976) F(982) F(1259) F(1264) F(1267) F(1275) F(1291)
+                        ...                                       F(1297) F(1311) F(1413) F(1449) F(1496) F(1620)
+
+Variable (set w/rexx)   stype                          Assigned : 1191 1200
+Variable (used in/rexx) stype                          Reference: 1192 1203 1207
+
+Built-In+/External use  SUBSTR                         Reference: F(533) F(534) F(540) F(541) F(550) F(576) F(583) F(596) F(609) F(612) F(623)
+                        ...                                       F(624) F(630) F(631) F(638) F(649) F(650) F(655) F(656) F(668) F(670) F(671)
+                        ...                                       F(675) F(676) F(684) F(686) F(687) F(691) F(692) F(772) F(773) F(780) F(785)
+                        ...                                       F(788) F(795) F(816) F(866) F(1267) F(1272) F(1275) F(1282) F(1289) F(2006)
+
+Built-In+/External use  SUBWORD                        Reference: F(876) F(891) F(907) F(909) F(943) F(965) F(974) F(2260) F(2261) F(2279) F(2280)
+
+Variable (set w/rexx)   swap                           Assigned : 2188
+Variable (used in/rexx) swap                           Reference: 2189
+
+Label (internal label)  SYNTAX                         Defined  : 127
+
+Built-In+/External use  SYNTAX (SIGNAL ON SYNTAX)      Reference: S(103)
+
+Variable (set w/rexx)   syntaxhigh                     Assigned : 138
+Variable (used in/rexx) syntaxhigh                     Reference: 139 141 143
+
+Variable (set w/rexx)   syntaxii                       Assigned : 139
+Variable (used in/rexx) syntaxii                       Reference: 140 141 143
+
+Variable (set w/rexx)   syntaxlow                      Assigned : 137
+Variable (used in/rexx) syntaxlow                      Reference: 139
+
+Built-In+/External use  SYSCALLS                       Reference: F(110) F(114)
+
+Variable (set w/rexx)   template                       Assigned : 824 1067 1074 1084 1104 1114 1165 1327 1333 1350 1369 1374
+Variable (used in/rexx) template                       Reference: 1115 1166 1327 1331 1332 1349 1350 1369 1373 1374
+
+Variable (set w/rexx)   tempname                       Assigned : 1861 1862 1996 2000 2003
+Variable (used in/rexx) tempname                       Reference: 1872 1875 1878 1881 1884 1887 1906 1910 1919 1923 1927 1931 1934 1997 2003 2004
+Variable (in Stem Ref)  tempname                       Reference: 2001 2002
+
+Variable (set w/rexx)   thesymbol                      Assigned : 772
+Variable (used in/rexx) thesymbol                      Reference: 777 792 804
+Variable (in Stem Ref)  thesymbol                      Reference: 803
+
+Variable (set w/rexx)   token                          Assigned : 1274 1277
+Variable (used in/rexx) token                          Reference: 1279 1282 1289 1307
+
+Variable (set w/rexx)   top                            Assigned : 2170
+Variable (used in/rexx) top                            Reference: 2174 2181
+
+Variable (set w/rexx)   totalline                      Assigned : 361 405
+Variable (used in/rexx) totalline                      Reference: 405
+
+Variable (set w/rexx)   tracerexxline                  Assigned : 175 176 476
+Variable (used in/rexx) tracerexxline                  Reference: 178 181 466 467 474
+
+Built-In+/External use  TRANSLATE                      Reference: F(1000) F(1100) F(1234) F(1327) F(1369) F(1861) F(2003)
+
+Variable (set w/rexx)   trapname                       Assigned : 835 1200
+Variable (used in/rexx) trapname                       Reference: 838 840 842 845 1201 1203
+
+Variable (set w/rexx)   validsymbolchars               Assigned : 293
+Variable (used in/rexx) validsymbolchars               Reference: 762 864
+
+Variable (set w/rexx)   validvariablestart             Assigned : 294
+Variable (NEVER USED)   validvariablestart             No Ref.  : If actually referenced, it must be via a cmd.
+
+Built-In+/External use  VALUE                          Reference: F(2153) F(2155) F(2160) F(2164) F(2170) F(2175) F(2186) F(2188) F(2189)
+
+Variable (set w/rexx)   valueb                         Assigned : 161
+Variable (used in/rexx) valueb                         Reference: 205 207 210 212 217
+
+Variable (set w/rexx)   valuex                         Assigned : 158
+Variable (used in/rexx) valuex                         Reference: 168 169
+
+Variable (set w/rexx)   valuey                         Assigned : 159
+Variable (used in/rexx) valuey                         Reference: 174 176
+
+Variable (set w/rexx)   valuez                         Assigned : 160
+Variable (used in/rexx) valuez                         Reference: 186 192 194 199 200
+
+Variable (set w/rexx)   variable                       Assigned : 334 1420 1458 1503 1588 1627 1739
+Variable (used in/rexx) variable                       Reference: 1420 1424 1458 1462 1503 1507 1588 1592 1627 1633 1739 1743 1769 1776 1789 1855
+Variable (in Stem Set)  variable                       Assigned : 1421 1422 1459 1460 1504 1505 1589 1590 1628 1630 1631 1740 1741
+
+Variable (set w/rexx)   varx                           Assigned : 711 777 792 843 845 846 851 860 865 928 1192 1203 1207 1213 1253 1282 1289 1307
+                        ...                                       1342 1356 1380 1413 1414 1449 1450 1496 1497 1580 1582 1620 1621 1731 1733
+Variable (used in/rexx) varx                           Reference: 712 713 846 1214 1283 1286 1308 1413 1421 1427 1442 1449 1451 1459 1465 1485
+                        ...                                       1496 1498 1504 1510 1522 1530 1533 1537 1547 1580 1581 1582 1620 1622 1628 1636
+                        ...                                       1650 1659 1668 1671 1675 1685 1731 1732 1733
+Variable (in Stem Set)  varx                           Assigned : 1424 1462 1507 1633
+Variable (in Stem Ref)  varx                           Reference: 1418 1434 1456 1471 1501 1514 1625 1640
+
+Variable (set w/rexx)   verbx                          Assigned : 835
+Variable (used in/rexx) verbx                          Reference: 846 851
+
+Built-In+/External use  VERIFY                         Reference: F(762) F(787) F(864)
+
+Variable (set w/rexx)   width                          Assigned : 189 195 200
+Variable (used in/rexx) width                          Reference: 2251 2269
+
+Built-In+/External use  WORD                           Reference: F(881) F(942) F(964) F(1062) F(1065) F(1071) F(1081) F(1097)
+
+Variable (set w/rexx)   word1                          Assigned : 1042 1182 1336 1350 1374
+Variable (used in/rexx) word1                          Reference: 1183 1189 1196 1337 1340 1342 1351 1353 1356 1375 1377 1380
+
+Variable (set w/rexx)   word2                          Assigned : 1042 1182
+Variable (used in/rexx) word2                          Reference: 1044 1045 1047 1048 1049 1050
+
+Variable (set w/rexx)   word3                          Assigned : 1042 1182
+Variable (used in/rexx) word3                          Reference: 1044 1045 1047
+
+Variable (set w/rexx)   word4                          Assigned : 1182
+Variable (NEVER USED)   word4                          No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   word5                          Assigned : 1182
+Variable (NEVER USED)   word5                          No Ref.  : If actually referenced, it must be via a cmd.
+
+Built-In+/External use  WORDPOS                        Reference: F(903) F(904) F(932) F(947) F(949) F(951) F(968) F(969) F(970) F(1065) F(1437)
+                        ...                                       F(1474) F(1517) F(1570) F(1602) F(1645) F(1654) F(1711) F(1720) F(1753)
+
+Built-In+/External use  WORDS                          Reference: F(712) F(934) F(952) F(954) F(1476) F(2254) F(2255) F(2273) F(2274)
+
+Variable (set w/rexx)   wordx                          Assigned : 2254 2255 2258 2273 2274 2277
+Variable (used in/rexx) wordx                          Reference: 2257 2260 2261 2276 2279 2280
+
+Variable (set w/rexx)   x                              Assigned : 110 114 505 762 864 932 947 949 951 952 968 969 970 971 1271 1825 1826 1827 1828
+                        ...                                       1829 1830 1831 1832 1833 1834 1835 1836 1837 1838 1839 1840 1841 1842 1843 1844
+                        ...                                       1845 1846 1847 1848 1849 1850 1851 1852 1872 1875 1878 1881 1884 1887 1890 1893
+                        ...                                       1896 1906 1910 1919 1923 1927 1931 1934 1938 1942 1944 1959 1960 1961 1962 1963
+                        ...                                       1964 1965 1966 1967 1968 1969 1970 1971 1972 1973 1974 1975 1976 1977 1978 1979
+                        ...                                       1980 1981 1982 1983 1984 1985 1986 1987 1988 2001 2010 2013 2016 2019 2036 2037
+                        ...                                       2038 2039 2040 2041 2042 2043 2044 2045 2046 2047 2048 2049 2050 2051 2052 2053
+                        ...                                       2054 2055 2056 2057 2058 2059 2060 2061 2062 2063 2064 2065 2066 2067 2068 2069
+                        ...                                       2070 2071 2072 2073 2074 2075 2076 2077 2078 2079 2080 2081 2082 2083 2084 2085
+                        ...                                       2086 2087 2088 2089 2090 2091 2092 2093 2094 2095 2096 2097 2098 2099 2100 2101
+                        ...                                       2102 2103 2104 2105 2106 2164 2175 2189
+Variable (used in/rexx) x                              Reference: 111 513 516 525 533 534 540 541 547 550 554 555 559 763 772 773 780 785 787 865
+                        ...                                       866 934 942 943 954 964 965 973 974 1272 1274 1275
+Variable (in Stem Ref)  x                              Reference: 2002
+
+Variable (set w/rexx)   x1                             Assigned : 500 903
+Variable (used in/rexx) x1                             Reference: 505 511 513 906 907 908
+
+Variable (set w/rexx)   x2                             Assigned : 501 904
+Variable (used in/rexx) x2                             Reference: 505 511 906 908 909
+
+Variable (set w/rexx)   y                              Assigned : 506 599 787
+Variable (used in/rexx) y                              Reference: 547 575 576 578 591 788 795
+
+Variable (set w/rexx)   y1                             Assigned : 502
+Variable (used in/rexx) y1                             Reference: 506
+
+Variable (set w/rexx)   y2                             Assigned : 503 1781 1782
+Variable (used in/rexx) y2                             Reference: 506 1784
+
+Variable (set w/rexx)   y3                             Assigned : 1810 1811
+Variable (used in/rexx) y3                             Reference: 1813
+
+Variable (set w/rexx)   yy                             Assigned : 578
+Variable (used in/rexx) yy                             Reference: 579 596 599 609 612 623 624 630 631 638 649 650 655 656 668 670 671 675 676 684
+                        ...                                       686 687 691 692
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 IN.0                                       Reference: 320 323 365 377 380
+Stem-1 IN.in                                      Reference: 408 418 425 432
+
+Stem-1 LITVALUE.                                  Assigned : 493
+Stem-1 LITVALUE.functionnum                       Reference: 1253
+Stem-1 LITVALUE.litnext                           Assigned : 585 618 644 664
+Stem-1 LITVALUE.litnum                            Reference: 843 860
+
+Stem-1 OUT.out                                    Assigned : 2237 2245 2264 2283 2294
+
+Stem-1 REXXSTMT.                                  Assigned : 260
+Stem-1 REXXSTMT.rexxstmt                          Assigned : 261 262 263 264 265 266 267 268 269 270 271 272 273 274 275 276 277 278 279 280 281
+       ...                                                   282 283 284 285 286 287 288 289
+Stem-1 REXXSTMT.thesymbol                         Reference: 803
+
+Stem-1 SORTEDSTEMVARIABLE.0                       Assigned : 1805
+Stem-1 SORTEDSTEMVARIABLE.indx2                   Reference: 1992
+Stem-1 SORTEDSTEMVARIABLE.sortedstemvariable      Assigned : 1799
+Stem-1 SORTEDSTEMVARIABLE.sortedstemvariable      Reference: 1800 1801 1803 1819
+
+Stem-1 SORTEDVARIABLE.0                           Assigned : 1776
+Stem-1 SORTEDVARIABLE.indx2                       Reference: 1857
+Stem-1 SORTEDVARIABLE.sortedvariable              Assigned : 1770
+Stem-1 SORTEDVARIABLE.sortedvariable              Reference: 1771 1772 1774 1790
+
+Stem-1 SPECIALSTEM.                               Assigned : 252
+Stem-1 SPECIALSTEM.SQLERRD                        Assigned : 253
+Stem-1 SPECIALSTEM.SQLWARN                        Assigned : 254
+Stem-1 SPECIALSTEM.stemname                       Reference: 2009
+
+Stem-1 SPECIALVAR.                                Assigned : 229
+Stem-1 SPECIALVAR.sortedvariable                  Reference: 1864
+Stem-1 SPECIALVAR.special                         Assigned : 232 235 238 241 244 247 250
+Stem-1 SPECIALVAR.tempname                        Reference: 2002
+
+Stem-1 STEMASG.                                   Assigned : 355
+Stem-1 STEMASG.indx                               Assigned : 1572
+Stem-1 STEMASG.indx                               Reference: 1570 1572 2012 2013
+Stem-1 STEMASG.stem                               Assigned : 1558
+
+Stem-1 STEMEXPOSEREF.                             Assigned : 354
+Stem-1 STEMEXPOSEREF.indx                         Assigned : 1713
+Stem-1 STEMEXPOSEREF.indx                         Reference: 1711 1713 2018 2019
+Stem-1 STEMEXPOSEREF.stem                         Assigned : 1696
+
+Stem-1 STEMINDX.                                  Assigned : 347
+Stem-1 STEMINDX.psuedovar                         Assigned : 1560 1699
+Stem-1 STEMINDX.psuedovar                         Reference: 1551 1567 1689 1706
+Stem-1 STEMINDX.sortedstemvariable                Reference: 1993
+
+Stem-1 STEMPERIODS.                               Assigned : 352
+Stem-1 STEMPERIODS.indx                           Reference: 2010 2013 2016 2019
+Stem-1 STEMPERIODS.stem                           Assigned : 1556 1694
+
+Stem-1 STEMREF.                                   Assigned : 353
+Stem-1 STEMREF.indx                               Assigned : 1722
+Stem-1 STEMREF.indx                               Reference: 1720 1722 2015 2016
+Stem-1 STEMREF.stem                               Assigned : 1557 1697
+
+Stem-1 STEMVARIABLE.                              Assigned : 351
+Stem-1 STEMVARIABLE.indx                          Reference: 1996 2006
+Stem-1 STEMVARIABLE.sortedstemvariable            Reference: 1799
+Stem-1 STEMVARIABLE.stem                          Assigned : 1555 1693
+
+Stem-1 VARIABLE.                                  Assigned : 337
+Stem-1 VARIABLE.indx                              Reference: 1861 1862 1890 1893 1896 1938 1942 1944
+Stem-1 VARIABLE.sortedvariable                    Reference: 1770
+Stem-1 VARIABLE.variable                          Assigned : 1421 1459 1504 1589 1628 1740
+
+Stem-1 VARIABLEEXPOSEREF.                         Assigned : 339
+Stem-1 VARIABLEEXPOSEREF.indx                     Assigned : 1647
+Stem-1 VARIABLEEXPOSEREF.indx                     Reference: 1645 1647 1867 1880 1881 1903 1912 1922 1923
+Stem-1 VARIABLEEXPOSEREF.variable                 Assigned : 1630
+
+Stem-1 VARIABLELABELDEF.                          Assigned : 343
+Stem-1 VARIABLELABELDEF.indx                      Assigned : 1479 1482
+Stem-1 VARIABLELABELDEF.indx                      Reference: 1474 1476 1479 1482 1889 1890 1892 1895 1937 1938 1941
+Stem-1 VARIABLELABELDEF.variable                  Assigned : 1460
+
+Stem-1 VARIABLELABELREF.                          Assigned : 344
+Stem-1 VARIABLELABELREF.indx                      Assigned : 1439
+Stem-1 VARIABLELABELREF.indx                      Reference: 1437 1439 1892 1893 1895 1896 1941 1942 1943 1944
+Stem-1 VARIABLELABELREF.variable                  Assigned : 1422
+
+Stem-1 VARIABLEREF.                               Assigned : 338
+Stem-1 VARIABLEREF.indx                           Assigned : 1656
+Stem-1 VARIABLEREF.indx                           Reference: 1654 1656 1867 1877 1878 1903 1912 1918 1919
+Stem-1 VARIABLEREF.variable                       Assigned : 1631
+
+Stem-1 VARIABLESET.                               Assigned : 340
+Stem-1 VARIABLESET.indx                           Assigned : 1519
+Stem-1 VARIABLESET.indx                           Reference: 1517 1519 1860 1867 1874 1875 1903 1909 1910 1933
+Stem-1 VARIABLESET.variable                       Assigned : 1505
+Stem-1 VARIABLESET.x                              Reference: 2002
+
+Stem-1 VARIABLESINDX.                             Assigned : 333
+Stem-1 VARIABLESINDX.simplevar                    Assigned : 1592 1743
+Stem-1 VARIABLESINDX.simplevar                    Reference: 1586 1599 1737 1750
+Stem-1 VARIABLESINDX.sortedvariable               Reference: 1858
+Stem-1 VARIABLESINDX.tempname                     Reference: 2001
+Stem-1 VARIABLESINDX.varx                         Assigned : 1424 1462 1507 1633
+Stem-1 VARIABLESINDX.varx                         Reference: 1418 1434 1456 1471 1501 1514 1625 1640
+
+Stem-1 VARIABLESTEMREF.                           Assigned : 342
+Stem-1 VARIABLESTEMREF.indx                       Assigned : 1755
+Stem-1 VARIABLESTEMREF.indx                       Reference: 1602 1753 1755 1867 1886 1887 1903 1912 1930 1931
+Stem-1 VARIABLESTEMREF.variable                   Assigned : 1741
+
+Stem-1 VARIABLESTEMSET.                           Assigned : 341
+Stem-1 VARIABLESTEMSET.indx                       Assigned : 1604
+Stem-1 VARIABLESTEMSET.indx                       Reference: 1604 1867 1883 1884 1903 1912 1926 1927
+Stem-1 VARIABLESTEMSET.variable                   Assigned : 1590
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

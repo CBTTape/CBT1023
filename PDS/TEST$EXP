@@ -1,0 +1,56 @@
+//SFRH66RX JOB 0,RHUMPHRIS@IOT.IN.GOV,MSGCLASS=S,CLASS=S,NOTIFY=SFRH66
+//*              ---------------------
+//* *internal job* ... used by me to test my version of the $EXPAND
+//*                   job.
+//*
+//*
+//* Job to use XMI* members in this pds, to create other pds's
+//*
+//*
+//*
+//   EXPORT SYMLIST=(THISDSN,XREFHLQ,RECOPT)
+//*    use fully qualified dataset names (below)
+//*    -----------------------------------------
+//   SET THISDSN='SFRH66.PUBLIC.REXXXREF.$PACKAGE' <-- dsn of this pds
+//   SET XREFHLQ='SFRH66.TEST.REXXXREF' <-- hlq for
+//*                                     new pds's with this hlq.
+//   SET RECOPT='UNIT(SYSDA)'  <---receive options (this is minimum)
+//*                                although you may use a different
+//*                                unit_name and/or add more options
+//*     potential RECOPT options:
+//*     -------------------------
+//*        UNIT(unit_name)
+//*        VOLUME(volser)
+//*        SPACE(primary,sec)
+//*        TRACKS or CYLINDERS
+//*        DIRECTORY(blocks)
+//*        BLKSIZE(size)
+//*        NEW or OLD or MOD or SHR
+//*        MGMTCLAS(management_class_name)
+//*        STORCLAS(storage_class_name)
+//*
+//*
+//*
+//PACKAGE  EXEC PGM=IKJEFT01,DYNAMNBR=20
+//SYSEXEC  DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.REXX
+//SYSTSPRT DD  SYSOUT=*
+//SYSPRINT DD  SYSOUT=*
+//*
+//*//XMIDOC   DD  DISP=SHR,DSN=&THISDSN.(XMIDOC)
+//*//XMIJCL   DD  DISP=SHR,DSN=&THISDSN.(XMIJCL)
+//*//XMIREXX  DD  DISP=SHR,DSN=&THISDSN.(XMIREXX)
+//*//XMISCAN  DD  DISP=SHR,DSN=&THISDSN.(XMISCAN)
+//*//XMIXREF  DD  DISP=SHR,DSN=&THISDSN.(XMIXREF)
+//*
+//SYSTSIN  DD  *,SYMBOLS=JCLONLY create PDS's for rexx xref
+PROFILE NOPREFIX
+TSOEXEC RECEIVE INDSNAME(&THISDSN.(XMIDOC))
+  DATASET(&XREFHLQ..DOC) &RECOPT
+TSOEXEC RECEIVE INDSNAME(&THISDSN.(XMIJCL))
+  DATASET(&XREFHLQ..JCL) &RECOPT
+TSOEXEC RECEIVE INDSNAME(&THISDSN.(XMIREXX))
+  DATASET(&XREFHLQ..REXX) &RECOPT
+TSOEXEC RECEIVE INDSNAME(&THISDSN.(XMISCAN))
+  DATASET(&XREFHLQ..SAMPLE.SCAN) &RECOPT
+TSOEXEC RECEIVE INDSNAME(&THISDSN.(XMIXREF))
+  DATASET(&XREFHLQ..SAMPLE.XREF) &RECOPT
