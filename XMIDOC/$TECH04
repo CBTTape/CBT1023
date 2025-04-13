@@ -1,0 +1,153 @@
+   (contents described in $TECHIDX)
+   (------------------------------)
+
+
+TECH04 - Logic + "data structures" in c9900OutputResults (creating xref 1 + 2)
+------------------------------------------------------------------------------
+
+The data structures created (mentioned in $TECH02) are now used to created the xref.
+
+For xref 1 we are focused on the "variable" structures
+------------------------------------------------------
+   We have a lot of "variables created:
+      variable.1
+      variable.2
+      ...up to ...
+      variable.variable
+
+   But these were all created randomly (as we saw variables referenced and/or assigned values)
+   and we want to produce the contents for xref1 in "sorted" order.
+
+   To do this, we set another set of variables:
+      sortedVariable.1        = variable.1
+      sortedVariable.2        = variable.2
+      ...
+      sortedVariable.variable = variable.variable
+
+   Then we sortedVariable.# into a sorted sequence.
+      If we had an omvs segment, we did this via an omvs function call.
+      If we didn't,              we called our own intenal sort
+
+   either way:
+      sortedVariable.1 has 1st variable for our xref.
+      sortedVariable.2 has 2nd variable for our xref.
+      etc.
+
+   now we loop thru those stem variables for the next group of entries to print in xref1.
+
+      do indx2 = 1 by 1 for variable
+         sortedVariable = sortedVariable.indx2  (get next sorted variable)
+         indx = variablesIndx.sortedVariable    (use variablesIndx. to switch from variablename to indx)
+         /*                                                                                 */
+         /* indx has a number of the entire datastructures w/  information on this variable */
+         /* ------------------------------------------------------------------------------- */
+         /*                                                                                 */
+         /*        variable.indx                  the value of varX                                                                   */
+         /*                                                                                                                           */
+         /*        variableRef.indx               a string of rexxline numbers (referencing this variable)                            */
+         /*                                                                                                                           */
+         /*        variableSet.indx               a string of rexxline numbers (for assignment(s) of this variable)                   */
+         /*                                                                                                                           */
+         /*        variableStemSet.indx           a string of rexxline numbers (for variable use in a stem)                           */
+         /*                                         Note: this variable was used as a variable in the right hand side of a stem       */
+         /*                                         ...and was used to help SET that stem variable.                                   */
+         /*                                                                                                                           */
+         /*        variableStemRef.indx           a string of rexxline numbers (for variable use in a stem)                           */
+         /*                                         Note: this variable was used as a variable in the right hand side of a stem       */
+         /*                                         ...and was used to help REFERENCE a stem variable.                                */
+         /*                                                                                                                           */
+         /*        variableLabelDef.indx          a string of rexxline numbers for where a label was defined.                         */
+         /*                                         Note: labels may start with digits and/or a period.  And labels are NOT           */
+         /*                                         ...treated as stems.  So variable.indx may start with digits and/or a period      */
+         /*                                         ...etc in variable.indx. (unlike any other variable.indx)                         */
+         /*                                         Note: labels may also appear as a literal like 'XTRNL' if user was calling        */
+         /*                                         and external routine and/or function with name in quotes.                         */
+         /*                                                                                                                           */
+         /*        variableLabelRef.indx          a string of rexxline numbers with call/function/signal info like C(#) F(#) or S(#). */
+         /*                                         Note: labels may start with digits and/or a period.  And labels are NOT           */
+         /*                                         ...treated as stems.  So variable.indx may start with digits and/or a period      */
+         /*                                         ...etc in variable.indx. (unlike any other variable.indx)                         */
+         /*                                         Note: labels may also appear as a literal like 'XTRNL' if user was calling        */
+         /*                                         and external routine and/or function with name in quotes.                         */
+         /*                                                                                                                           */
+         /*        variableAddrDef.indx           a string of rexxline numbers where a ADDRESS 'environment'                          */
+         /*                                                                       or a ADDRESS 'environment' <cmd>                    */
+         /*                                         was used.  Actual <cmd> is not xreferenced, although any indiviual variables used */
+         /*                                         in such a command will show up in the xreference.                                 */
+         /*                                                                                                                           */
+         /*                                                                                                                           */
+         /*        variableAddrDefValue.Index     a string of rexxline numbers where a ADDRESS VALUE expression                       */
+         /*                                                                       or a ADDRESS (expression)                           */
+         /*                                         was used.  Note:  if any individual variables are used in the expression they     */
+         /*                                         will also show up in the xreference.  In addition, the parens are equivelent to   */
+         /*                                         spaces, so if the expression continues past the closing paren, that is legal.     */
+         /*                                                                                                                           */
+         using those datastructures, if we have info on variable (say for simple references) then that goes into the xref.
+
+         if variable name is also a special variable, we may add more information.
+
+         if variable name (variableSet.indx) was NEVER assigned a value, the variable name is put into XREF in UpperCase.
+         if variable name (variableSet.indx) was       ASSIGNED a value, the variable name is put into XREF in LowerCase.
+
+         if it's used in a LabelDef or LabelRef (and it's an internal label) it will always be in UpperCase.  When reporting label info.
+         if it's used in a LabelDef or LabelRef (and it's an external label) then the case will be as it was in the literal value.
+     end
+
+For xref 2 we are focused on the "stem" structures
+--------------------------------------------------
+   We have a lot of "stem" variables created:
+      stem.1
+      stem.2
+      ...up to ...
+      stem.stem
+
+   But these were all created randomly (as we saw variables referenced and/or assigned values)
+   and we want to produce the contents for xref2 in "sorted" order.
+
+   To do this, we set another set of variables:
+      sortedStemVariable.1        = stem.1
+      sortedStemVariable.2        = stem.2
+      ...
+      sortedStemVariable.stem     = stem.stem
+
+   Then we sort sortedStemVariable.# into a sorted sequence.
+      If we had an omvs segment, we did this via an omvs function call.
+      If we didn't,              we called our own intenal sort
+
+   either way:
+      sortedStemVariable.1 has 1st variable for our xref.
+      sortedStemVariable.2 has 2nd variable for our xref.
+      etc.
+
+   now we loop thru those stem variables for the next group of entries to print in xref1.
+
+      do indx2 = 1 by 1 for stem
+         sortedStemVariable = sortedStemVariable.indx2 (get next sorted variable)
+         indx = stemIndx.sortedStemVariable (use stemIndx. to switch from sortedStemVariable to indx)
+         /*                                                                                 */
+         /* indx has a number of the entire datastructures w/  information on this variable */
+         /* ------------------------------------------------------------------------------- */
+         /*                                                                                 */
+         /*        stem.indx                      the value of varX (for example:  stem. stem.indx stem.x)                            */
+         /*                                                                                                                           */
+         /*        stemAsg.indx                   a string of rexxline numbers assigning values to this stem                          */
+         /*                                                                                                                           */
+         /*        stemRef.indx                   a string of rexxline numbers referencing this stem                                  */
+         /*                                                                                                                           */
+         /*                                                                                                                           */
+
+         note:  the sortedStemVariable will contain one (or more) periods.  And variable on the right of them stem (except null) is
+            then looked up via the variables.Indx to see if it was ever assigned a value.
+
+            If it was NOT assigned a value then variable (to the right of the stem) is displayed in the XREF in UpperCase.
+            If it WAS     assigned a value then variable (to the right of the stem) is displayed in the XREF in LowerCase.
+
+            Thus, at a glance, you can determine (usually) if part of the stem was used as a constant or a variable.
+
+            Of course, in actuallity, depending on when it was assigned a value, it might have been used as both a constant and a
+            variable.
+
+         Counting periods in sortedStemValue gives us a "stem-#".  Of course, this in practice, this may not be useful if any of the
+         variables (to the right of stem variable) contain periods themselves.
+
+     end

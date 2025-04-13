@@ -1,0 +1,847 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.CNTL.DB2(PARTSHUT)"      */
+/*      -------------------------       */
+/*  date/time of XREF was:              */
+/*     20231217 23:02:19                */
+/*      -------------------------       */
+
+/***************************** REXX **********************************
+ *********************************************************************
+ *                                                                   *
+ *  Name:  PARTSHUT                                                  *
+ *                                                                   *
+ *  Description:  Either part of the FULLSHUT cmd and/or             *
+ *    just the PARTSHUT command.                                     *
+ *                In either case, the primary function of PARTSHUT is*
+ *    to define the phases of how things will be brought down.       *
+ *                After defining the phase actions it will enable the*
+ *    TOD rule SHUTPROC.  SHUTPROC will go thru the partshut phases  *
+ *    (and optionally) the fullshut phase as well.                   *
+ *                                                                   *
+ *                                                                   *
+ *********************************************************************
+ *                                                                   *
+ * CHG#  DATE     WHO               DESCRIPTION                      *
+ * ----+--------+-------+------------------------------------------- *
+ *      02/14/04 SCH059   Initial create                             *
+ *      04/16/04 SCH059   Added SHOW command                         *
+ *      02/03/13 SFRH25   Added STOP for IRLM* resources             *
+ *      06/13/18 SFRH66   Added support for FULLSHUT command and     *
+ *                    updated process of bringing down tasks for     *
+ *                    PARTSHUT and/or FULLSHUT.                      *
+ *                        Added PARTSHUT CANCEL command too.         *
+ *      02/18/19 SFRH66   Removed reference to PPRT5 (obsolete)      *
+ *      10/21/19 SFRH66   Added                                      *
+ *                    phase 1:  (db2) stop ddf mode(quiesce) cmds.   *
+ *                    phase 2:  (db2) stop ddf mode(force)   cmds.   *
+ *                    for phase 3, when we bring down db2(s) this    *
+ *                              should prevent any DDF hangs from    *
+ *                              preventing DB2(s) from stopping.     *
+ *      02/16/20 SFRH66                                              *
+ *                    before, if fullshut, F DFHSM,HOLD ALL was      *
+ *                                         issued (in phase 1) which *
+ *                                         blocked all recalls.      *
+ *                    now, we'll do HOLD ALL (before phase 1)  .     *
+ *                    but then RELEASE (hold) on RECALL  in phase 1. *
+ *                    (find on DFHSM, to see changes)                *
+ *      01/04/21 SFRH66                                              *
+ *                    removed (omegamon ims) CANSI5, as rule no      *
+ *                         no longer exists for CANSI5.              *
+ *      01/19/21 SFRH66                                              *
+ *                    shutdown IZUANG1 first (and let af/operator    *
+ *                         stop it (not us) in phase 1.              *
+ *                                                                   *
+ *                         We had issued p izusvr1 1st, in phase 1   *
+ *                         without af/operator control.              *
+ *                                                                   *
+ *                    shutdown IZUSVR1 next  (and let af/operator    *
+ *                         stop it (not us) in phase 2.              *
+ *                                                                   *
+ *                         We had issued p izuang1 2nd, in phase 2.  *
+ *                         without af/operator control.              *
+ *                                                                   *
+ *                    Remove IMS tasks from shutdown (no longer      *
+ *                         active any longer).                       *
+ *                                                                   *
+ *                    Remove DSN5/DSN6 commands from shutdown (no    *
+ *                         longer exist).                            *
+ *      02/21/21 SFRH66                                              *
+ *                    reverse, izusrvr1 before izuang1               *
+ *      05/11/22 sfrh66                                              *
+ *                    add stop for AXR (system rexx) when AXR04 is up*
+ *                    ...this address space is new with z/os 2.5     *
+ *      05/17/22 sfrh66                                              *
+ *                    add stop for CFZCIM (in phase 1)               *
+ *                    remove stops for izusrvr1 and izuang1 and let  *
+ *                    ... F OMVS,SHUTDOWN take them down in phase 4. *
+ *      08/17/22 sfrh66                                              *
+ *                    add trap for IKT012D messages (where TSO stalls*
+ *                    coming down, where it want to procede (U) or   *
+ *                    take a dump (reply DUMP).  For now, just reply *
+ *                    U.  Trap is SHUTTCAS and there is a rexx by    *
+ *                    that name that will be fired.                  *
+ *********************************************************************/
+ trace r
+ parse upper arg cmd .
+
+ x = SYSVGET('AOSYSID') /* get system name ISDPROD or ISDTEST */
+ say 'AOSYSID='aosysid
+ x = SHARVGET('SYSTEM','GLOBAL.KPRESHUT.') /* get info on PRESHUT  */
+ x = SHARVGET('SYSTEM','GLOBAL.KPARTSHUT.') /* get info on PARTSHUT  */
+ x = SHARVGET('SYSTEM','GLOBAL.KFULLSHUT.') /* get info on FULLSHUT  */
+
+ if cmd = 'CANCEL' /* allow PARTSHUT cancel */
+ then do /* also cancel's fullshut, if active */
+    'TRAP DISABLE(SHUTWTOR)' /* end this from firing */
+    'TRAP DISABLE(SHUTPROC)' /* end this from firing */
+    'TRAP DISABLE(SHUTTCAS)' /* end this from firing */
+    /* dom any highlighted wto's now */
+    parse var GLOBAL.Kpreshut.Kpreshut001 dom1 .
+    parse var GLOBAL.Kpreshut.Kpreshut002 dom2 .
+    parse var GLOBAL.Kpreshut.Kpreshut003 dom3 .
+    parse var GLOBAL.Kpreshut.Kpreshut004 dom4 .
+    if dom1 <> '' & datatype(dom1,'W') then 'DOM' dom1
+    if dom2 <> '' & datatype(dom2,'W') then 'DOM' dom2
+    if dom3 <> '' & datatype(dom3,'W') then 'DOM' dom3
+    if dom4 <> '' & datatype(dom4,'W') then 'DOM' dom4
+
+    /* reinit global variables and exit */
+    GLOBAL.Kpreshut.Kpreshut001 = ''
+    GLOBAL.Kpreshut.Kpreshut002 = ''
+    GLOBAL.Kpreshut.Kpreshut003 = ''
+    "WTO 'PARTSHUT cancel completed'" ,
+       "ROUT(2) DESC(2)" ,
+       "MSGID(PARTSH04) WTONO(GETDOM)"
+    x = glbvget('GETDOM')
+    GLOBAL.Kpreshut.Kpreshut004 = GETDOM date('b') time('s')
+    GLOBAL.kSHUTPROCPHASE.kACTIVE = 0
+    GLOBAL.kPARTSHUT.kACTIVE    = 0
+    GLOBAL.kFULLSHUT.kACTIVE    = 0
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT001')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT002')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT003')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT004')
+    x = sharvput('SYSTEM','GLOBAL.KSHUTPROCPHASE.KACTIVE')
+    x = sharvput('SYSTEM','GLOBAL.KPARTSHUT.KACTIVE')
+    x = sharvput('SYSTEM','GLOBAL.KFULLSHUT.KACTIVE')
+    return
+ end
+ if GLOBAL.kSHUTPROCPHASE.kACTIVE > 0 ,
+  | GLOBAL.KPARTSHUT.KACTIVE     = 1
+ then do
+    parse var global.Kpreshut.Kpreshut004 dom4 .
+
+    if dom4 <> '' & datatype(dom4,'W')
+    then 'DOM' dom4 /* unhighlight any outstanding wto's */
+
+    "WTO 'PARTSHUT is still running, PARTSHUT cmd ignored'" ,
+        "MSGID(PARTSH04) WTONO(GETDOM)"
+     x = glbvget('GETDOM')
+     GLOBAL.Kpreshut.Kpreshut004 = GETDOM date('b') time('s')
+     x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT004')
+    return
+ end
+
+ /* ******************************************************** */
+ /* Now we are in actual  "command" processing.  We need to  */
+ /* begin the "PreShut" process of bringing down onlines and */
+ /* quiesing things like DFHSM.                              */
+ /* ******************************************************** */
+
+ /* dom any highlighted wto's now */
+ parse var GLOBAL.Kpreshut.Kpreshut001 dom1 .
+ parse var GLOBAL.Kpreshut.Kpreshut002 dom2 .
+ parse var GLOBAL.Kpreshut.Kpreshut003 dom3 .
+ parse var GLOBAL.Kpreshut.Kpreshut004 dom4 .
+ if dom1 <> '' & datatype(dom1,'W') then 'DOM' dom1
+ if dom2 <> '' & datatype(dom2,'W') then 'DOM' dom2
+ if dom3 <> '' & datatype(dom3,'W') then 'DOM' dom3
+ if dom4 <> '' & datatype(dom4,'W') then 'DOM' dom4
+
+ GLOBAL.Kpreshut.Kpreshut001 = ''
+ GLOBAL.Kpreshut.Kpreshut002 = ''
+ GLOBAL.Kpreshut.Kpreshut003 = ''
+ GLOBAL.Kpreshut.Kpreshut004 = ''
+ GLOBAL.kSHUTPROCPHASE.kACTIVE = 0
+ GLOBAL.KPARTSHUT.KACTIVE = 0
+
+    /* call SetPhaseActions... define sequence for shutdown */
+    /* call SetPhaseActions... define sequence for shutdown */
+    /* ---------------------------------------------------- */
+
+ seterrors = 0
+ call SetPhaseActions /* set variables for actions to take now (later*/
+                      /*     in this exec) or in the future.         */
+ if seterrors > 0
+ then do /* this rule cannot process correctly */
+    msg = 'SetPhaseActions failed, seterrors='seterrors
+    "WTO '"msg"'" ,
+        "ROUT(2) DESC(2) MSGID(PARTSH03) WTONO(GETDOM)"
+    x = glbvget('GETDOM')
+    GLOBAL.Kpreshut.Kpreshut003 = GETDOM date('b') time('s')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT003')
+    return
+ end
+
+   /*  need to save global variables for SHUTPROC use */
+   /*  ---------------------------------------------- */
+ x = SHARVPUT('SYSTEM','GLOBAL.KSETTASK.')    /* save info  */
+ x = SHARVPUT('SYSTEM','GLOBAL.KSETRCFTASK.') /* save info  */
+ x = SHARVPUT('SYSTEM','GLOBAL.KSETRCFGROUP.')/* save info  */
+ x = SHARVPUT('SYSTEM','GLOBAL.KSETCMD.')     /* save info  */
+
+ if cmd = 'TEST' /* test option: for checking SetPhaseActions only */
+ then return     /* ... so exit now.                               */
+
+ if cmd <> ''
+ then do
+    /* partshut command has 3 options:                   */
+    /*    <no option> normal partshut/fullshut operation */
+    msg = 'PARTSHUT cmd ignored; only options are CANCEL or TEST'
+    "WTO '"msg"'" ,
+        "ROUT(2) DESC(2) MSGID(PARTSH03) WTONO(GETDOM)"
+    x = glbvget('GETDOM')
+    GLOBAL.Kpreshut.Kpreshut003 = GETDOM date('b') time('s')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT003')
+    return
+ end
+
+ /* at this point, add some innocous commands to make sure */
+ /* ...we can talk to ca70/ca72 later                      */
+ "OPER 'F CA70,/LOGON CONSOL'" /* tell ca70/ca72 to listen to */
+ "OPER 'F CA72,/LOGON CONSOL'" /* ...af/operator.             */
+
+ /* if fullshut, disable HSM now... in phase 1, reenable for recall*/
+ if global.kFULLSHUT.kACTIVE = 1   /* is fullshut in progress? */
+ then "OPER 'F DFHSM,HOLD ALL'"    /* yes, quiesce DFHSM now   */
+
+ /* now add add/enable some traps for PARTSHUT/FULLSHUT process*/
+ "TRAP ADD(SHUTWTOR) WTO(KAO03900) ACTION('EX SHUTWTOR') AOTRAP"
+ if rc <> 0
+ then do
+    msg = 'TRAP ADD(SHUTWTOR) failed for PARTSHUT cmd'
+    "WTO '"msg"'" ,
+        "ROUT(2) DESC(2) MSGID(PARTSH03) WTONO(GETDOM)"
+    x = glbvget('GETDOM')
+    GLOBAL.Kpreshut.Kpreshut003 = GETDOM date('b') time('s')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT003')
+    return
+ end
+
+ /* now add add/enable some traps for PARTSHUT/FULLSHUT process*/
+ "TRAP ADD(SHUTTCAS) WTO(IKT012D) ACTION('EX SHUTTCAS') AOTRAP"
+ if rc <> 0
+ then do
+    msg = 'TRAP ADD(SHUTTCAS) failed for PARTSHUT cmd'
+    "WTO '"msg"'" ,
+        "ROUT(2) DESC(2) MSGID(PARTSH03) WTONO(GETDOM)"
+    x = glbvget('GETDOM')
+    GLOBAL.Kpreshut.Kpreshut003 = GETDOM date('b') time('s')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT003')
+    return
+ end
+
+ "OPER 'RCF CHECK APPC'"  /* APPC is likely in a incorrect state */
+                /* ... mark started if started.        */
+                /* (SFRH66) */
+ 'TRAP ENABLE(SHUTWTOR)' /* start it up */
+ /* note:  SHUTWTOR will reply cancel to any scheduled */
+ /*    task that is trying to start while we are       */
+ /*    shutting down the system.                       */
+
+ 'TRAP ENABLE(SHUTTCAS)' /* start it up */
+ /* note:  SHUTTCAS will reply U to a IKT012D message  */
+ /*    asking us to procede with TSO shutdown and/or   */
+ /*    take a DUMP of tso first.                       */
+
+ "OPER 'RCF SHOW *'               "
+
+
+ "TRAP ADD(SHUTPROC) TOD(*) INTERVAL(30) ACTION('EX SHUTPROC')"
+ if rc <> 0
+ then do
+    if tasks <> ''
+    then 'DOM' getdom
+    msg = 'TRAP ADD(SHUTPROC) failed for PARTSHUT cmd'
+    "WTO '"msg"'" ,
+        "ROUT(2) DESC(2) MSGID(PARTSH03) WTONO(GETDOM)"
+    x = glbvget('GETDOM')
+    GLOBAL.Kpreshut.Kpreshut003 = GETDOM date('b') time('s')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT004')
+    return
+ end
+
+ GLOBAL.kPARTSHUT.kACTIVE      = 1 /* partshut is active */
+ GLOBAL.kSHUTPROCPHASE.kACTIVE = 1 /* this is phase we are in */
+
+ if global.kFULLSHUT.kACTIVE = 1   /* is fullshut in progress? */
+ then nop                          /* yes, don't reset variable*/
+ else global.kFULLSHUT.kACTIVE = 0 /* no, but ensure it has a valid value */
+
+ x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT001')
+ x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT002')
+ x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT003')
+ x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT004')
+ x = sharvput('SYSTEM','GLOBAL.KSHUTPROCPHASE.KACTIVE')
+ x = sharvput('SYSTEM','GLOBAL.KPARTSHUT.KACTIVE')
+ x = sharvput('SYSTEM','GLOBAL.KFULLSHUT.KACTIVE')
+
+ 'TRAP ENABLE(SHUTPROC)' /* start it up */
+ /* note:  SHUTPROC will complete the partial shutdown */
+ /* note:  if FULLSHUT is also in progress, when it    */
+ /*    completes the partial shutdown, SHUTPROC will   */
+ /*    also complete the FULLSHUT process as well.     */
+
+ /* normal end of PARTSHUT command, before SHUTPROC takes over */
+ /* normal end of PARTSHUT command, before SHUTPROC takes over */
+ /* normal end of PARTSHUT command, before SHUTPROC takes over */
+ /* normal end of PARTSHUT command, before SHUTPROC takes over */
+return
+
+    /* subroutines follow */
+    /* subroutines follow */
+    /* subroutines follow */
+    /* subroutines follow */
+
+
+SetPhaseActions:
+ /* now define the tasks and/or commands and phase of shutdown */
+ /* ------------------------------------------------------------- */
+     /* PARTSHUT or FULLSHUT                                   */
+           /*                   PARTSHUT and FULLSHUT          */
+           /*                Note: phase 4 only executed when  */
+           /*                   FULLSHUT was requested.        */
+     /* phase 1 = execute in PARTSHUT (phase 1) */
+     /* phase 2 = execute in SHUTPROC (phase 2, after phase 1  */
+           /*                              tasks are down.     */
+           /*                                                  */
+     /* phase 3 = execute in SHUTPROC (phase 3, after phase 2  */
+           /*                              tasks are down.     */
+           /*                                                  */
+     /* phase 4 = exec.maybe SHUTPROC (phase 4, after phase 3  */
+           /*                              tasks are down.     */
+
+    groupindex. = 0 /* Groupindex. set to 0 (one time)*/
+       /* differences in which routines to call */
+       /*     phaseInit - called after you set phase=1,2,3 or 4 */
+       /*                    if you add additional phases you'll*/
+       /*                    have to modify SHUTPROC so that it */
+       /*                    knows what phases belong to "PARTSHUT"*/
+       /*                    and what phases belong to FULLSHUT    */
+       /*                    At time of documentation:             */
+       /*                       phase 1,2,3 are part of PARTSHUT   */
+       /*                       phase 4     is  FULLSHUT.          */
+       /*                    Critical for SHUTPROC to know that.   */
+       /*                                                          */
+       /*     SetTask   - called with 'taskname, command'          */
+       /*                 Shutproc(one time) will check if         */
+       /*                       task is up, if so will issue cmd.  */
+       /*                 Shutproc(everytime) will also want this  */
+       /*                       task to come down, unless command  */
+       /*                       is a "drain" command or            */
+       /*                       when task = C2RSERVE               */
+       /*                                                          */
+       /*     SetCmd    - called with 'command'.  Shutproc (onetime)*/
+       /*                       will issue the command,            */
+       /*                                                          */
+       /*     SetRCFtask - called with 'taskname' we will ask the  */
+       /*                  system state manager to bring down the  */
+       /*                  task.  We will check task to make sure  */
+       /*                  it comes down.                          */
+       /*                                                          */
+       /*     SetRCFgroup - called with 'groupname task1 task2 etc'*/
+       /*                  can be called multiple times with same  */
+       /*                  groupname so you can identify all the   */
+       /*                  started tasks.  We will check tasks to  */
+       /*                  make sure they come down.               */
+       /*                                                          */
+       /* phase processing (in SHUTPROC):                          */
+       /*     1st - SetRCFtasks are asked to be brought down       */
+       /*         for a phase (if task is up).                     */
+       /*     2nd - SetRCFgroups are asked to be brought down      */
+       /*         for a phase (if any task is up).                 */
+       /*     3rd - SetTasks (if task is up, command is issued)    */
+       /*     4th - SetCmd command is issued.                      */
+       /*     (repeat, while tasks are up)                         */
+       /*         - if tasks are still up, inform operator         */
+       /*         - if reply can be made, do reply.                */
+       /*         - repeat until tasks in phase are down.          */
+       /*     Now, that all tasks for phase are down, advance to   */
+       /*   the next phase.                                        */
+       /*     When all Partshut phases are complete, see if we're  */
+       /*   done or if we want a Fullshut to be done.  Either quit */
+       /*   or continue with fullshut phase.                       */
+       /*                                                          */
+       /*                                                          */
+
+ /* phase 1 time */
+ /* --------------- */
+    phase = 1
+    call phaseInit
+
+    call SetTask 'C2RSERVE, S C2RSLOG' /* extract copy of server log */
+                                       /* ...before shutting down C2RSERVE*/
+
+    if aosysid = 'ISDPROD'
+    then do
+       /* above we told DFHSM to "HOLD ALL" during FULLSHUT processing.  */
+       /* ...override that to allow recall's                             */
+       if global.kFULLSHUT.kACTIVE = 1
+       then call SetTask 'DFHSM, F DFHSM,RELEASE RECALL' /*allow recall  */
+       else call SetTask 'DFHSM, D A,DFHSM'  /*dummy command for PARTSHUT*/
+                                             /*...PARTSHUT, generally    */
+                                             /*...followed by FULLSHUT   */
+       call SetCmd  '-DSN0 STOP DDF MODE(QUIESCE)' /* DDF, if "stopped"     */
+       call SetCmd  '-DSN1 STOP DDF MODE(QUIESCE)' /* ...doesn't actually   */
+       call SetCmd  '-DSN2 STOP DDF MODE(QUIESCE)' /* ...come down until db2*/
+                                                   /* ...does.  Therefore,  */
+                                                   /* ...just issue cmd     */
+       call SetCmd  '-DSNQ STOP DDF MODE(QUIESCE)' /* ...w/o checking.      */
+
+          /* dsn5/dsn6 are obsolete */
+     /*call SetCmd  '-DSN5 STOP DDF MODE(QUIESCE)'  * obsolete              */
+     /*call SetCmd  '-DSN6 STOP DDF MODE(QUIESCE)'  * obsolete              */
+
+       call SetRCFtask 'SSHD2'
+
+       call SetRCFtask 'CFZCIM'   /* stop CFZCIM before IZUSVR1 */
+                                  /* ...which now stops w/F OMVS,SHUTDOWN*/
+                                  /* ...in phase4                        */
+
+       /* call SetTask 'CSMTCSRV CSMDBSRV CSMDBMUF, S CSMSTOP' */
+       call SETRCFtask 'CSMTCSRV' /* bring down this now, FULLSHUT will*/
+                                  /*                     bring down others*/
+
+       call SetCmd  'F CA70,/SHUTDOWN Z1' /* we don't want to wait....   */
+       call SetCmd  'F CA72,/SHUTDOWN Z1' /* ...will be reissued in phase 2*/
+                                          /* and        reissued as SetTask*/
+                                          /* ...in phase2; wait in phase2  */
+                                          /*            no wait in phase1  */
+
+       call SetTask 'ICOM, R x,STOP'     /*"R x," cmds replaced with R #,*/
+       call SetTask 'CA72ICOM, R x,STOP' /*"R x," cmds replaced with R #,*/
+
+       /* stop IMS "immediately", sort of */
+       /* ------------------------------- */
+          /*             --------- ----------- ' */
+          /*SETRCFGROUP 'groupname taskname(s) ' */
+          /*             --------- ----------- ' */
+          /*  note:  stop the IMS control regions with:  R xx,/CHE DUMPQ */
+          /*     this will result in the following actions in the following*/
+          /*     address spaces (see one of the started tasks that ended): */
+          /*  DFS058I checkpoint command in progress                     */
+          /*  DFS00126 IMS (communications?) with APPC/MVS has been stopped*/
+          /*  DFS552I (multiple msgs) message regions coming down.       */
+          /*  DFS994I (presumably) chkpt command completes               */
+          /*  DFS091I archive jobs start                                 */
+          /*  DFS994I IMS shutdown complete                              */
+          /*  Control Region ends HASP395 (ex:  IMSPROD, IMSREFM, etc).  */
+          /*                                                             */
+          /*                                                             */
+          /* obsolete- call SetRCFgroup 'GIMSPROD  IMSPROD' */
+          /* obsolete- call SetRCFgroup 'IREFORM   IMSREFM' */
+          /* obsolete- call SetRCFgroup 'ISYSTEST  IMSSYST' */
+          /* obsolete- call SetRCFgroup 'IMSTEST   IMSTRNG' */
+          /* obsolete- call SetRCFgroup 'IMSUATT   IMSUATT' */
+          /* obsolete- call SetRCFgroup 'IMSECTL   IMSECTL' */
+
+       /* stop IDMSTEST and IDMSPROD groups immediately */
+       /* --------------------------------------------- */
+ /* obsolete- call SetRCFgroup 'IDMSTEST  IDMSQE18 IDMSSFR  IDMTST18'*/
+ /* obsolete- call SetRCFgroup 'IDMSPROD  IDMDOC18 IDMPRD18 IDMSREVP'*/
+
+       /* stop CICS's immediately */
+       /* ----------------------- */
+       call SetRCFgroup 'CICSPROD  CICSMCMS CICSVTAM CICS50 CICS60'
+
+         /* call multiple times to identify all CICSTEST regions*/
+       call SetRCFgroup 'CICSTEST  CICSTSTA CICSTST2 CICSTST3'
+       call SetRCFgroup 'CICSTEST  CICSTST4 CICSTST5 CICSTST6'
+       call SetRCFgroup 'CICSTEST  CICSTST7 CICSTST8 CICSTST9'
+       call SetRCFgroup 'CICSTEST  CICSVTMA CICSVTM2 CICSVTM3'
+       call SetRCFgroup 'CICSTEST  CICSVTM4 CICSVTM5 CICSVTM6'
+       call SetRCFgroup 'CICSTEST  CICSVTM7 CICSVTM8 CICSVTM9'
+       call SetRCFgroup 'CICSTEST  CICS40'
+
+       call SetRCFtask  'CICSIVTC  CICSIVTC'
+
+       /* drain DLF (before it can be stopped) */
+       call SetCmd 'F DLF,MODE=DRAIN'
+
+       call SetCmd 'O340 EX PRTSTOPP'
+       call SetRCFTASK 'IDISAMAN'
+    end
+    else do /* ISDTEST */
+
+       call SetTask 'ICOM, R x,STOP'     /*"R x," cmds replaced with R #,*/
+       call SetTask 'CA72ICOM, R x,STOP' /*"R x," cmds replaced with R #,*/
+
+       /* above we told DFHSM to "HOLD ALL" during FULLSHUT processing.  */
+       /* ...override that to allow recall's                             */
+       if global.kFULLSHUT.kACTIVE = 1
+       then call SetTask 'DFHSM, F DFHSM,RELEASE RECALL' /*allow recall  */
+       else call SetTask 'DFHSM, D A,DFHSM'  /*dummy command for PARTSHUT*/
+
+       /* drain DLF (before it can be stopped) */
+       call SetCmd 'F DLF,MODE=DRAIN'
+
+       call SetTask 'SSHD2, P SSHD2'
+       call Settask 'IDISAMAN, P IDISAMAN'
+    end
+
+ /* phase 2 time */
+ /* --------------- */
+    phase = 2
+    call phaseInit
+
+    if aosysid = 'ISDPROD'
+    then do
+          /* reissue these commands */
+       call SetTask 'CA70, F CA70,/SHUTDOWN Z1' /* re-issue, now wait */
+       call SetTask 'CA72, F CA72,/SHUTDOWN Z1' /* re-issue, now wait */
+
+          /* we already "quieseced DDF, now be more forceful, just in case  */
+       call SetCmd  '-DSN0 STOP DDF MODE(FORCE)'   /* DDF, if "stopped"     */
+       call SetCmd  '-DSN1 STOP DDF MODE(FORCE)'   /* ...doesn't actually   */
+       call SetCmd  '-DSN2 STOP DDF MODE(FORCE)'   /* ...come down until db2*/
+                                                   /* ...does.  Therefore,  */
+                                                   /* ...just issue cmd     */
+       call SetCmd  '-DSNQ STOP DDF MODE(FORCE)'   /* ...w/o checking.      */
+
+          /* dsn5/dsn6 obsolete */
+     /*call SetCmd  '-DSN5 STOP DDF MODE(FORCE)'    * obsolete              */
+     /*call SetCmd  '-DSN6 STOP DDF MODE(FORCE)'    * obsolete              */
+
+         /* bring down the IMS connect (tcp/ip type) regions */
+         /* (obsolete) */
+    /* call setRcfTask 'IMSCNCTR'    bring down IMS connect regions */
+    /* call setRcfTask 'IMSCONE'     bring down IMS connect regions */
+    /* call setRcfTask 'IMSCONR'     bring down IMS connect regions */
+    /* call setRcfTask 'IMSCONS'     bring down IMS connect regions */
+    /* call setRcfTask 'IMSCONT'     bring down IMS connect regions */
+    /* call setRcfTask 'IMSCONU'     bring down IMS connect regions */
+    /* call setRcfTask 'IMSCONW1'    bring down IMS connect regions */
+    /* call setRcfTask 'IMSCONW2'    bring down IMS connect regions */
+
+          /* bring down the IMS CSL (Common Services Layer) regions */
+          /*    IMS*OM  are the Operations Manager regions */
+          /*    IMS*SCI are the Structured Call Interface regions */
+                       /*groupname   task(s) */
+         /* (obsolete) */
+    /* call SetRCFGroup 'IPROD    IMSPOM IMSPSCI'  * ims support regions */
+    /* call SetRCFgroup 'IMSREFM  IMSROM IMSRSCI'  * ims support regions */
+    /* call SetRCFgroup 'IREFORMP IMSSOM IMSSSCI'  * ims support regions */
+    /* call SetRCFGroup 'ITRAIN   IMSTOM IMSTSCI'  * ims support regions */
+    /* call SetRCFGroup 'IUAT     IMSUOM IMSUSCI'  * ims support regions */
+
+       call SetCmd  'F CA70,/SHUTDOWN Z1' /* wait will be caused by SETTASK */
+       call SetCmd  'F CA72,/SHUTDOWN Z1' /*    at start of phase 2 for    */
+                                          /*    ca70/ca72; so use SetCmd this*/
+                                          /*    time.                      */
+                                          /* But these same commands issued*/
+                                          /*    in phase 1, may have been  */
+                                          /*    ignored.  So reissue them. */
+                                          /*    a 3rd time, just in case.  */
+
+    end
+
+
+ /* phase 3 time */
+ /* --------------- */
+    phase = 3
+    call phaseInit
+
+    call SetCmd '$PLOGON1'
+    call SetCmd '$PLOGON2'
+    call SetCmd '$PI'
+    if aosysid = 'ISDPROD'
+    then do
+       call SetTask 'AOPD, S AOPSTOP'
+       call SetRCFtask 'CASAMS'
+
+          /* bring down IMS's (lock manager IRLM regions);IMS already shutdown*/
+         /* (obsolete) */
+    /* call SetRCFtask 'IRLMPREP' */    /* sfhr66, added IRLMPREP    */
+    /* call SetRCFtask 'IRLMPROD' */
+    /* call SetRCFtask 'IRLMREFM' */
+    /* call SetRCFtask 'IRLMSYST' */
+    /* call SetRCFtask 'IRLMTRNG' */
+
+          /* KLS is a pre-req for IMS; since IMS is down, stop KLS now*/
+       call SetRCFtask 'KLS' /* supersession */
+
+                       /*groupname   task(s) */
+       call SetRCFGroup 'CFUSION     CFUSION CFUSION2'
+       call SetRCFGroup 'VIEWDIRECT  SFRVDR'
+       call SetRCFGroup 'CA7WEB      CA7SRVR  CA7WEBC  CA7XVFB'
+
+       call SetRCFgroup 'OMEGAMON    CANSCN   CANSC20  CANSC5'
+       call SetRCFgroup 'OMEGAMON    CANSDS   CANSDSST CANSD2'
+       call SetRCFgroup 'OMEGAMON    CANSD5   CANSETE  CANSI2'
+       call SetRCFgroup 'OMEGAMON             CANSM2   CANSM2CS'
+       call SetRCFgroup 'OMEGAMON    CANSM2EZ CANSM2HD CANSM2HI'
+       call SetRCFgroup 'OMEGAMON    CANSM2RC CANSOC0  CANSO2'
+       call SetRCFgroup 'OMEGAMON    CANSTOM'
+
+       call SetRCFgroup 'DSN0  DSN0MSTR DSN0DBM1 DSN0DIST DSN0IRLM'
+       call SetRCFgroup 'DSN1  DSN1MSTR DSN1DBM1 DSN1DIST DSN1IRLM'
+       call SetRCFgroup 'DSN2  DSN2MSTR DSN2DBM1 DSN2DIST DSN2IRLM'
+       call SetRCFgroup 'DSNQ  DSNQMSTR DSNQDBM1 DSNQDIST DSNQIRLM'
+
+          /* DSN5/DSN6 are gone */
+         /* (obsolete) */
+    /* call SetRCFgroup 'DSN5  DSN5MSTR DSN0DBM1 DSN0DIST DSN0IRLM' */
+    /* call SetRCFgroup 'DSN6  DSN6MSTR DSN0DBM1 DSN0DIST DSN0IRLM' */
+
+       call SetRCFgroup 'VTAMAPP  IMSCONE IMSCONR  IMSCONS  IMSCONT'
+       call SetRCFgroup 'VTAMAPP  IMSCONU IMSCONW1 IMSCONW2'
+
+       /* now this */
+       call SetTask 'CA11, CA11 SHUTDOWN ALL'
+       call SetTask 'CA11, R x,Y'
+
+    end
+    else do /* ISDTEST*/
+       call Settask     'KLS, P KLS'
+    end
+
+    call SetRCFgroup 'ZSECURE  C2RSERVE'
+
+ /* phase 4 time */
+ /* --------------- */
+    phase = 4 /* FULLSHUT (partshut completed already) */
+              /* ...this phase only executed when doing FULLSHUT */
+    call phaseInit
+
+    call SetCmd 'RCF STOP *'
+    if aosysid = 'ISDTEST'
+    then do
+       call SetTask 'APPC,     C APPC' /* this is how ISDPROD does it*/
+       call Settask 'ENFCCI,   P ENF'/* stop this task */
+       call Settask 'ENFCCI,   R x,Y'/* ...reply to WTOR so it comes down */
+       call SetTask 'HZSPROC,  P HZSPROC'
+       call SetTask 'TSO,      P TSO'
+       call SetTask 'TN3270,   P TN3270'
+       call SetTask 'OAM,      P OAM'
+       call SetTask 'ADBTCXX,  P ADBTCXX'
+       call SetTask 'CSF,      P CSF'
+       call SetTask 'VLF,      P VLF'
+       call SetTask 'DLF,      P DLF'
+       call SetTask 'LLA,      P LLA'
+       call SetTask 'FFST,     P FFST'
+       call SetTask 'VTAM,     Z NET,QUICK'
+       call SetTask 'TCPIP,    P TCPIP'
+       call Setcmd  'F OMVS,SHUTDOWN'
+       call SetTask 'RRS,      SETRRS SHUTDOWN'
+       call SetTask 'C2PACMON, P C2PACMON'
+       call SetTask 'C2POLICE, P C2POLICE'
+       call SetTask 'TSO, R x,FSTOP'     /*"R x," cmds replaced with R #,*/
+       call SetTask 'AXR04,    P AXR'    /* stop AXR, stops AXR04 */
+    end
+    else do
+       call SetTask 'TSO, R x,FSTOP'     /*"R x," cmds replaced with R #,*/
+       call SetTask 'C2PACMON, P C2PACMON'
+       call SetTask 'C2POLICE, P C2POLICE'
+       call SetTask 'APPC,     C APPC' /* this is how ISDPROD does it*/
+       call SetTask 'AXR04,    P AXR'    /* stop AXR, stops AXR04 */
+    end
+  return
+
+/* PhaseInit                                                    */
+/* ---------                                                    */
+/* There are some standard variables we need to create at the   */
+/* start of every new phase.                                    */
+/*                                                              */
+/* This will create those variables used by:                    */
+/*    SetCmd                                                    */
+/*    SetTask                                                   */
+/*    SetRCFtask                                                */
+/*    and SetRCFgroup                                           */
+PhaseInit:
+  if datatype(phase,'W') = 0 ,
+   | phase < 1               ,
+   | phase > 4               ,
+  then do
+     seterrors = seterrors + 1
+     say 'SETTASK: Bad phase #; found phase="'phase'"'
+     return
+  end
+  /* some variable initialization */
+  GLOBAL.KsetTASK.phase.0       = 0 /* no SetTask(s)     for this phase */
+  GLOBAL.KsetRCFTASK.phase.0    = 0 /* no SetRCFtask(s)  for this phase */
+  GLOBAL.KsetRCFGROUP.phase.0   = 0 /* no SetRCFgroup(s) for this phase */
+  GLOBAL.KsetCMD.phase.0        = 0 /* no SetCMD(s)      for this phase */
+  return
+
+/* SetTask                                                      */
+/* -------                                                      */
+/*    call SetTask('taskname1 taskname2 ...,command')           */
+/*       if one (or more) of the tasks is up, the command is    */
+/*      issued at time "phase".                                 */
+/*       Normally, it would be one task, one command.           */
+/*       However, in following examples you see why multiple    */
+/*      tasks would be allowed:                                 */
+/*       note:  anything after the first COMMA, is the command  */
+/*                                                              */
+/* ex:  call SetTask 'SSHD2,F SSHD2,STOP'                       */
+/*    this would result in:  if SSHD2 is up                     */
+/*                           then issue cmd:  F SSHD2,STOP      */
+/*                                                              */
+/*    note:  anything before first comma are the tasks; anything*/
+/*       after the first comma is the command.                  */
+/*                                                              */
+/* ex:  call SetTask 'CSMTCSRV CSMDBSRV CSMDBMUF,S CSMSTOP'     */
+/*    this sould result in:  if any of specified tasks are up   */
+/*                           then issue cmd:  S CSMSTOP         */
+/*                                                              */
+/*                                                              */
+SetTask:
+   parse upper arg tasks ',' command
+   command = strip(command)
+   if datatype(phase,'W') = 0
+   then do
+      seterrors = seterrors + 1
+      say 'SETTASK: Bad phase #; found phase="'phase'"'
+      return
+   end
+   if tasks = ''
+   then do
+      seterrors = seterrors + 1
+      say 'SETTASK:  tasks=""'
+      return
+   end
+   if command = ''
+   then do
+      seterrors = seterrors + 1
+      say 'SETTASK:  tasks="'tasks'"; but command=""'
+      return
+   end
+   GLOBAL.KsetTASK.phase.0 = GLOBAL.KsetTASK.phase.0 + 1
+   tasknum = GLOBAL.KsetTASK.phase.0
+   GLOBAL.KsetTASK.phase.tasknum.KtaskNames = tasks
+   GLOBAL.KsetTASK.phase.tasknum.Kcmd = command
+   return
+
+/* SetRCFtask                                                   */
+/*    call SetRCFtask(taskname)                                 */
+/*                                                              */
+/*    assumption is we will just stop the rcf task so no command*/
+/*    is needed.                                                */
+/*                                                              */
+/*    example:  call SetRCFtask 'sshd2'                         */
+/*    then at time (phase) if sshd2 is up                       */
+/*                            then RCF STOP SSHD2 will be issued*/
+/*                                                              */
+SetRCFtask:
+   parse upper arg task .
+   if datatype(phase,'W') = 0
+   then do
+      seterrors = seterrors + 1
+      say 'SetRCFtask: Bad phase #; found phase="'phase'"'
+      return
+   end
+   if task = ''
+   then do
+      seterrors = seterrors + 1
+      say 'SetRCFtask:  task=""'
+      return
+   end
+   GLOBAL.KsetRCFtask.phase.0 = GLOBAL.KsetRCFtask.phase.0 + 1
+   tasknum = GLOBAL.KsetRCFtask.phase.0
+   GLOBAL.KsetRCFtask.phase.tasknum = task
+   return
+
+
+/* SetRCFGroup                                                  */
+/*    call SetRCFGroup(groupname taskname(s))                   */
+/*                                                              */
+/*    assumption is we will just stop the rcf group so no cmd   */
+/*    is needed.                                                */
+/*                                                              */
+/*    call as often as needed to identify all the tasks         */
+/*                                                              */
+/*    examples:                                                 */
+/*       call SetRCFGroup 'CICSTEST CICSTSTA CICSTST2 CICSTST3' */
+/*       call SetRCFGroup 'CICSTEST CICSTST4 CICSTST5 CICSTST6' */
+/*       call SetRCFGroup 'CICSTEST CICSTST7 CICSTST8 CICSTST9' */
+/*       call SetRCFGroup 'CICSTEST CICSVTMA CICSVTM2 CICSVTM3' */
+/*       call SetRCFGroup 'CICSTEST CICSVTM4 CICSTST5 CICSTST6' */
+/*       call SetRCFGroup 'CICSTEST CICSVTM7 CICSTST8 CICSTST9' */
+/*       call SetRCFGroup 'CICSTEST CICS40'                     */
+/*                                                              */
+/*    this will identify all the tasks controlled by RCF Group  */
+/*       CICSTEST                                               */
+/*                                                              */
+/*    then if any of those tasks are up at time identified via  */
+/*       phase number, then RCF STOP GROUP=CICSTEST will be     */
+/*       issued.                                                */
+SetRCFGroup:
+   parse upper arg VgroupName Vtasks
+   if datatype(phase,'W') = 0
+   then do
+      seterrors = seterrors + 1
+      say 'SetRCFgroup: Bad phase #; found phase="'phase'"'
+      return
+   end
+   if VgroupName = ''
+   then do
+      seterrors = seterrors + 1
+      say 'SetRCFgroup error:  group=""'
+      return
+   end
+   if Vtasks = ''
+   then do
+      seterrors = seterrors + 1
+      say 'SetRCFgroup:  tasks=""'
+      return
+   end
+   if groupindex.phase.VgroupName = 0
+   then do
+      /* new group, get next groupnum variable created */
+      GLOBAL.KsetRCFGROUP.phase.0 = GLOBAL.KsetRCFGROUP.phase.0 + 1
+      groupNum =                  GLOBAL.KsetRCFGROUP.phase.0
+      groupIndex.phase.VgroupName = groupNum
+      GLOBAL.KsetRCFGROUP.phase.groupnum.KgroupName = VgroupName
+      GLOBAL.KsetRCFGROUP.phase.groupnum.KgroupTasks = Vtasks
+      return
+   end
+   /* existing group, just add more tasks */
+   groupnum = groupINdex.phase.VgroupName /* reuse existing one */
+   /* append tasks to list of existing tasks */
+   GLOBAL.KsetRCFGROUP.phase.groupnum.KgroupTasks = ,
+         GLOBAL.KsetRCFGROUP.phase.groupnum.KgroupTasks Vtasks
+   return
+
+/* SetCmd                                                       */
+/* -------                                                      */
+/*    call Setcmd(command)                                      */
+/*       at time identified in phase, this command will be      */
+/*      issued.                                                 */
+/*                                                              */
+/* ex:  call SetCmd('F DLF,MODE=DRAIN')                         */
+/*    this would result in command being issued at time         */
+/*      identified in phase.                                    */
+/*                                                              */
+/*                                                              */
+SetCmd:
+   parse upper arg command
+   if datatype(phase,'W') = 0
+   then do
+      seterrors = seterrors + 1
+      say 'SETCMD:  Bad phase #; found phase="'phase'"'
+      return
+   end
+   if command = ''
+   then do
+      seterrors = seterrors + 1
+      say 'SETCMD error:  command=""'
+      return
+   end
+   GLOBAL.KsetCMD.phase.0 = GLOBAL.KsetCMD.phase.0 + 1
+   cmdnum = GLOBAL.KsetCMD.phase.0
+   GLOBAL.KsetCMD.phase.cmdnum = command
+   return
+

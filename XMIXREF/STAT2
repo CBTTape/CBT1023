@@ -1,0 +1,1863 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(STAT2)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(STAT2)
+   -----------------------------------------
+
+READY
+    STAT2
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.REXX(STAT2)"      */
+    Generated scan code/comment:   /*      ------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:       */
+    Generated scan code/comment:   /*     20231217 23:04:05         */
+    Generated scan code/comment:   /*      ------------------       */
+     1 *-* /* rexx  STAT2                                                      */
+     2 *-* /*   SMFIN  ddname for smf record type 100 recs; ifcid 2            */
+     3 *-* /*   SMFRPT ddname for report output                                */
+     4 *-* /*                                                                  */
+     5 *-* /* looks at raw rmf data.                                           */
+     6 *-* /*                                                                  */
+     7 *-* /* process smf statistics record 2 data */
+     8 *-* /*    - when exec is invoked, provide SSID and buffer pools to create stats for (or * for all bp's)              */
+     9 *-* /*                                                                                                               */
+    10 *-* /*    - ifcid=2 contains many thing including buffer pool stats; simulated buffer pool stats; edm pool stats     */
+    11 *-* /*         - process buffer pool stats from DSNDQBST sections.                                                   */
+    12 *-* /*         - process buffer pool stats from DSNDQBSP (simulated buffer pool stats, if any)                       */
+    13 *-* /*         - output bpool/simulated stats per each buffer pool # (one or more csv records per sample, per bp)    */
+    14 *-* /*                                                                                                               */
+    15 *-* /*                                                                                                               */
+    16 *-* numeric digits 18 /* handle large numbers */
+    17 *-* maxLrecl = 0
+    18 *-* parse upper arg ArgSSID argBpool
+    19 *-* if ArgSSID = ''
+    20 *-*  then
+       *-*  do
+    21 *-*   say 'missing ArgSSID'
+    22 *-*   exit 8
+    23 *-*  end
+    24 *-* if wordpos(argssid,'DSN0 DSN1 DSN2 DSNQ') = 0
+    25 *-*  then
+       *-*  do
+    26 *-*   say 'ArgSSID specified as "'argSSID'" but it must be DSN0, DSN1, DSN2 or DSNQ'
+    27 *-*   say 'Invalid parm supplied to this rexx exec, aborting now'
+    28 *-*   exit 8
+    29 *-*  end
+    30 *-* say 'interested in db2 ifcid=2 statistical records for subsystem' argSSID
+    32 *-* lastValue. = '' /* by default, not known; but we will save prior value later */
+    33 *-* /* updated by our function F0100adjValue('variableName')     */
+    35 *-* lastRefValue.=''/* by default, not known; but we will save prior ref value later */
+    36 *-* /* updated by our function F0100adjValue('variableName')     */
+    37 *-* /* referredby our function F0110refValue('variableName')     */
+    39 *-* /* note:  if interested, bpool.# = -1                                                    */
+    40 *-* /*        later, as interested bpools are found, it will become a positive "line" number */
+    41 *-* /*        if not interested, bpool.# will be equal to 0                                  */
+    42 *-* if argbpool = '*' | argbpool = ''
+    43 *-*  then
+       *-*  do
+    44 *-*   say 'argbpool specified as "'argbpool'" therefore, we will get stats for all bufferpools'
+    45 *-*   bpool. = -1 /* interested in all buffer pools */
+    46 *-*   argbpool = ''
+    47 *-*  end
+    48 *-* else
+       *-*  do
+    49 *-*   say 'argbpool specified as "'argbpool'"'
+    50 *-*   say 'now verifying specified buffer pools'
+    51 *-*   bpool. = 0 /* interested in only some buffer pools */
+    53 *-*   do while argbpool <> ''
+    54 *-*    parse upper var argbpool nextB argbpool
+    55 *-*    if datatype(nextb,'W') = 1
+    56 *-*     then
+       *-*     nop
+    57 *-*    else
+       *-*     do
+    58 *-*      maybe32 = wordpos(nextb,'BP32K  BP32K1 BP32K2 BP32K3 BP32K4 BP32K5 BP32K6 BP32K7 BP32K8 BP32K9')
+    59 *-*      maybe8  = wordpos(nextb,'BP8K0  BP8K1  BP8K2  BP8K3  BP8K4  BP8K5  BP8K6  BP8K7  BP8K8  BP8K9')
+    60 *-*      maybe16 = wordpos(nextb,'BP16K0 BP16K1 BP16K2 BP16K3 BP16K4 BP16K5 BP16K6 BP16K7 BP16K8 BP16K9')
+    61 *-*      if maybe32 > 0
+       *-*       then
+       *-*       nextb = 50+maybe32
+    62 *-*      if maybe8  > 0
+       *-*       then
+       *-*       nextb = 60+maybe8
+    63 *-*      if maybe16 > 0
+       *-*       then
+       *-*       nextb = 70+maybe16
+    64 *-*     end
+    65 *-*    if datatype(nextb,'W') = 0
+    66 *-*     then
+       *-*     do
+    67 *-*      say 'invalid bpool number "'nextB'" ignored'
+    68 *-*      iterate
+    69 *-*     end
+    70 *-*    if nextb < 0 | nextb > 79
+    71 *-*     then
+       *-*     do
+    72 *-*      say 'invalid bpool number "'nextB'" ignored'
+    73 *-*      iterate
+    74 *-*     end
+    75 *-*    if bpool.nextb = -1 /* duplicate? */
+    76 *-*     then
+       *-*     iterate       /* ...yes, already tracking */
+    77 *-*    say 'now interested in buffer pool' nextb
+    78 *-*    bpool.nextb = -1 /* interested in this bpool and simulated bpool */
+    79 *-*   end
+    80 *-*  end
+    82 *-* say 'assuming the VPSEQT is set to 80 (80% of buffer pool for sequential pages)'
+    83 *-* vpseqt = 80 * 0.01  /* convert to percentage; used in calculations later */
+    85 *-* address 'TSO'
+    86 *-* 'EXECIO 20  DISKR SMFIN (OPEN STEM SMFIN.'
+    87 *-* if rc = 0 | rc = 2
+    88 *-*  then
+       *-*  smfinRc = rc
+    89 *-* else
+       *-*  do
+    90 *-*   say 'error reading SMFIN; rc='rc
+    91 *-*   say 'aborting rc=8'
+    92 *-*   'EXECIO 0 DISKR SMFIN (FINIS'
+    93 *-*   exit 8
+    94 *-*  end
+    96 *-* address 'TSO'
+    97 *-* 'EXECIO 0  DISKW SMFRPT(OPEN'
+    98 *-* if rc = 0
+    99 *-*  then
+       *-*  smfrptRc = rc
+   100 *-* else
+       *-*  do
+   101 *-*   say 'error opening SMFRPT; rc='rc
+   102 *-*   say 'aborting rc=8'
+   103 *-*   'EXECIO 0 DISKR SMFIN (FINIS'
+   104 *-*   'EXECIO 0 DISKW SMFRPT(FINIS'
+   105 *-*   exit 8
+   106 *-*  end
+   109 *-* /* general server info */
+   111 *-* /*                                                                                                               */
+   112 *-* /*                                                                                                               */
+   113 *-* /* self defining section                                                                                         */
+   114 *-* /* ---------------------                                                                                         */
+   115 *-* /* * DB2 SELF DEFINING SECTION MACRO FOR DATA BASE STATISTICS IFCID=0002                                         */
+   116 *-* /* *                                                                                                             */
+   117 *-* /* * PRODUCT SECTION FOR DATA BASE STATISTICS CONTAINS THE                                                       */
+   118 *-* /* * STANDARD HEADER MAPPED BY DSNDQWHS                                                                          */
+   119 *-* /* QWS10PSO DS    AL4                   OFFSET TO THE PRODUCT SECTION                                            */
+   120 *-* /* QWS10PSL DS    XL2                   LENGTH OF THE PRODUCT SECTION                                            */
+   121 *-* /* QWS10PSN DS    XL2                   NUMBER OF PRODUCT SECTIONS                                               */
+   122 *-* /* * FOR RMID 22    MAPPED BY DSNDQXST       SQL                                                                 */
+   123 *-* /* QWS10R1O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+   124 *-* /* QWS10R1L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   125 *-* /* QWS10R1N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   126 *-* /* * FOR RMID 20    MAPPED BY DSNDQTST  SERVICE CONTROLLER                                                       */
+   127 *-* /* QWS10R2O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+   128 *-* /* QWS10R2L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   129 *-* /* QWS10R2N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   130 *-* /* * FOR RMID 10    MAPPED BY DSNDQBST     BUFFER MANAGER (buffer pool statistics)                               */
+   131 *-* /* QWS10R3O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+   132 *-* /* QWS10R3L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   133 *-* /* QWS10R3N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   134 *-* /* * FOR RMID 14    MAPPED BY DSNDQIST    DATA MANAGER                                                           */
+   135 *-* /* QWS10R4O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+   136 *-* /* QWS10R4L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   137 *-* /* QWS10R4N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   138 *-* /* * FOR RMID 20    MAPPED BY DSNDQTXA   **  LOCK MANAGER                                                        */
+   139 *-* /* QWS10R5O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+   140 *-* /* QWS10R5L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   141 *-* /* QWS10R5N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   142 *-* /* * FOR RMID 14    MAPPED BY DSNDQISE   EDM POOL STATISTICS                                                     */
+   143 *-* /* QWS10R6O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+   144 *-* /* QWS10R6L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   145 *-* /* QWS10R6N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   146 *-* /* * FOR RMID 10    MAPPED BY DSNDQBGL   GROUP BUFFER POOL STATISTICS                                            */
+   147 *-* /* QWS10R7O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+   148 *-* /* QWS10R7L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   149 *-* /* QWS10R7N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   150 *-* /* * FOR RMID 20    MAPPED BY DSNDQTGS   GLOBAL LOCKING STATISTICS                                               */
+   151 *-* /* QWS10R8O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+   152 *-* /* QWS10R8L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   153 *-* /* QWS10R8N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   154 *-* /* * FOR RMID 22    MAPPED BY DSNDQLES LE ACCESS FROM ADMF STATISTICS                                            */
+   155 *-* /* QWS10R9O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+   156 *-* /* QWS10R9L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   157 *-* /* QWS10R9N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   158 *-* /* * FOR RMID 22    MAPPED BY DSNDQISJ STARJOIN POOL STATISTICS                                                  */
+   159 *-* /* QWS10RAO DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+   160 *-* /* QWS10RAL DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   161 *-* /* QWS10RAN DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   162 *-* /* * FOR RMID 033 MAPPED BY DSNDQ8ST    ACCEL SVCS SYSTEM STATISTICS                                             */
+   163 *-* /* QWS10RBO DS    XL4                   OFFSET TO THE DATA SECTION                                               */
+   164 *-* /* QWS10RBL DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   165 *-* /* QWS10RBN DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   166 *-* /* * FOR RMID 10  MAPPED BY DSNDQBSP    SIMULATED BUFFER POOL STATISTICS                                         */
+   167 *-* /* QWS10RCO DS    XL4                   OFFSET TO THE DATA SECTION                                               */
+   168 *-* /* QWS10RCL DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+   169 *-* /* QWS10RCN DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+   170 *-* /* QWS10END DS    0C                    END OF THE SELF DEFINING SECTION                                         */
+   171 *-* /*          MEND                                                                                                 */
+   172 *-* /*                                                                                                               */
+   174 *-* smfin = 0
+   175 *-* line  = 1 /* start with header line */
+   176 *-* line.line = "SSID,bpool,'Date Time'" ,   || ",'Actual BP Page Residency in secs (max 600)'"             ,
+                                         || ",'Sim.   BP Page Residency in secs (max 600)'"             ,
+                              || ",'Actual BP Hit Ratio'"                                    ,
+                   || ",'Sim.   BP Hit Ratio'"                                    ,
+        || ",'Actual BP Page Residency in mins (max  10) (excel filter use)'" ,                                                 ||
+",'Sim.   BP Page Residency in mins (max  10) (excel filter use)'" ,                                                 || ",'Actual B
+P Hit Ratio index (excel filter use)'"           ,                                                        || ",'Sim.   BP Hit Ratio
+ index (excel filter use)'"           ,                                                        || ",'qbstGet (# of get page request
+s (cond + non-c))'"        ,                                                        || ",'qbstRio (# of sync read i/o requests)'"
+                ,                                              || ",'qbstDwv (# of vdwq threshold reached)'"                  ,
+                                          || ",'qbstSws (# of setw issued for system pages)'"            ,
+                           || ",'qbstPws (# of page writes for system pages)'"            ,
+            || ",'qbstWio (# of asynch write i/o(s))'"                     ,                                           || ",'qbstCb
+a (# of current active buffers)'"                  ,                                || ",'qbstRpi (# of page-ins required for read
+i/o)'"          ,                                                      || ",'qbstWpi (# of page-ins required for write i/o)'"
+   ,                                                       || ",'qbstImw (# of immed sync write i/o)'"                    ,
+                                    || ",'qbstSeq (# of seq prefetch requested)'"                  ,
+               || ",'qbstSpp (# of page read due to seq prefetch)'"           ,
+ || ",'qbstSpd (# of seq prefetch disabled - buf shrtge)'"      ,                                                          || ",'qb
+stRee (# of seq prefetch disabled - unavail read eng)'",                                                                || ",'qbstD
+wt (# of DW threshold reached)'"                    ,                                            || ",'qbstDmc (# of Data Mngr thre
+shold reached)'"             ,                                                   || ",'qbstPio (# of seq prefetch read i/o)'"
+             ,                                             || ",'qbstWkpd (# of work prefetch aborted w/zero prefetch#)'" ,
+                                                       || ",'qbstMax (# of wk file not created; buff.resources)'"     ,
+                                               || ",'qbstWfm (# of max wk files allocated)'"                  ,
+            || ",'qbstWdrp (# of destructive read page requests)'"         ,
+ || ",'qbstWbvq (# of destr. read page req. dq'd from dwqt)'"   ,                                                               ||
+",'qbstWfr (# of q.req. for wk files in sort/merge)'"       ,                                                         || ",'qbstWft
+ (# of wk req. during sort/merge)'"               ,                                                 || ",'qbstWfd (# of wk req. den
+ied during sort/merge)'"        ,                                                        || ",'qbstWff (# of sort/merge performance
+ buf shortage)'"     ,                                                            || ",'qbstLpf (# of concurrent list pref same pag
+eset)'"       ,                                                          || ",'qbstDpf (# of dynamic prefetch requests)'"
+     ,                                                 || ",'qbstVpl (# of buffers allocated)'"                       ,
+                                  || ",'qbstDpp (# of pages read dynamic prefetch)'"             ,
+                  || ",'qbstLpp (# of pages read list prefetch)'"                ,                                                |
+| ",'qbstDio (# of dynamic prefetch read i/o(s))'"            ,                                                    || ",'qbstLio (#
+ of list prefetch read i/o(s))'"               ,                                                 || ",'qbstSgt (# of get pages sequ
+ential req)'"                ,                                                || ",'qbstSio (# of sync read i/o(s))'"
+          ,                                            || ",'qbstNgt (# of unsuccessful cond getpage req)'"           ,
+                                         || ",'qbstXis (# of highest prefetch i/o streams alloc)'"      ,
+                  || ",'qbstJis (# of denied prefetch i/o streams)'"             ,
+  || ",'qbstPqo (# of parallism bm/rds negotiations)'"           ,                                                     || ",'qbstPg
+f (# of parallism downgraded  bp shortage)'"       ,                                                         || ",'qbstPl1 (# of pr
+efetch 1/2 normal)'"                     ,                                            || ",'qbstPl2 (# of prefetch 1/4 normal)'"
+                  ,                                            || ",'qbstNsg (# of cond.seq getpage fail  not in buf)'"       ,
+                                                     || ",'qbstSioc (# of i/o hitting disk cache)'"                 ,
+                                  || ",'qbstSmin (# of min buffers on slru (in interval))'"      ,
+           || ",'qbstSmax (# of max buffers on slru (in interval))'"      ,                                            || ",'qbstHs
+t (# of times slru chain length=vpseqt)'"          ,                                                      || ",'qbstRhs (# of rando
+m getpage found on slru)'"            ,                                                    || ",'qbspIus sim.(Current # pages in si
+m. bp)'"               ,                                          || ",'qbspHus sim.(Highest # pages in sim. bp)'"               ,
+                               || ",'qbspSus sim.(Current # seq. pages in sim. bp)'"          ,
+      || ",'qbspHsu sim.(Highest # seq. pages in sim. bp)'"          ,                                   || ",'qbspDrr sim.(# read
+sync i/o Random) (avoided)'"         ,                                          || ",'qbspDrs sim.(# read sync i/o Seq.)   (avoided
+)'"         ,                                        || ",'qbspDra sim.(# read async i/o Seq.)  (avoided)'"         ,
+                           || ",'qbspMvi sim.(# pages logically moved into sim bp)'"      ,
+               || ",'qbspDtm sim.(time waiting for sync read i/o) (avoided)'" ,
+ /* the end of continuation(s)                                  */
+   243 *-* maxlrecl = length(line.1)
+   244 *-* do forever
+   245 *-*  smfin = smfin + 1
+   246 *-*  if smfin > smfin.0
+   247 *-*   then
+       *-*   do
+   248 *-*    if smfinRc = 2
+       *-*     then
+       *-*     leave
+   249 *-*    'EXECIO 20 DISKR SMFIN (STEM SMFIN.'
+   250 *-*    smfinRc = rc
+   251 *-*    smfin = 0
+   252 *-*    if smfinRc = 0
+       *-*     then
+       *-*     iterate
+   253 *-*    if smfinRc = 2
+       *-*     then
+       *-*     iterate
+   254 *-*    leave
+   255 *-*   end
+   256 *-*  if line > 100
+   257 *-*   then
+       *-*   do
+   258 *-*    'EXECIO' line 'DISKW SMFRPT (STEM LINE.'
+   259 *-*    if rc = 0
+   260 *-*     then
+       *-*     line = 0
+   261 *-*    else
+       *-*     do
+   262 *-*      if rc = 1
+       *-*       then
+       *-*       say 'maxlrecl was' maxLrecl
+   263 *-*      say 'Error writing to SMFRPT, rc='rc
+   264 *-*      'EXECIO 0 DISKR SMFIN (FINIS'
+   265 *-*      'EXECIO 0 DISKW SMFRPT(FINIS'
+   266 *-*      exit 8
+   267 *-*     end
+   268 *-*   end
+   270 *-*  parse var smfin.smfin ,       1 .        ,       2 sm101rty , /* record type; should be '64'x */       3 sm101tme , /*
+time smf record moved        */       7 sm101dte , /* date smf record moved        */      11 sm101sid , /* lpar
+      */      15 sm101ssi , /* subsystem                    */      19 sm101stf , /* subtype                      */      29 . /* n
+ote 24 is start of self defining terms */
+   280 *-*  if sm101ssi <> ArgSSID /* subsystem we're looking for? */
+   281 *-*   then
+       *-*   iterate           /* ...no skip record            */
+   283 *-*  if sm101rty <> '64'x
+   284 *-*   then
+       *-*   iterate /* needs to be a db2 statistics */
+   286 *-*   /* -------------------------------------------------------- */
+   287 *-*   /* we need prod section if see if this is an ifcid 2 record */
+   288 *-*   /* -------------------------------------------------------- */
+   289 *-*   /* smfoffset starts at 1 (without lrecl) so, subtract 4... and make it -3 */
+   290 *-*  parse var smfin.smfin , /* always look at prod section 1st*/       1 .         ,      25 QWS10PSO  ,        /* prod sec
+tion offset */      29  QWS10PSL ,        /* length of prod section*/      31  QWS10PSN ,        /* # of prod sections    */      3
+3 .
+   296 *-*  smfRecOffset =  -3      /* start of record appears to be +1.... but subtract 4 (mythyical lrecl) = =3 */
+   297 *-*  prodSectionOffset = c2d(qws10pso) + smfRecOffset
+   298 *-*  prodSectionLength = c2d(qws10psl)
+   299 *-*  prodSectionNumber = c2d(qws10psn)
+   300 *-*  /* get QWHSIID (ifcid) from prod section */
+   301 *-*  fieldStart = ProdSectionOffset + 4
+       *-*  /* qwhsiid offset, length 2, binary */
+   302 *-*  ifcid = c2d(substr(smfin.smfin,fieldStart,2))
+   304 *-*  if ifcid <> 2
+   305 *-*   then
+       *-*   iterate /* only want stat records for ifcid 2 */
+   307 *-*  if old101dte = sm101dte
+   308 *-*   then
+       *-*   nop /* smfDate already set; and doesn't need to be recalculated */
+   309 *-*  else
+       *-*   do /* first time or when date changes in smf date, calculate new date for output */
+   310 *-*    /* -------------------------------------------------------------------------- */
+   311 *-*    old101dte = sm101dte
+   312 *-*    sm101dte = left(c2x(sm101dte),7) + 1900000
+   313 *-*    smfDate  = date('S',date('B',left(sm101dte,4)'0101','S')-1+right(sm101dte,3),'B')
+   314 *-*    /* smfdate = yyyymmdd */
+   315 *-*   end
+   317 *-*  sm101tme = format(c2d(sm101tme)/100,,0) /* get rid of fractions of a second */
+   318 *-*  secs     = (sm101tme)//60                          /* get seconds */
+   319 *-*  mins     = (sm101tme-secs)/60//60                  /* get minutes */
+   320 *-*  hours    = format((sm101tme-secs-mins*60)/3600,,0) /* get hours   */
+   321 *-*  smfDateTime  = "'"smfdate right('0'hours,2)':'right('0'mins,2)':'right('0'secs,2)"'"   /* 'hh:mm:ss'          */
+   324 *-*  /* ifcid 2; get rest of offsets, lengths, occurances */
+   325 *-*  /* ------------------------------------------------- */
+   326 *-*  parse var smfin.smfin , /* always look at prod section 1st*/       1 .         ,      33 QWS10R1O  ,        /*    the t
+riplet for    */      37  QWS10R1L ,        /* ... DSNDQXST          */      39  QWS10R1N ,        /* ...                   */
+ 41 QWS10R2O  ,        /*    the triplet for    */      45  QWS10R2L ,        /* ... DSNDQTST          */      47  QWS10R2N ,
+  /* ...                   */      49 QWS10R3O  ,        /*    the triplet for    */      53  QWS10R3L ,        /* ... DSNDQBST (bp
+ool stats */      55  QWS10R3N ,        /* ...                   */      57 QWS10R4O  ,        /*    the triplet for    */      61
+ QWS10R4L ,        /* ... DSNDQIST          */      63  QWS10R4N ,        /* ...                   */      65 QWS10R5O  ,        /*
+    the triplet for    */      69  QWS10R5L ,        /* ... DSNDQTXA          */      71  QWS10R5N ,        /* ...
+  */      73 QWS10R6O  ,        /*    the triplet for    */      77  QWS10R6L ,        /* ... DSNDQISE          */      79  QWS10R6
+N ,        /* ...                   */      81 QWS10R7O  ,        /*    the triplet for    */      85  QWS10R7L ,        /* ... DSN
+DQBGL          */      87  QWS10R7N ,        /* ...                   */      89 QWS10R8O  ,        /*    the triplet for    */
+  93  QWS10R8L ,        /* ... DSNDQTGS          */      95  QWS10R8N ,        /* ...                   */      97 QWS10R9O  ,
+   /*    the triplet for    */     101  QWS10R9L ,        /* ... DSNDQLES          */     103  QWS10R9N ,        /* ...
+       */     105 QWS10RAO  ,        /*    the triplet for    */     109  QWS10RAL ,        /* ... DSNDQISJ          */     111  QW
+S10RAN ,        /* ...                   */     113 QWS10RBO  ,        /*    the triplet for    */     117  QWS10RBL ,        /* ..
+. DSNDQ8ST          */     119  QWS10RBN ,        /* ...                   */     121 QWS10RCO  ,        /*    the triplet for    *
+/     125  QWS10RCL ,        /* ... DSNDQBSP (sim bpool stats */     127  QWS10RCN ,        /* ...                   */     129 .
+               /* and that's all we care about */
+   366 *-*  /* since it's ifcid 2, the qws10* offsets, etc, are valid */
+   367 *-*  /* ------------------------------------------------------ */
+   368 *-*  dsndqXstOffset = c2d(qws10r1O) + smfRecOffset
+   369 *-*  dsndqXstLength = c2d(qws10r1L)
+   370 *-*  dsndqXstNumber = c2d(qws10r1N)
+   372 *-*  dsndqTstOffset = c2d(qws10r2O) + smfRecOffset
+   373 *-*  dsndqTstLength = c2d(qws10r2L)
+   374 *-*  dsndqTstNumber = c2d(qws10r2N)
+   376 *-*  dsndqBstOffset = c2d(qws10r3O) + smfRecOffset
+   377 *-*  dsndqBstLength = c2d(qws10r3L)
+   378 *-*  dsndqBstNumber = c2d(qws10r3N)
+   380 *-*  dsndqIstOffset = c2d(qws10r4O) + smfRecOffset
+   381 *-*  dsndqIstLength = c2d(qws10r4L)
+   382 *-*  dsndqIstNumber = c2d(qws10r4N)
+   384 *-*  dsndqTxaOffset = c2d(qws10r5O) + smfRecOffset
+   385 *-*  dsndqTxaLength = c2d(qws10r5L)
+   386 *-*  dsndqTxaNumber = c2d(qws10r5N)
+   388 *-*  dsndqIseOffset = c2d(qws10r6O) + smfRecOffset
+   389 *-*  dsndqIseLength = c2d(qws10r6L)
+   390 *-*  dsndqIseNumber = c2d(qws10r6N)
+   392 *-*  dsndqBglOffset = c2d(qws10r7O) + smfRecOffset
+   393 *-*  dsndqBglLength = c2d(qws10r7L)
+   394 *-*  dsndqBglNumber = c2d(qws10r7N)
+   396 *-*  dsndqTgsOffset = c2d(qws10r8O) + smfRecOffset
+   397 *-*  dsndqTgsLength = c2d(qws10r8L)
+   398 *-*  dsndqTgsNumber = c2d(qws10r8N)
+   400 *-*  dsndqLesOffset = c2d(qws10r9O) + smfRecOffset
+   401 *-*  dsndqLesLength = c2d(qws10r9L)
+   402 *-*  dsndqLesNumber = c2d(qws10r9N)
+   404 *-*  dsndqIsjOffset = c2d(qws10raO) + smfRecOffset
+   405 *-*  dsndqIsjLength = c2d(qws10raL)
+   406 *-*  dsndqIsjNumber = c2d(qws10raN)
+   408 *-*  dsndq8stOffset = c2d(qws10rbO) + smfRecOffset
+   409 *-*  dsndq8stLength = c2d(qws10rbL)
+   410 *-*  dsndq8stNumber = c2d(qws10rbN)
+   412 *-*  dsndqBspOffset = c2d(qws10rcO) + smfRecOffset
+   413 *-*  dsndqBspLength = c2d(qws10rcL)
+   414 *-*  dsndqBspNumber = c2d(qws10rcN)
+   416 *-*  bpid.  = 0
+   417 *-*  /* lets start with real buffer pool statistics */
+   418 *-*  dsndqBstOffset = dsndqBstOffset - dsndqBstLength
+   419 *-*  if dsndqbstNumber > 0
+   420 *-*   then
+       *-*   if dsndqBstLength <> 520
+   421 *-*    then
+       *-*    do
+   422 *-*     say 'logic error; dsndqbstlength =' dsndqbstlength
+   423 *-*     exit 8
+   424 *-*    end
+   425 *-*  do bst = 1 by 1 for dsndqBstNumber
+   426 *-*   dsndqBstOffset = dsndqBstOffset + dsndqBstLength
+   427 *-*   dsndqBst = substr(smfin.smfin,dsndqBstOffset,dsndqBstLength)
+   428 *-*   parse var dsndqBst ,         1 qbstPid       , /* .4 buffer Pool id */         5 qbstflg       , /* .1 flag
+*/         6 .             , /* .3 reserved       */         9 qbstGet       , /* .8 # of get page requests (cond + non cond)*/
+    17 qbstrio       , /* .8 # of sync read i/o requests             */        25 qbstdwv       , /* .8 # of vdwq threshold reached
+             */        33 qbstxfl       , /* .8 # of getpage failures bpool full        */        41 qbstxfv       , /* .8 # of exp
+ansion failures v.stor short    */        49 qbstsws       , /* .8 # of setw issued for system pages       */        57 qbstpws
+   , /* .8 # of page writes for system pages       */        65 qbstwio       , /* .8 # of asynch write i/o                   */
+     73 qbstcba       , /* .8 # of current active buffers             */        81 qbstrpi       , /* .8 # of page-ins required for
+ read i/o     */        89 qbstwpi       , /* .8 # of page-ins required for write i/o    */        97 qbstdso       , /* .8 # of da
+tasets opened successfully       */       105 qbstimw       , /* .8 # of immed sync write i/o               */       113 qbstseq
+    , /* .8 # of SEQ PREFETCH REQUESTED             */       121 qbstspp       , /* .8 # of PAGE READ DUE TO SEQ PREFETCH      */
+     129 qbstspd       , /* .8 # of SEQ PREFETCH DISABLED buffer short */       137 qbstree       , /* .8 # of seq prefetch disable
+d unavial r.eng*/       145 qbstdwt       , /* .8 # of DW threshold reached               */       153 qbstdmc       , /* .8 # of d
+ata mngr. threshold reached       */       161 qbstmig       , /* .8 # of migrated datasets at open          */       169 qbstrto
+     , /* .8 # of recall timeouts                    */       177 qbstpio       , /* .8 # of seq prefetch read i/o              */
+      185 qbstwkpd      , /* .8 # of wk prefetch aborted, zero pre #    */       193 qbstmax       , /* .8 # of wk file not created
+; buff.resources*/       201 qbstwfm       , /* .8 # of max wk files allocated             */       209 qbstwdrp      , /* .8 # of
+destructive read page requests     */       217 qbstwbvq      , /* .8 # of dest. read page req. dq'd from dwqt*/       225 qbstwfr
+      , /* .8 # of q.req. for workfiles in sort/merge */       233 qbstwft       , /* .8 # of w.f. req. during sort/merge        */
+       241 qbstwfd       , /* .8 # of w.f. req. denied during sort/merge */       249 qbstwff       , /* .8 # of sort/merge perf. b
+uffer shortage   */       257 qbstlpf       , /* .8 # of concurrent list pref same pageset  */       265 qbstdpf       , /* .8 # of
+ dynamic prefetch requests          */       273 qbstvpa       , /* .8 # of successful vpool exp/contractions  */       281 qbstpco
+       , /* .8 # of pg on 'unlock castout'             */       289 qbstcio       , /* .8 # of i/o on castout                     *
+/       297 qbstvpl       , /* .8 # of buffers allocated                  */       305 qbstdpp       , /* .8 # of pages read dynami
+c prefetch        */       313 qbstlpp       , /* .8 # of pages read list prefetch           */       321 qbstdio       , /* .8 # o
+f dynamic prefetch read i/o(s)       */       329 qbstlio       , /* .8 # of list prefetch read i/o(s)          */       337 qbstsg
+t       , /* .8 # of get pages sequential req           */       345 qbstsio       , /* .8 # of sync read i/o(s)
+*/       353 qbstngt       , /* .8 # of unsuccessful cond getpage requests */       361 qbstxis       , /* .8 # of highest prefetch
+ i/o streams alloc.*/       369 qbstjis       , /* .8 # of # of denied prefetch i/o streams   */       377 qbstpqo       , /* .8 #
+of parallism bm/rds negotiations      */       385 qbstpgf       , /* .8 # of parallism down graded, bp shortage */       393 qbstp
+l1       , /* .8 # of prefetch 1/2 normal                */       401 qbstpl2       , /* .8 # of prefetch 1/4 normal
+ */       409 qbstnsg       , /* .8 # of cond.seq getpage fail, not in buffer*/       417 qbstsyio      , /* .8 # of zhyperlink rea
+d i/o(s)             */       425 qbstsioc      , /* .8 # of i/o hitting disk cache             */       433 .             , /* .8
+reserved                                */       441 .             , /* .8 reserved                                */       449 qbs
+tlpl       , /* .8 # of one or more pages added to lpl     */       457 qbstsmin      , /* .8 # of min buffers on slru (in interval
+)  */       465 qbstsmax      , /* .8 # of max buffers on slru (in interval)  */       473 qbsthst       , /* .8 # of slru chain le
+ngth = vpseqt         */       481 qbstrhs       , /* .8 # of random getpage req found on slru   */       489 qbstaget      , /* .8
+ # of overflow total random getpages     */       497 qbstasge      , /* .8 # of overflow total seq.   getpages     */       505 qb
+stasyn      , /* .8 # of overflow random sync read i/o(s)   */       513 qbstasse      , /* .8 # of overflow seq.   sync read i/o(s
+)   */       521 .             /* the end */
+   497 *-*   qbstpid = c2d(qbstpid)
+   498 *-*   if bpool.qbstpid = 0
+   499 *-*    then
+       *-*    iterate /* ignore this buffer pool */
+   501 *-*   line = line + 1
+   502 *-*   bpool.qbstpid = line /* remember this line number, so we can append if simulation bpool exists */
+   504 *-*   /* f0100AdjValue statements must by used before f0110PrevValue functions.  So we create partial line now */
+   505 *-*   PartialLine =  ','f0100AdjValue('qbstGet')  ,     /* # of get page requests (cond + non-c)'"         */
+              || ','f0100AdjValue('qbstRio')  ,     /* # of sync read i/o requests'"                   */                   || ','f
+0100AdjValue('qbstDwv')  ,     /* # of vdwq threshold reached'"                   */                   || ','f0100AdjValue('qbstSws
+')  ,     /* # of setw issued for system pages'"             */                         || ','f0100AdjValue('qbstPws')  ,     /* #
+of page writes for system pages'"             */                         || ','f0100AdjValue('qbstWio')  ,     /* # of asynch write
+ i/o(s)'"                      */                  || ','f0120SaveValue('qbstCba') ,     /* # of current active buffers'"
+         */                  || ','f0100AdjValue('qbstRpi')  ,     /* # of page-ins required for read i/o'"           */
+                || ','f0100AdjValue('qbstWpi')  ,     /* # of page-ins required for write i/o'"          */
+    || ','f0100AdjValue('qbstImw')  ,     /* # of immed sync write i/o'"                     */                  || ','f0100AdjValu
+e('qbstSeq')  ,     /* # of seq prefetch requested'"                   */                   || ','f0100AdjValue('qbstSpp')  ,     /
+* # of page read due to seq prefetch'"            */                          || ','f0100AdjValue('qbstSpd')  ,     /* # of seq pre
+fetch disabled - buf shrtge'"       */                               || ','f0100AdjValue('qbstRee')  ,     /* # of seq prefetch dis
+abled - unavail read eng'" */                                     || ','f0100AdjValue('qbstDwt')  ,     /* # of DW threshold reache
+d'"                     */                  || ','f0100AdjValue('qbstDmc')  ,     /* # of Data Mngr threshold reached'"
+  */                        || ','f0100AdjValue('qbstPio')  ,     /* # of seq prefetch read i/o'"                    */
+      || ','f0100AdjValue('qbstWkpd') ,     /* # of work prefetch aborted, zero prefetch#'"    */
+  || ','f0100AdjValue('qbstMax')  ,     /* # of wk file not created; buff.resources'"      */                                || ','
+f0120SaveValue('qbstWfm') ,     /* # of max wk files allocated'"                   */                  || ','f0100AdjValue('qbstWdr
+p') ,     /* # of destructive read page requests'"           */                             || ','f0100AdjValue('qbstWbvq') ,     /
+* # of destr. read page req. dq''d from dwqt'"    */                                    || ','f0100AdjValue('qbstWfr')  ,     /* #
+of q.req. for wk files in sort/merge'"        */                              || ','f0100AdjValue('qbstWft')  ,     /* # of wk req.
+ during sort/merge'"                */                      || ','f0100AdjValue('qbstWfd')  ,     /* # of wk req. denied during sor
+t/merge'"         */                             || ','f0100AdjValue('qbstWff')  ,     /* # of sort/merge performance; buf shortage
+'"     */                                 || ','f0100AdjValue('qbstLpf')  ,     /* # of concurrent list pref; same pageset'"
+*/                               || ','f0100AdjValue('qbstDpf')  ,     /* # of dynamic prefetch requests'"                */
+               || ','f0120SaveValue('qbstVpl') ,     /* # of buffers allocated'"                        */                   || ','
+f0100AdjValue('qbstDpp')  ,     /* # of pages read dynamic prefetch'"              */                        || ','f0100AdjValue('q
+bstLpp')  ,     /* # of pages read list prefetch'"                 */                     || ','f0100AdjValue('qbstDio')  ,     /*
+# of dynamic prefetch read i/o(s)'"             */                         || ','f0100AdjValue('qbstLio')  ,     /* # of list prefe
+tch read i/o(s)'"                */                      || ','f0100AdjValue('qbstSgt')  ,     /* # of get pages sequential req'"
+               */                     || ','f0100AdjValue('qbstSio')  ,     /* # of sync read i/o(s)'"                         */
+                || ','f0100AdjValue('qbstNgt')  ,     /* # of unsuccessful cond getpage req'"            */
+  || ','f0120SaveValue('qbstXis') ,     /* # of highest prefetch i/o streams alloc'"       */                  || ','f0100AdjValue(
+'qbstJis')  ,     /* # of denied prefetch i/o streams'"              */                        || ','f0100AdjValue('qbstPqo')  ,
+  /* # of parallism bm/rds negotiations'"            */                          || ','f0100AdjValue('qbstPgf')  ,     /* # of para
+llism downgraded, bp shortage'"        */                              || ','f0100AdjValue('qbstPl1')  ,     /* # of prefetch 1/2 n
+ormal'"                      */                  || ','f0100AdjValue('qbstPl2')  ,     /* # of prefetch 1/4 normal'"
+       */                  || ','f0100AdjValue('qbstNsg')  ,     /* # of cond.seq getpage fail, not in buf'"        */
+                 || ','f0100AdjValue('qbstSioc') ,     /* # of i/o hitting disk cache'"                   */                     ||
+ ','f0120SaveValue('qbstSmin'),     /* # of min buffers on slru (in interval)'"        */                  || ','f0120SaveValue('qb
+stSmax'),     /* # of max buffers on slru (in interval)'"        */                  || ','f0100AdjValue('qbstHst')  ,     /* # of
+times slru chain length=vpseqt'"           */                           || ','f0100AdjValue('qbstRhs')  ,     /* # of random getpag
+e found on slru'"             */                         /* the end of continued lines   */
+   555 *-*   /* real buffer pool stats */
+   556 *-*   /* calculate some residency numbers */
+   557 *-*   /* -------------------------------- */
+   558 *-*   maxResidency = f0110RefPrevValue('qbstvpl')*60    /* we consider max to be bpsize * 60 seconds       */
+   560 *-*   pagesUsedPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+         +f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */                        +f0110RefPrev
+Value('qbstdpp') , /*+# of pages read due to dyn prefetch             */                        +f0110RefPrevValue('qbstlpp') , /*+
+# of pages read due to listprefetch             */                        +f0110RefPrevValue('qbstsio') , /*+# of pages read synch
+for seq.       ch         */                        ) / 60
+   565 *-*   /*  = pages read / 60 secs = pages/sec             */
+   567 *-*   randomPagesPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+             +f0110RefPrevValue('qbstsio') , /*+# of sync pages read for seq.                   */                          ) / 60
+   569 *-*   /*  = pages read / 60 secs = pages/sec             */
+   572 *-*   if pagesUsedPerSec < 1 /* if too small, don't divide */
+   573 *-*    then
+       *-*    answer1 = 0
+   574 *-*   else
+       *-*    answer1 = f0110RefPrevValue('qbstvpl') / pagesUsedPerSec
+   576 *-*   if randomPagesPerSec < 1 /* if too small, don't divide */
+   577 *-*    then
+       *-*    answer2 = 0
+   578 *-*   else
+       *-*    answer2 = f0110RefPrevValue('qbstvpl') * (1 - vpSEQT)/ RandomPagesPerSec
+   580 *-*   residencyInSecs = format(max(answer1,answer2),,1)    /* this is an important number */
+   581 *-*   residencyInSecs = format(min(residencyInSecs,600),,1)/* this is an important number */
+   583 *-*   /* now transform residency in secs to an "index" in minutes */
+   584 *-*   /* -------------------------------------------------------- */
+   585 *-*   if      residencyInSecs < 60
+   586 *-*    then
+       *-*    residencyIndexInMin = format(residencyInSecs/60,,1)      /* 0.0 to 1.0 */
+   587 *-*   else
+       *-*    if residencyInSecs < 730
+   588 *-*     then
+       *-*     residencyIndexInMin = format(residencyInSecs/60,,0)      /* round to nearest min 1-10*/
+   589 *-*    else
+       *-*     if residencyInSecs < 3600
+   590 *-*      then
+       *-*      residencyIndexInMin = format(residencyInSecs/900,,0)*15  /* round to nearest 15, 30, 45 or 60 */
+   591 *-*     else
+       *-*      residencyIndexInMin = 60                                 /* max at 60                         */
+   593 *-*   /* calculate some hit % numbers */
+   594 *-*   /* -------------------------------- */
+   595 *-*   allRead = f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
++f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */                        +f0110RefPrevValue('qb
+stdpp') , /*+# of pages read due to dyn prefetch             */                        +f0110RefPrevValue('qbstlpp') , /*+# of page
+s read due to listprefetch             */                        +f0110RefPrevValue('qbstsio') , /*+# of pages read synch for seq.
+      ch         */
+   601 *-*   hitRatio = 100 /* assume it's 100 */
+   602 *-*   hitRatio2= 100 /* assume it's 100 */
+   603 *-*   if f0110RefPrevValue('qbstget') - f0110RefPrevValue('qbstnsg') > 0 /* denominator non-zero? */
+   604 *-*    then
+       *-*    do
+   605 *-*     /* calculate hitRatio, hitRatio2 */
+   606 *-*     hitRatioFirst = ''
+   607 *-*     hitRatio = format(  (  f0110RefPrevValue('qbstget')   ,                                                         - f0
+110RefPrevValue('qbstnsg')    ,                                                         - allread                         ,
+                                                 )                                 ,
+        / (  f0110RefPrevValue('qbstget')   ,                                                          - f0110RefPrevValue('qbstnsg
+')   ,                                                         )                                 ,                           * 100
+                              ,                          ,,1) /* round to nearest tenth */
+   617 *-*     /* "re-format" hit ratio answer in hitration2   */
+   618 *-*     if hitratio >= -100
+   619 *-*      then
+       *-*      hitratio2 = format(hitratio/10,,0) * 10 /* make it -100, -90, ... ,0, 10, 20, etc */
+   620 *-*     else
+       *-*      if hitRatio < -100
+   621 *-*       then
+       *-*       hitratio2 = format(hitratio/50,,0) * 50 /* make it -100, -150, -200, etc */
+   622 *-*    end
+   623 *-*   say 'debug1 hitratio ='hitratio'; qbstget='f0110RefPrevValue('qbstget')'; allRead='allRead
+   625 *-*   /* assume no simulated buffer pool, create with no sim stats */
+   626 *-*   /* now start producing beginning of line (before simulated bp numbers) */
+   627 *-*   line.line = sm101ssi',BP'qbstpid','smfdateTime          , /* ssid,BP#,'20230102 hh:mm:ss' */             || ','strip(r
+esidencyInSecs)                     , /* ...stat calculated after partialLine created */             || ",''"
+                   , /* ...stat calculated after partialLine created */             || ','strip(residencyIndexInMin)
+  , /* ...stat calculated after partialLine created */             || ",''"                                         , /* ...stat ca
+lculated after partialLine created */             || ','strip(hitRatio)                            , /* ...stat calculated after pa
+rtialLine created */             || ",''"                                         , /* ...stat calculated after partialLine created
+ */             || ','strip(hitRatio2)                           , /* ...stat calculated after partialLine created */             |
+| ",''"                                         , /* ...stat calculated after partialLine created */             || partialLine
+                               /* rest of prebuilt (partial) line */
+   639 *-*   /* max lrecl so far */
+   640 *-*   maxLrecl = max(maxLrecl,length(line.line))
+   642 *-*  end
+   644 *-*  /* now let's get simulated buffer pool stats */
+   645 *-*  dsndqBspOffset = dsndqBspOffset - dsndqBspLength
+   646 *-*  if dsndqbspNumber > 0
+   647 *-*   then
+       *-*   if dsndqBspLength <> 112
+   648 *-*    then
+       *-*    do
+   649 *-*     say 'logic error; dsndqBspLength =' dsndqBspLength
+   650 *-*     exit 8
+   651 *-*    end
+   652 *-*  do bsp = 1 by 1 for dsndqBspNumber
+   653 *-*   dsndqBspOffset = dsndqBspOffset + dsndqBspLength
+   654 *-*   dsndqBsp = substr(smfin.smfin,dsndqBspOffset,dsndqBspLength)
+   655 *-*   parse var dsndqBsp ,         1 qbspPid       , /* .4 buffer Pool id */         5 qbspflg       , /* .1 flag
+*/         6 .             , /* .3 reserved       */         9 qbspIus       , /* .8 Current # pages in sim. buffer pool     */
+    17 qbspHus       , /* .8 Highest # pages in sim. buffer pool     */        25 qbspSus       , /* .8 Current # pages for sequent
+ial/sim      */        33 qbspHsu       , /* .8 Highest # pages for sequential/sim      */        41 qbspDrr       , /* .8 # of ran
+dom read sync i/o (sim) (avoided)*/        49 qbspDrs       , /* .8 # of seq read sync i/o (sim)    (avoided)*/        57 qbspDra
+     , /* .8 # of seq read async i/o (sim)   (avoided)*/        65 qbspGrr       , /* .8 # of GBP w/c                            */
+        73 qbspGRS       , /* .8 # of GBP w/c                            */        81 qbspGRA       , /* .8 # of GBP w/c
+                 */        89 qbspMvi       , /* .8 # of pages logically moved in sim bp    */        97 qbspDtm       , /* .8 time
+ waiting for sync read i/o  (avoided)*/       105 .             , /* .8 reserved                                */       113 .
+        /* the end */
+   673 *-*   qbsppid = c2d(qbsppid) /* of course, any bsp variable should use our buffer pool id*/
+   674 *-*   qbstpid = qbsppid      /* any bst variable reference should use our buffer pool id */
+   675 *-*   x = f0120SaveValue('qbspIus')
+   676 *-*   x = f0120SaveValue('qbspHus')
+   677 *-*   x = f0120SaveValue('qbspSus')
+   678 *-*   x = f0120SaveValue('qbspHsu')
+   679 *-*   x = f0100AdjValue('qbspDrr')
+   680 *-*   x = f0100AdjValue('qbspDrs')
+   681 *-*   x = f0100AdjValue('qbspDra')
+   682 *-*   /* x = f0100AdjValue('qbspGrr') group buffer pool ignore */
+   683 *-*   /* x = f0100AdjValue('qbspGRS') group buffer pool ignore */
+   684 *-*   /* x = f0100AdjValue('qbspGRA') group buffer pool ignore */
+   685 *-*   x = f0100AdjValue('qbspMvi')
+   686 *-*   x = f0100AdjValue('qbspDtm')
+   687 *-*   if bpool.qbsppid = 0
+   688 *-*    then
+       *-*    iterate /* ignore this buffer pool */
+   690 *-*    /* real buffer pool stats */
+   691 *-*    /* calculate some residency numbers */
+   692 *-*    /* -------------------------------- */
+   693 *-*   maxResidency = f0110RefPrevValue('qbstvpl')*60    /* we consider max to be bpsize * 60 seconds       */
+   695 *-*   pagesUsedPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+         +f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */                        +f0110RefPrev
+Value('qbstdpp') , /*+# of pages read due to dyn prefetch             */                        +f0110RefPrevValue('qbstlpp') , /*+
+# of pages read due to listprefetch             */                        +f0110RefPrevValue('qbstsio') , /*+# of pages read synch
+for seq.       ch         */                        ) / 60
+   700 *-*   /*  = pages read / 60 secs = pages/sec             */
+   702 *-*   randomPagesPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+             +f0110RefPrevValue('qbstsio') , /*+# of sync pages read for seq.                   */                          ) / 60
+   704 *-*   /*  = pages read / 60 secs = pages/sec             */
+   707 *-*   if pagesUsedPerSec < 1 /* if too small, don't divide */
+   708 *-*    then
+       *-*    answer1 = 0
+   709 *-*   else
+       *-*    answer1 = f0110RefPrevValue('qbstvpl') / pagesUsedPerSec
+   711 *-*   if randomPagesPerSec < 1 /* if too small, don't divide */
+   712 *-*    then
+       *-*    answer2 = 0
+   713 *-*   else
+       *-*    answer2 = f0110RefPrevValue('qbstvpl') * (1 - vpSEQT)/ RandomPagesPerSec
+   715 *-*   residencyInSecs = format(max(answer1,answer2),,1)    /* this is an important number */
+   716 *-*   residencyInSecs = format(min(residencyInSecs,600),,1)/* this is an important number */
+   718 *-*   /* now transform residency in secs to an "index" in minutes */
+   719 *-*   /* -------------------------------------------------------- */
+   720 *-*   if      residencyInSecs < 60
+   721 *-*    then
+       *-*    residencyIndexInMin = format(residencyInSecs/60,,1)      /* 0.0 to 1.0 */
+   722 *-*   else
+       *-*    if residencyInSecs < 730
+   723 *-*     then
+       *-*     residencyIndexInMin = format(residencyInSecs/60,,0)      /* round to nearest min 1-10*/
+   724 *-*    else
+       *-*     if residencyInSecs < 3600
+   725 *-*      then
+       *-*      residencyIndexInMin = format(residencyInSecs/900,,0)*15  /* round to nearest 15, 30, 45 or 60 */
+   726 *-*     else
+       *-*      residencyIndexInMin = 60                                 /* max at 60                         */
+   728 *-*   /* calculate some hit % numbers */
+   729 *-*   /* -------------------------------- */
+   730 *-*   allRead = f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
++f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */                        +f0110RefPrevValue('qb
+stdpp') , /*+# of pages read due to dyn prefetch             */                        +f0110RefPrevValue('qbstlpp') , /*+# of page
+s read due to listprefetch             */                        +f0110RefPrevValue('qbstsio') , /*+# of pages read synch for seq.
+      ch         */
+   736 *-*   hitRatio = 100 /* assume it's 100 */
+   737 *-*   hitRatio2= 100 /* assume it's 100 */
+   738 *-*   if f0110RefPrevValue('qbstget') - f0110RefPrevValue('qbstnsg') > 0 /* denominator non-zero? */
+   739 *-*    then
+       *-*    do
+   740 *-*     /* calculate hitRatio, hitRatio2 */
+   741 *-*     hitRatio = format(  (  f0110RefPrevValue('qbstget')   ,                                                         - f0
+110RefPrevValue('qbstnsg')    ,                                                         - allread                         ,
+                                                 )                                 ,
+        / (  f0110RefPrevValue('qbstget')   ,                                                          - f0110RefPrevValue('qbstnsg
+')   ,                                                         )                                 ,                           * 100
+                              ,                          ,,1) /* round to nearest tenth */
+   751 *-*     /* "re-format" hit ratio answer in hitration2   */
+   752 *-*     if hitratio >= -100
+   753 *-*      then
+       *-*      hitratio2 = format(hitratio/10,,0) * 10 /* make it -100, -90, ... ,0, 10, 20, etc */
+   754 *-*     else
+       *-*      if hitRatio < -100
+   755 *-*       then
+       *-*       hitratio2 = format(hitratio/50,,0) * 50 /* make it -100, -150, -200, etc */
+   756 *-*    end
+   759 *-*    /* sim. buffer pool stats */
+   760 *-*    /* calculate some residency numbers */
+   761 *-*    /* -------------------------------- */
+   762 *-*   simMaxResidency = f0110RefPrevValue('qbspHus')*60    /* we consider max to be sim. bpsize * 60 seconds */
+   764 *-*   simPagesUsedPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+               +f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */                           +f01
+10RefPrevValue('qbstdpp') , /*+# of pages read due to dyn prefetch             */                           +f0110RefPrevValue('qbs
+tlpp') , /*+# of pages read due to listprefetch             */                           +f0110RefPrevValue('qbstsio') , /*+# of pa
+ges read synch for seq.                  */                           -f0110RefPrevValue('qbspDrr') , /* # of sync read i/o(s) AVOI
+DED                   */                           -f0110RefPrevValue('qbspDra') , /*+# of pages read due to seq/dyn/list prefetch
+avoided*/                           -f0110RefPrevValue('qbspDrs') , /*+# of pages read synch for seq. avoided          */
+                 ) / 60
+   772 *-*   /*  = pages read / 60 secs = pages/sec             */
+   774 *-*   simRandomPagesPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+                   +f0110RefPrevValue('qbstsio') , /*+# of sync pages read for seq.                   */
+  -f0110RefPrevValue('qbspDrr') , /* # of sync read i/o(s) avoided                   */                             -f0110RefPrevVa
+lue('qbspDrs') , /*+# of sync pages read for seq. avoided           */                             ) / 60
+   778 *-*   /*  = pages read / 60 secs = pages/sec             */
+   781 *-*   if SimPagesUsedPerSec < 1 /* if too small, don't divide */
+   782 *-*    then
+       *-*    answer1 = f0110RefPrevValue('qbspHus')
+   783 *-*   else
+       *-*    answer1 = f0110RefPrevValue('qbspHus') / SimPagesUsedPerSec
+   785 *-*   if simRandomPagesPerSec < 1 /* if too small, don't divide */
+   786 *-*    then
+       *-*    answer2 = f0110RefPrevValue('qbspHus') * (1 - vpSEQT)
+   787 *-*   else
+       *-*    answer2 = f0110RefPrevValue('qbspHus') * (1 - vpSEQT)/ simRandomPagesPerSec
+   789 *-*   simResidencyInSecs = format(max(answer1,answer2),,1)       /* this is an important number */
+   790 *-*   simResidencyInSecs = format(min(simResidencyInSecs,600),,1)/* this is an important number */
+   792 *-*   /* now transform residency in secs to an "index" in minutes */
+   793 *-*   /* -------------------------------------------------------- */
+   794 *-*   if      simResidencyInSecs < 60
+   795 *-*    then
+       *-*    simResidencyIndexInMin = format(simResidencyInSecs/60,,1)      /* 0.0 to 1.0 */
+   796 *-*   else
+       *-*    if simResidencyInSecs < 730
+   797 *-*     then
+       *-*     simResidencyIndexInMin = format(simResidencyInSecs/60,,0)      /* round to nearest min 1-10*/
+   798 *-*    else
+       *-*     if simResidencyInSecs < 3600
+   799 *-*      then
+       *-*      simResidencyIndexInMin = format(simResidencyInSecs/900,,0)     /* round to nearest 15, 30, 45 or 60 */
+   800 *-*     else
+       *-*      simResidencyIndexInMin = 60                                 /* max at 60                         */
+   802 *-*   /* calculate some hit % numbers */
+   803 *-*   /* -------------------------------- */
+   804 *-*   simAllRead = f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+   +f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */                        +f0110RefPrevValue(
+'qbstdpp') , /*+# of pages read due to dyn prefetch             */                        +f0110RefPrevValue('qbstlpp') , /*+# of p
+ages read due to listprefetch             */                        +f0110RefPrevValue('qbstsio') , /*+# of pages read synch for se
+q.                  */                        -f0110RefPrevValue('qbspDrr') , /* # of sync read i/o(s) avoided                   */
+                        -f0110RefPrevValue('qbspDra') , /*+# of pages read due to seq/dyn/list prefetch avoided*/
+  -f0110RefPrevValue('qbspDrs') , /*+# of pages read synch for seq. avoided          */
+   813 *-*   if simAllRead > allRead
+   814 *-*    then
+       *-*    say 'debug2 simAllread='simAllRead'; allRead='allRead
+   815 *-*   simHitRatio = 100 /* assume it's 100 */
+   816 *-*   simHitRatio2= 100 /* assume it's 100 */
+   817 *-*   if f0110RefPrevValue('qbstget') - f0110RefPrevValue('qbstnsg') > 0 /* denominator non-zero? */
+   818 *-*    then
+       *-*    do
+   819 *-*     /* calculate simHitRatio, simHitRatio2 */
+   820 *-*     SimHitRatio = format( (  f0110RefPrevValue('qbstget')   ,
+ - f0110RefPrevValue('qbstnsg') ,                                                            - simAllread                   ,
+                                                   )                                 ,
+            /                                 ,                                                         (  f0110RefPrevValue('qbstg
+et')   ,                                                          - f0110RefPrevValue('qbstnsg')   ,
+                          )                                 ,                                 * 100                             ,
+                             ,,1) /* round to nearest tenth */
+   831 *-*     /* "re-format" hit ratio answer in SimHitration2   */
+   832 *-*     if simHitratio >= -100
+   833 *-*      then
+       *-*      simHitratio2 = format(simHitratio/10,,0) * 10 /* make it -100, -90, ... ,0, 10, 20, etc */
+   834 *-*     else
+       *-*      if simHitRatio < -100
+   835 *-*       then
+       *-*       simHitratio2 = format(simHitratio/50,,0) * 50 /* make it -100, -150, -200, etc */
+   836 *-*     if simHitRatio < HitRatio
+   837 *-*      then
+       *-*      say 'debug2 simHitRatio='simHitRatio'; hitRatio='hitRatio'; qbstget='f0110RefPrevValue('qbstget') ,            || '
+; allRead='allread'; simAllRead='simallread
+   839 *-*    end
+   841 *-*    /* now start producing beginning of line (before simulated bp numbers) */
+   842 *-*   Rline = bpool.qbsppid /* buffer pool output line to reuse */
+   843 *-*   line.Rline= sm101ssi',BP'qbstpid','smfdateTime          , /* ssid,BP#,'20230102 hh:mm:ss' */             || ','strip(r
+esidencyInSecs)                     , /* ...stat calculated in bsp created */                        || ','strip(simResidencyInSecs
+)                  , /* ...stat calculated in bsp created */                        || ','strip(hitRatio)
+  , /* ...stat calculated in bsp created */                        || ','strip(simHitRatio)                         , /* ...stat ca
+lculated in bsp created */                        || ','strip(residencyIndexInMin)                 , /* ...stat calculated in bsp c
+reated */                        || ','strip(simResidencyIndexInMin)              , /* ...stat calculated in bsp created */
+                || ','strip(hitRatio2)                           , /* ...stat calculated in bsp created */                        |
+| ','strip(simHitRatio2)                        , /* ...stat calculated in bsp created */                        || ','f0110RefPrev
+Value('qbstGet') ,  /* # of get page requests (cond + non-c)'"         */                             || ','f0110RefPrevValue('qbst
+Rio') ,  /* # of sync read i/o requests'"                   */                   || ','f0110RefPrevValue('qbstDwv') ,  /* # of vdwq
+ threshold reached'"                   */                   || ','f0110RefPrevValue('qbstSws') ,  /* # of setw issued for system pa
+ges'"             */                         || ','f0110RefPrevValue('qbstPws') ,  /* # of page writes for system pages'"
+   */                         || ','f0110RefPrevValue('qbstWio') ,  /* # of asynch write i/o(s)'"                      */
+        || ','f0110RefPrevValue('qbstcba') ,  /* # of current active buffers'"                   */                  || ','f0110Ref
+PrevValue('qbstRpi') ,  /* # of page-ins required for read i/o'"           */                           || ','f0110RefPrevValue('qb
+stWpi') ,  /* # of page-ins required for write i/o'"          */                            || ','f0110RefPrevValue('qbstImw') ,  /
+* # of immed sync write i/o'"                     */                  || ','f0110RefPrevValue('qbstSeq') ,  /* # of seq prefetch re
+quested'"                   */                   || ','f0110RefPrevValue('qbstSpp') ,  /* # of page read due to seq prefetch'"
+       */                          || ','f0110RefPrevValue('qbstSpd') ,  /* # of seq prefetch disabled - buf shrtge'"       */
+                          || ','f0110RefPrevValue('qbstRee') ,  /* # of seq prefetch disabled - unavail read eng'" */
+                       || ','f0110RefPrevValue('qbstDwt') ,  /* # of DW threshold reached'"                     */
+ || ','f0110RefPrevValue('qbstDmc') ,  /* # of Data Mngr threshold reached'"              */                        || ','f0110RefP
+revValue('qbstPio') ,  /* # of seq prefetch read i/o'"                    */                  || ','f0110RefPrevValue('qbstWkpd') ,
+ /* # of work prefetch aborted, zero prefetch#'"    */                                    || ','f0110RefPrevValue('qbstMax') ,  /*
+# of wk file not created; buff.resources'"      */                                || ','f0110RefPrevValue('qbstWfm') ,  /* # of max
+ wk files allocated'"                   */                  || ','f0110RefPrevValue('qbstWdrp') , /* # of destructive read page req
+uests'"           */                             || ','f0110RefPrevValue('qbstWbvq') , /* # of destr. read page req. dq''d from dwq
+t'"    */                                    || ','f0110RefPrevValue('qbstWfr') ,  /* # of q.req. for wk files in sort/merge'"
+   */                              || ','f0110RefPrevValue('qbstWft') ,  /* # of wk req. during sort/merge'"                */
+                 || ','f0110RefPrevValue('qbstWfd') ,  /* # of wk req. denied during sort/merge'"         */
+      || ','f0110RefPrevValue('qbstWff') ,  /* # of sort/merge performance; buf shortage'"     */                                 |
+| ','f0110RefPrevValue('qbstLpf') ,  /* # of concurrent list pref; same pageset'"       */                               || ','f011
+0RefPrevValue('qbstDpf') ,  /* # of dynamic prefetch requests'"                */                      || ','f0110RefPrevValue('qbs
+tVpl') ,  /* # of buffers allocated'"                        */                   || ','f0110RefPrevValue('qbstDpp') ,  /* # of pag
+es read dynamic prefetch'"              */                        || ','f0110RefPrevValue('qbstLpp') ,  /* # of pages read list pre
+fetch'"                 */                     || ','f0110RefPrevValue('qbstDio') ,  /* # of dynamic prefetch read i/o(s)'"
+     */                         || ','f0110RefPrevValue('qbstLio') ,  /* # of list prefetch read i/o(s)'"                */
+              || ','f0110RefPrevValue('qbstSgt') ,  /* # of get pages sequential req'"                 */                     || ',
+'f0110RefPrevValue('qbstSio') ,  /* # of sync read i/o(s)'"                         */                  || ','f0110RefPrevValue('qb
+stNgt') ,  /* # of unsuccessful cond getpage req'"            */                          || ','f0110RefPrevValue('qbstXis') ,  /*
+# of highest prefetch i/o streams alloc'"       */                  || ','f0110RefPrevValue('qbstJis') ,  /* # of denied prefetch i
+/o streams'"              */                        || ','f0110RefPrevValue('qbstPqo') ,  /* # of parallism bm/rds negotiations'"
+          */                          || ','f0110RefPrevValue('qbstPgf') ,  /* # of parallism downgraded, bp shortage'"        */
+                            || ','f0110RefPrevValue('qbstPl1') ,  /* # of prefetch 1/2 normal'"                      */
+      || ','f0110RefPrevValue('qbstPl2') ,  /* # of prefetch 1/4 normal'"                      */                  || ','f0110RefPr
+evValue('qbstNsg') ,  /* # of cond.seq getpage fail, not in buf'"        */                              || ','f0110RefPrevValue('q
+bstSioc') , /* # of i/o hitting disk cache'"                   */                     || ','f0110RefPrevValue('qbstSmin') , /* # of
+ min buffers on slru (in interval)'"        */                  || ','f0110RefPrevValue('qbstSmax') , /* # of max buffers on slru (
+in interval)'"        */                  || ','f0110RefPrevValue('qbstHst') ,  /* # of times slru chain length=vpseqt'"
+*/                           || ','f0110RefPrevValue('qbstRhs') ,  /* # of random getpage found on slru'"             */
+              || ','f0110RefPrevValue('qbspIus') ,  /* Current # pages in sim. bp                 */                             ||
+ ','f0110RefPrevValue('qbspHus') ,  /* Highest # pages in sim. bp                 */                             || ','f0110RefPrev
+Value('qbspSus') ,  /* Current # seq. pages in sim. bp            */                             || ','f0110RefPrevValue('qbspHsu')
+ ,  /* Highest # seq. pages in sim. bp            */                             || ','f0110RefPrevValue('qbspDrr') ,  /* # read sy
+nc i/o Random (avoided)           */                             || ','f0110RefPrevValue('qbspDrs') ,  /* # read sync i/o Seq.   (a
+voided)           */                             || ','f0110RefPrevValue('qbspDra') ,  /* # read async i/o Seq.  (avoided)
+  */                             || ','f0110RefPrevValue('qbspMvi') ,  /* # pages logically moved into sim bp        */
+                     || ','f0110RefPrevValue('qbspDtm')/1000000 , /* time waiting for sync read i/o (avoided) */
+       /* the end of continued lines           */
+   912 *-*   maxLrecl = max(maxLrecl,length(line.appendLine))
+   913 *-*  end
+   914 *-* end
+   915 *-* 'EXECIO' line 'DISKW SMFRPT (STEM LINE. FINIS'
+   916 *-* if rc = 0
+   917 *-*  then
+       *-*  pendingRc = 0
+   918 *-* else
+       *-*  do
+   919 *-*   if rc = 1
+       *-*    then
+       *-*    say 'maxlrecl was' maxLrecl'; lrecl on SMFRPT was too small'
+   920 *-*   say 'Error writing and closing SMFRPT, rc='rc
+   921 *-*   'EXECIO 0 DISKR SMFIN (FINIS'
+   922 *-*   pendingRc = 8
+   923 *-*  end
+   924 *-* say 'maxlrecl observaed was' maxLrecl
+   925 *-* 'EXECIO 0 DISKR SMFIN (FINIS'
+   926 *-* if smfinRc <> 2 | rc <> 0
+   927 *-*  then
+       *-*  do
+   928 *-*   pendingRc = 8
+   929 *-*   if smfInRc <> 2
+   930 *-*    then
+       *-*    say 'Error reading from SMFIN, rc='smfinRc
+   931 *-*   else
+       *-*    say 'Error closing from SMFIN, rc='rc
+   932 *-*  end
+   933 *-* exit pendingRc
+   934 *-* /*---------- */
+   935 *-* /*end of pgm */
+   936 *-* /*---------- */
+   938 *-* /* ------------------ */
+   939 *-* /* start of functions */
+   940 *-* /* ------------------ */
+   943 *-* /* f0100AdjValue function                                         */
+   944 *-* /*    called with variable name like:  adjValue('variableName')   */
+   945 *-* /*    we lookup prior value in lastValue.variableName             */
+   946 *-* /*    and return difference.                                      */
+   947 *-* f0100AdjValue:
+   948 *-* parse upper arg variableName .
+   950 *-* if      left(variableName,4) = 'QBST'
+   951 *-*  then
+       *-*  bufferPool = qbstpid
+   952 *-* else
+       *-*  if left(variableName,4) = 'QBSP'
+   953 *-*   then
+       *-*   bufferPool = qbsppid
+   954 *-*  else
+       *-*   bufferPool = 'bp'
+   956 *-* if lastvalue.bufferPool.variableName = ''
+   957 *-*  then
+       *-*  do
+   958 *-*   lastvalue.bufferPool.variableName = c2d(value(variableName))
+   959 *-*   lastRefValue.bufferPool.variableName = 0
+   960 *-*   return lastRefValue.bufferPool.variableName
+   961 *-*  end
+   962 *-* else
+       *-*  do
+   963 *-*   pv = lastvalue.bufferPool.variableName
+   964 *-*   cv = c2d(value(variableName))
+   965 *-*   lastValue.bufferPool.variableName    = cv
+   966 *-*   lastRefValue.bufferPool.variableName = cv - pv
+   967 *-*   return lastRefValue.bufferPool.variableName
+   968 *-*  end
+   969 *-* /* meaningless return, we'll never get here */
+   970 *-* return 0
+   972 *-* oldCode:
+   973 *-* if variableName = 'QBSTXFV'
+   974 *-*  then
+       *-*  do
+   975 *-*   xxx = 'QBSTXFV'
+   976 *-*   say '(debug) lastValue.'xxx '="'lastValue.xxx'"'
+   977 *-*   yyy = 'JUNK'
+   978 *-*   say '(debug) lastValue.'yyy '="'lastValue.yyy'"'
+   979 *-*   say "(debug) value('lastValue.'variableName) ='"value('lastValue.'variableName)"'"
+   980 *-*  end
+   981 *-* if value('lastValue.'variableName) = ''
+   982 *-*  then
+       *-*  do
+   983 *-*   /* get pv (previous value (null) and set new previous value in stem */
+   984 *-*   cv = c2d(value(variableName))
+   985 *-*   pv = value('lastValue.'variableName,cv)   /* set previous starting value to cv */
+   986 *-*   xxx= value('lastRefValue.'variableName,0) /* set to value we are returning */
+   987 *-*   say 'lastValue.'variableName '='value('lastValue.'variableName)
+   988 *-*   say '(default) variableName='variableName', pv=, cv='cv', return value=0'
+   989 *-*   xxx = 'QBSTXFV'
+   990 *-*   say '(default) lastValue.'xxx '="'lastValue.xxx'"'
+   991 *-*   yyy = 'JUNK'
+   992 *-*   say '(default) lastValue.'yyy '="'lastValue.yyy'"'
+   993 *-*   say "(default) value('lastValue.'xxx) ='"value('lastValue.'xxx)"'"
+   994 *-*   say "(default) value('lastValue.'variableName) ='"value('lastValue.'variableName)"'"
+   995 *-*   return 0                                  /* first time, return 0 */
+   996 *-*  end
+   997 *-* else
+       *-*  do
+   998 *-*   /* get pv (previous value) and set new previous value in stem */
+   999 *-*   trace 'i'
+  1000 *-*   cv = c2d(value(variableName))
+  1001 *-*   pv = value('lastValue.'variableName,cv)
+  1002 *-*   refValue = cv - pv
+  1003 *-*   say 'variableName='variableName', pv='pv', cv='cv', returned value='refValue
+  1004 *-*   xxx= value('lastRefValue.'variableName,refValue) /* set to value we are returning */
+  1005 *-*   exit 8
+  1007 *-*   /* return difference between this value and previous one */
+  1008 *-*   return refValue                                  /* return same value as in lastrefvalue. */
+  1009 *-*  end
+  1010 *-* /* meaningless return, we'll never get here */
+  1011 *-* return 0
+  1012 *-* /* updated by our function adjValue('variableName')          */
+  1013 *-* /* f0110RefPrevValue function                                         */
+  1014 *-* /*    called with variable name like:  f0110RefPrevValue('variableName')   */
+  1015 *-* /*    we lookup prior value in lastValue.variableName             */
+  1016 *-* /*    and return difference (that we set last time in f0100)      */
+  1017 *-* f0110RefPrevValue:
+  1018 *-* parse upper arg variableName .
+  1020 *-* if      left(variableName,4) = 'QBST'
+  1021 *-*  then
+       *-*  bufferPool = qbstpid
+  1022 *-* else
+       *-*  if left(variableName,4) = 'QBSP'
+  1023 *-*   then
+       *-*   bufferPool = qbsppid
+  1024 *-*  else
+       *-*   bufferPool = 'bp'
+  1026 *-* if lastRefValue.bufferPool.variableName = ''
+  1027 *-*  then
+       *-*  return 0
+  1028 *-* return lastRefValue.bufferPool.variableName
+  1030 *-* /* f0120SaveValue function                                        */
+  1031 *-* /*    called with variable name like: saveValue('variableName')   */
+  1032 *-* /*    we convert and save value.                                  */
+  1033 *-* f0120SaveValue:
+  1034 *-* parse upper arg variableName .
+  1036 *-* if      left(variableName,4) = 'QBST'
+  1037 *-*  then
+       *-*  bufferPool = qbstpid
+  1038 *-* else
+       *-*  if left(variableName,4) = 'QBSP'
+  1039 *-*   then
+       *-*   bufferPool = qbsppid
+  1040 *-*  else
+       *-*   bufferPool = 'bp'
+  1042 *-* cv = c2d(value(variableName))
+  1043 *-* lastRefValue.bufferPool.variableName = cv
+  1044 *-* return lastRefValue.bufferPool.variableName
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Address Envir.Constant: ADDRESS 'TSO'               Reference: 85 96
+
+Variable (set w/rexx)   allread                     Assigned : 595 730
+Variable (used in/rexx) allread                     Reference: 607 623 741 813 814 837
+
+Variable (set w/rexx)   answer1                     Assigned : 573 574 708 709 782 783
+Variable (used in/rexx) answer1                     Reference: 580 715 789
+
+Variable (set w/rexx)   answer2                     Assigned : 577 578 712 713 786 787
+Variable (used in/rexx) answer2                     Reference: 580 715 789
+
+Variable (NEVER SET)    APPENDLINE                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Ref)  APPENDLINE                  Reference: 912
+
+Variable (set w/rexx)   argbpool                    Assigned : 18 46 54
+Variable (used in/rexx) argbpool                    Reference: 42 44 49 53 54
+
+Variable (set w/rexx)   argssid                     Assigned : 18
+Variable (used in/rexx) argssid                     Reference: 19 24 26 30 280
+
+Variable (set w/rexx)   bsp                         Assigned : 652
+Variable (NEVER USED)   bsp                         No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   bst                         Assigned : 425
+Variable (NEVER USED)   bst                         No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   bufferpool                  Assigned : 951 953 954 1021 1023 1024 1037 1039 1040
+Variable (in Stem Set)  bufferpool                  Assigned : 958 959 965 966 1043
+Variable (in Stem Ref)  bufferpool                  Reference: 956 960 963 967 1026 1028 1044
+
+Built-In+/External use  C2D                         Reference: F(297) F(298) F(299) F(302) F(317) F(368) F(369) F(370) F(372) F(373) F(374) F(376)
+                        ...                                    F(377) F(378) F(380) F(381) F(382) F(384) F(385) F(386) F(388) F(389) F(390) F(392)
+                        ...                                    F(393) F(394) F(396) F(397) F(398) F(400) F(401) F(402) F(404) F(405) F(406) F(408)
+                        ...                                    F(409) F(410) F(412) F(413) F(414) F(497) F(673) F(958) F(964) F(984) F(1000)
+                        ...                                    F(1042)
+
+Built-In+/External use  C2X                         Reference: F(312)
+
+Variable (set w/rexx)   cv                          Assigned : 964 984 1000 1042
+Variable (used in/rexx) cv                          Reference: 965 966 985 988 1001 1002 1003 1043
+
+Built-In+/External use  DATATYPE                    Reference: F(55) F(65)
+
+Built-In+/External use  DATE                        Reference: F(313)
+
+Variable (set w/rexx)   dsndq8stlength              Assigned : 409
+Variable (NEVER USED)   dsndq8stlength              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndq8stnumber              Assigned : 410
+Variable (NEVER USED)   dsndq8stnumber              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndq8stoffset              Assigned : 408
+Variable (NEVER USED)   dsndq8stoffset              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqbgllength              Assigned : 393
+Variable (NEVER USED)   dsndqbgllength              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqbglnumber              Assigned : 394
+Variable (NEVER USED)   dsndqbglnumber              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqbgloffset              Assigned : 392
+Variable (NEVER USED)   dsndqbgloffset              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqbsp                    Assigned : 654
+Variable (used in/rexx) dsndqbsp                    Reference: 655
+
+Variable (set w/rexx)   dsndqbsplength              Assigned : 413
+Variable (used in/rexx) dsndqbsplength              Reference: 645 647 649 653 654
+
+Variable (set w/rexx)   dsndqbspnumber              Assigned : 414
+Variable (used in/rexx) dsndqbspnumber              Reference: 646 652
+
+Variable (set w/rexx)   dsndqbspoffset              Assigned : 412 645 653
+Variable (used in/rexx) dsndqbspoffset              Reference: 645 653 654
+
+Variable (set w/rexx)   dsndqbst                    Assigned : 427
+Variable (used in/rexx) dsndqbst                    Reference: 428
+
+Variable (set w/rexx)   dsndqbstlength              Assigned : 377
+Variable (used in/rexx) dsndqbstlength              Reference: 418 420 422 426 427
+
+Variable (set w/rexx)   dsndqbstnumber              Assigned : 378
+Variable (used in/rexx) dsndqbstnumber              Reference: 419 425
+
+Variable (set w/rexx)   dsndqbstoffset              Assigned : 376 418 426
+Variable (used in/rexx) dsndqbstoffset              Reference: 418 426 427
+
+Variable (set w/rexx)   dsndqiselength              Assigned : 389
+Variable (NEVER USED)   dsndqiselength              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqisenumber              Assigned : 390
+Variable (NEVER USED)   dsndqisenumber              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqiseoffset              Assigned : 388
+Variable (NEVER USED)   dsndqiseoffset              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqisjlength              Assigned : 405
+Variable (NEVER USED)   dsndqisjlength              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqisjnumber              Assigned : 406
+Variable (NEVER USED)   dsndqisjnumber              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqisjoffset              Assigned : 404
+Variable (NEVER USED)   dsndqisjoffset              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqistlength              Assigned : 381
+Variable (NEVER USED)   dsndqistlength              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqistnumber              Assigned : 382
+Variable (NEVER USED)   dsndqistnumber              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqistoffset              Assigned : 380
+Variable (NEVER USED)   dsndqistoffset              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqleslength              Assigned : 401
+Variable (NEVER USED)   dsndqleslength              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqlesnumber              Assigned : 402
+Variable (NEVER USED)   dsndqlesnumber              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqlesoffset              Assigned : 400
+Variable (NEVER USED)   dsndqlesoffset              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqtgslength              Assigned : 397
+Variable (NEVER USED)   dsndqtgslength              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqtgsnumber              Assigned : 398
+Variable (NEVER USED)   dsndqtgsnumber              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqtgsoffset              Assigned : 396
+Variable (NEVER USED)   dsndqtgsoffset              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqtstlength              Assigned : 373
+Variable (NEVER USED)   dsndqtstlength              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqtstnumber              Assigned : 374
+Variable (NEVER USED)   dsndqtstnumber              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqtstoffset              Assigned : 372
+Variable (NEVER USED)   dsndqtstoffset              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqtxalength              Assigned : 385
+Variable (NEVER USED)   dsndqtxalength              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqtxanumber              Assigned : 386
+Variable (NEVER USED)   dsndqtxanumber              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqtxaoffset              Assigned : 384
+Variable (NEVER USED)   dsndqtxaoffset              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqxstlength              Assigned : 369
+Variable (NEVER USED)   dsndqxstlength              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqxstnumber              Assigned : 370
+Variable (NEVER USED)   dsndqxstnumber              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsndqxstoffset              Assigned : 368
+Variable (NEVER USED)   dsndqxstoffset              No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  F0100ADJVALUE               Defined  : 947
+Label (int. label ref)  F0100ADJVALUE               Reference: F(505) F(679) F(680) F(681) F(685) F(686)
+
+Label (internal label)  F0110REFPREVVALUE           Defined  : 1017
+Label (int. label ref)  F0110REFPREVVALUE           Reference: F(558) F(560) F(567) F(574) F(578) F(595) F(603) F(607) F(623) F(693) F(695) F(702)
+                        ...                                    F(709) F(713) F(730) F(738) F(741) F(762) F(764) F(774) F(782) F(783) F(786) F(787)
+                        ...                                    F(804) F(817) F(820) F(837) F(843)
+
+Label (internal label)  F0120SAVEVALUE              Defined  : 1033
+Label (int. label ref)  F0120SAVEVALUE              Reference: F(505) F(675) F(676) F(677) F(678)
+
+Variable (set w/rexx)   fieldstart                  Assigned : 301
+Variable (used in/rexx) fieldstart                  Reference: 302
+
+Built-In+/External use  FORMAT                      Reference: F(317) F(320) F(580) F(581) F(586) F(588) F(590) F(607) F(619) F(621) F(715) F(716)
+                        ...                                    F(721) F(723) F(725) F(741) F(753) F(755) F(789) F(790) F(795) F(797) F(799) F(820)
+                        ...                                    F(833) F(835)
+
+Variable (set w/rexx)   hitratio                    Assigned : 601 607 736 741
+Variable (used in/rexx) hitratio                    Reference: 618 619 620 621 623 627 752 753 754 755 836 837 843
+
+Variable (set w/rexx)   hitratio2                   Assigned : 602 619 621 737 753 755
+Variable (used in/rexx) hitratio2                   Reference: 627 843
+
+Variable (set w/rexx)   hitratiofirst               Assigned : 606
+Variable (NEVER USED)   hitratiofirst               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   hours                       Assigned : 320
+Variable (used in/rexx) hours                       Reference: 321
+
+Variable (set w/rexx)   ifcid                       Assigned : 302
+Variable (used in/rexx) ifcid                       Reference: 304
+
+Built-In+/External use  LEFT                        Reference: F(312) F(313) F(950) F(952) F(1020) F(1022) F(1036) F(1038)
+
+Built-In+/External use  LENGTH                      Reference: F(243) F(640) F(912)
+
+Variable (set w/rexx)   line                        Assigned : 175 260 501
+Variable (used in/rexx) line                        Reference: 256 258 501 502 915
+Variable (in Stem Set)  line                        Assigned : 176 627
+Variable (in Stem Ref)  line                        Reference: 640
+
+Built-In+/External use  MAX                         Reference: F(580) F(640) F(715) F(789) F(912)
+
+Variable (set w/rexx)   maxlrecl                    Assigned : 17 243 640 912
+Variable (used in/rexx) maxlrecl                    Reference: 262 640 912 919 924
+
+Variable (set w/rexx)   maxresidency                Assigned : 558 693
+Variable (NEVER USED)   maxresidency                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   maybe16                     Assigned : 60
+Variable (used in/rexx) maybe16                     Reference: 63
+
+Variable (set w/rexx)   maybe32                     Assigned : 58
+Variable (used in/rexx) maybe32                     Reference: 61
+
+Variable (set w/rexx)   maybe8                      Assigned : 59
+Variable (used in/rexx) maybe8                      Reference: 62
+
+Built-In+/External use  MIN                         Reference: F(581) F(716) F(790)
+
+Variable (set w/rexx)   mins                        Assigned : 319
+Variable (used in/rexx) mins                        Reference: 320 321
+
+Variable (set w/rexx)   nextb                       Assigned : 54 61 62 63
+Variable (used in/rexx) nextb                       Reference: 55 58 59 60 65 67 70 72 77
+Variable (in Stem Set)  nextb                       Assigned : 78
+Variable (in Stem Ref)  nextb                       Reference: 75
+
+Variable (set w/rexx)   old101dte                   Assigned : 311
+Variable (used in/rexx) old101dte                   Reference: 307
+
+Label (internal label)  OLDCODE                     Defined  : 972
+Label (int. label ref)  OLDCODE                     Reference:
+
+Variable (set w/rexx)   pagesusedpersec             Assigned : 560 695
+Variable (used in/rexx) pagesusedpersec             Reference: 572 574 707 709
+
+Variable (set w/rexx)   partialline                 Assigned : 505
+Variable (used in/rexx) partialline                 Reference: 627
+
+Variable (set w/rexx)   pendingrc                   Assigned : 917 922 928
+Variable (used in/rexx) pendingrc                   Reference: 933
+
+Variable (set w/rexx)   prodsectionlength           Assigned : 298
+Variable (NEVER USED)   prodsectionlength           No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   prodsectionnumber           Assigned : 299
+Variable (NEVER USED)   prodsectionnumber           No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   prodsectionoffset           Assigned : 297
+Variable (used in/rexx) prodsectionoffset           Reference: 301
+
+Variable (set w/rexx)   pv                          Assigned : 963 985 1001
+Variable (used in/rexx) pv                          Reference: 966 1002 1003
+
+Variable (set w/rexx)   qbspdra                     Assigned : 655
+Variable (NEVER USED)   qbspdra                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbspdrr                     Assigned : 655
+Variable (NEVER USED)   qbspdrr                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbspdrs                     Assigned : 655
+Variable (NEVER USED)   qbspdrs                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbspdtm                     Assigned : 655
+Variable (NEVER USED)   qbspdtm                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbspflg                     Assigned : 655
+Variable (NEVER USED)   qbspflg                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbspgra                     Assigned : 655
+Variable (NEVER USED)   qbspgra                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbspgrr                     Assigned : 655
+Variable (NEVER USED)   qbspgrr                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbspgrs                     Assigned : 655
+Variable (NEVER USED)   qbspgrs                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbsphsu                     Assigned : 655
+Variable (NEVER USED)   qbsphsu                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbsphus                     Assigned : 655
+Variable (NEVER USED)   qbsphus                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbspius                     Assigned : 655
+Variable (NEVER USED)   qbspius                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbspmvi                     Assigned : 655
+Variable (NEVER USED)   qbspmvi                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbsppid                     Assigned : 655 673
+Variable (used in/rexx) qbsppid                     Reference: 673 674 953 1023 1039
+Variable (in Stem Ref)  qbsppid                     Reference: 687 842
+
+Variable (set w/rexx)   qbspsus                     Assigned : 655
+Variable (NEVER USED)   qbspsus                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstaget                    Assigned : 428
+Variable (NEVER USED)   qbstaget                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstasge                    Assigned : 428
+Variable (NEVER USED)   qbstasge                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstasse                    Assigned : 428
+Variable (NEVER USED)   qbstasse                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstasyn                    Assigned : 428
+Variable (NEVER USED)   qbstasyn                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstcba                     Assigned : 428
+Variable (NEVER USED)   qbstcba                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstcio                     Assigned : 428
+Variable (NEVER USED)   qbstcio                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstdio                     Assigned : 428
+Variable (NEVER USED)   qbstdio                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstdmc                     Assigned : 428
+Variable (NEVER USED)   qbstdmc                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstdpf                     Assigned : 428
+Variable (NEVER USED)   qbstdpf                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstdpp                     Assigned : 428
+Variable (NEVER USED)   qbstdpp                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstdso                     Assigned : 428
+Variable (NEVER USED)   qbstdso                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstdwt                     Assigned : 428
+Variable (NEVER USED)   qbstdwt                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstdwv                     Assigned : 428
+Variable (NEVER USED)   qbstdwv                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstflg                     Assigned : 428
+Variable (NEVER USED)   qbstflg                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstget                     Assigned : 428
+Variable (NEVER USED)   qbstget                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbsthst                     Assigned : 428
+Variable (NEVER USED)   qbsthst                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstimw                     Assigned : 428
+Variable (NEVER USED)   qbstimw                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstjis                     Assigned : 428
+Variable (NEVER USED)   qbstjis                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstlio                     Assigned : 428
+Variable (NEVER USED)   qbstlio                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstlpf                     Assigned : 428
+Variable (NEVER USED)   qbstlpf                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstlpl                     Assigned : 428
+Variable (NEVER USED)   qbstlpl                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstlpp                     Assigned : 428
+Variable (NEVER USED)   qbstlpp                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstmax                     Assigned : 428
+Variable (NEVER USED)   qbstmax                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstmig                     Assigned : 428
+Variable (NEVER USED)   qbstmig                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstngt                     Assigned : 428
+Variable (NEVER USED)   qbstngt                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstnsg                     Assigned : 428
+Variable (NEVER USED)   qbstnsg                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstpco                     Assigned : 428
+Variable (NEVER USED)   qbstpco                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstpgf                     Assigned : 428
+Variable (NEVER USED)   qbstpgf                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstpid                     Assigned : 428 497 674
+Variable (used in/rexx) qbstpid                     Reference: 497 627 843 951 1021 1037
+Variable (in Stem Set)  qbstpid                     Assigned : 502
+Variable (in Stem Ref)  qbstpid                     Reference: 498
+
+Variable (set w/rexx)   qbstpio                     Assigned : 428
+Variable (NEVER USED)   qbstpio                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstpl1                     Assigned : 428
+Variable (NEVER USED)   qbstpl1                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstpl2                     Assigned : 428
+Variable (NEVER USED)   qbstpl2                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstpqo                     Assigned : 428
+Variable (NEVER USED)   qbstpqo                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstpws                     Assigned : 428
+Variable (NEVER USED)   qbstpws                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstree                     Assigned : 428
+Variable (NEVER USED)   qbstree                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstrhs                     Assigned : 428
+Variable (NEVER USED)   qbstrhs                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstrio                     Assigned : 428
+Variable (NEVER USED)   qbstrio                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstrpi                     Assigned : 428
+Variable (NEVER USED)   qbstrpi                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstrto                     Assigned : 428
+Variable (NEVER USED)   qbstrto                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstseq                     Assigned : 428
+Variable (NEVER USED)   qbstseq                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstsgt                     Assigned : 428
+Variable (NEVER USED)   qbstsgt                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstsio                     Assigned : 428
+Variable (NEVER USED)   qbstsio                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstsioc                    Assigned : 428
+Variable (NEVER USED)   qbstsioc                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstsmax                    Assigned : 428
+Variable (NEVER USED)   qbstsmax                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstsmin                    Assigned : 428
+Variable (NEVER USED)   qbstsmin                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstspd                     Assigned : 428
+Variable (NEVER USED)   qbstspd                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstspp                     Assigned : 428
+Variable (NEVER USED)   qbstspp                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstsws                     Assigned : 428
+Variable (NEVER USED)   qbstsws                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstsyio                    Assigned : 428
+Variable (NEVER USED)   qbstsyio                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstvpa                     Assigned : 428
+Variable (NEVER USED)   qbstvpa                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstvpl                     Assigned : 428
+Variable (NEVER USED)   qbstvpl                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstwbvq                    Assigned : 428
+Variable (NEVER USED)   qbstwbvq                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstwdrp                    Assigned : 428
+Variable (NEVER USED)   qbstwdrp                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstwfd                     Assigned : 428
+Variable (NEVER USED)   qbstwfd                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstwff                     Assigned : 428
+Variable (NEVER USED)   qbstwff                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstwfm                     Assigned : 428
+Variable (NEVER USED)   qbstwfm                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstwfr                     Assigned : 428
+Variable (NEVER USED)   qbstwfr                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstwft                     Assigned : 428
+Variable (NEVER USED)   qbstwft                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstwio                     Assigned : 428
+Variable (NEVER USED)   qbstwio                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstwkpd                    Assigned : 428
+Variable (NEVER USED)   qbstwkpd                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstwpi                     Assigned : 428
+Variable (NEVER USED)   qbstwpi                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstxfl                     Assigned : 428
+Variable (NEVER USED)   qbstxfl                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstxfv                     Assigned : 428
+Variable (NEVER USED)   qbstxfv                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qbstxis                     Assigned : 428
+Variable (NEVER USED)   qbstxis                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qws10psl                    Assigned : 290
+Variable (used in/rexx) qws10psl                    Reference: 298
+
+Variable (set w/rexx)   qws10psn                    Assigned : 290
+Variable (used in/rexx) qws10psn                    Reference: 299
+
+Variable (set w/rexx)   qws10pso                    Assigned : 290
+Variable (used in/rexx) qws10pso                    Reference: 297
+
+Variable (set w/rexx)   qws10r1l                    Assigned : 326
+Variable (used in/rexx) qws10r1l                    Reference: 369
+
+Variable (set w/rexx)   qws10r1n                    Assigned : 326
+Variable (used in/rexx) qws10r1n                    Reference: 370
+
+Variable (set w/rexx)   qws10r1o                    Assigned : 326
+Variable (used in/rexx) qws10r1o                    Reference: 368
+
+Variable (set w/rexx)   qws10r2l                    Assigned : 326
+Variable (used in/rexx) qws10r2l                    Reference: 373
+
+Variable (set w/rexx)   qws10r2n                    Assigned : 326
+Variable (used in/rexx) qws10r2n                    Reference: 374
+
+Variable (set w/rexx)   qws10r2o                    Assigned : 326
+Variable (used in/rexx) qws10r2o                    Reference: 372
+
+Variable (set w/rexx)   qws10r3l                    Assigned : 326
+Variable (used in/rexx) qws10r3l                    Reference: 377
+
+Variable (set w/rexx)   qws10r3n                    Assigned : 326
+Variable (used in/rexx) qws10r3n                    Reference: 378
+
+Variable (set w/rexx)   qws10r3o                    Assigned : 326
+Variable (used in/rexx) qws10r3o                    Reference: 376
+
+Variable (set w/rexx)   qws10r4l                    Assigned : 326
+Variable (used in/rexx) qws10r4l                    Reference: 381
+
+Variable (set w/rexx)   qws10r4n                    Assigned : 326
+Variable (used in/rexx) qws10r4n                    Reference: 382
+
+Variable (set w/rexx)   qws10r4o                    Assigned : 326
+Variable (used in/rexx) qws10r4o                    Reference: 380
+
+Variable (set w/rexx)   qws10r5l                    Assigned : 326
+Variable (used in/rexx) qws10r5l                    Reference: 385
+
+Variable (set w/rexx)   qws10r5n                    Assigned : 326
+Variable (used in/rexx) qws10r5n                    Reference: 386
+
+Variable (set w/rexx)   qws10r5o                    Assigned : 326
+Variable (used in/rexx) qws10r5o                    Reference: 384
+
+Variable (set w/rexx)   qws10r6l                    Assigned : 326
+Variable (used in/rexx) qws10r6l                    Reference: 389
+
+Variable (set w/rexx)   qws10r6n                    Assigned : 326
+Variable (used in/rexx) qws10r6n                    Reference: 390
+
+Variable (set w/rexx)   qws10r6o                    Assigned : 326
+Variable (used in/rexx) qws10r6o                    Reference: 388
+
+Variable (set w/rexx)   qws10r7l                    Assigned : 326
+Variable (used in/rexx) qws10r7l                    Reference: 393
+
+Variable (set w/rexx)   qws10r7n                    Assigned : 326
+Variable (used in/rexx) qws10r7n                    Reference: 394
+
+Variable (set w/rexx)   qws10r7o                    Assigned : 326
+Variable (used in/rexx) qws10r7o                    Reference: 392
+
+Variable (set w/rexx)   qws10r8l                    Assigned : 326
+Variable (used in/rexx) qws10r8l                    Reference: 397
+
+Variable (set w/rexx)   qws10r8n                    Assigned : 326
+Variable (used in/rexx) qws10r8n                    Reference: 398
+
+Variable (set w/rexx)   qws10r8o                    Assigned : 326
+Variable (used in/rexx) qws10r8o                    Reference: 396
+
+Variable (set w/rexx)   qws10r9l                    Assigned : 326
+Variable (used in/rexx) qws10r9l                    Reference: 401
+
+Variable (set w/rexx)   qws10r9n                    Assigned : 326
+Variable (used in/rexx) qws10r9n                    Reference: 402
+
+Variable (set w/rexx)   qws10r9o                    Assigned : 326
+Variable (used in/rexx) qws10r9o                    Reference: 400
+
+Variable (set w/rexx)   qws10ral                    Assigned : 326
+Variable (used in/rexx) qws10ral                    Reference: 405
+
+Variable (set w/rexx)   qws10ran                    Assigned : 326
+Variable (used in/rexx) qws10ran                    Reference: 406
+
+Variable (set w/rexx)   qws10rao                    Assigned : 326
+Variable (used in/rexx) qws10rao                    Reference: 404
+
+Variable (set w/rexx)   qws10rbl                    Assigned : 326
+Variable (used in/rexx) qws10rbl                    Reference: 409
+
+Variable (set w/rexx)   qws10rbn                    Assigned : 326
+Variable (used in/rexx) qws10rbn                    Reference: 410
+
+Variable (set w/rexx)   qws10rbo                    Assigned : 326
+Variable (used in/rexx) qws10rbo                    Reference: 408
+
+Variable (set w/rexx)   qws10rcl                    Assigned : 326
+Variable (used in/rexx) qws10rcl                    Reference: 413
+
+Variable (set w/rexx)   qws10rcn                    Assigned : 326
+Variable (used in/rexx) qws10rcn                    Reference: 414
+
+Variable (set w/rexx)   qws10rco                    Assigned : 326
+Variable (used in/rexx) qws10rco                    Reference: 412
+
+Variable (set w/rexx)   randompagespersec           Assigned : 567 702
+Variable (used in/rexx) randompagespersec           Reference: 576 578 711 713
+
+SpecialVar(set no-XREF) RC                           *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RC                          Reference: 87 88 90 98 99 101 250 259 262 263 916 919 920 926 931
+
+Variable (set w/rexx)   refvalue                    Assigned : 1002
+Variable (used in/rexx) refvalue                    Reference: 1003 1004 1008
+
+Variable (set w/rexx)   residencyindexinmin         Assigned : 586 588 590 591 721 723 725 726
+Variable (used in/rexx) residencyindexinmin         Reference: 627 843
+
+Variable (set w/rexx)   residencyinsecs             Assigned : 580 581 715 716
+Variable (used in/rexx) residencyinsecs             Reference: 581 585 586 587 588 589 590 627 716 720 721 722 723 724 725 843
+
+Built-In+/External use  RIGHT                       Reference: F(313) F(321)
+
+Variable (set w/rexx)   rline                       Assigned : 842
+Variable (in Stem Set)  rline                       Assigned : 843
+
+Variable (set w/rexx)   secs                        Assigned : 318
+Variable (used in/rexx) secs                        Reference: 319 320 321
+
+Variable (set w/rexx)   simallread                  Assigned : 804
+Variable (used in/rexx) simallread                  Reference: 813 814 820 837
+
+Variable (set w/rexx)   simhitratio                 Assigned : 815 820
+Variable (used in/rexx) simhitratio                 Reference: 832 833 834 835 836 837 843
+
+Variable (set w/rexx)   simhitratio2                Assigned : 816 833 835
+Variable (used in/rexx) simhitratio2                Reference: 843
+
+Variable (set w/rexx)   simmaxresidency             Assigned : 762
+Variable (NEVER USED)   simmaxresidency             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   simpagesusedpersec          Assigned : 764
+Variable (used in/rexx) simpagesusedpersec          Reference: 781 783
+
+Variable (set w/rexx)   simrandompagespersec        Assigned : 774
+Variable (used in/rexx) simrandompagespersec        Reference: 785 787
+
+Variable (set w/rexx)   simresidencyindexinmin      Assigned : 795 797 799 800
+Variable (used in/rexx) simresidencyindexinmin      Reference: 843
+
+Variable (set w/rexx)   simresidencyinsecs          Assigned : 789 790
+Variable (used in/rexx) simresidencyinsecs          Reference: 790 794 795 796 797 798 799 843
+
+Variable (set w/rexx)   sm101dte                    Assigned : 270 312
+Variable (used in/rexx) sm101dte                    Reference: 307 311 312 313
+
+Variable (set w/rexx)   sm101rty                    Assigned : 270
+Variable (used in/rexx) sm101rty                    Reference: 283
+
+Variable (set w/rexx)   sm101sid                    Assigned : 270
+Variable (NEVER USED)   sm101sid                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   sm101ssi                    Assigned : 270
+Variable (used in/rexx) sm101ssi                    Reference: 280 627 843
+
+Variable (set w/rexx)   sm101stf                    Assigned : 270
+Variable (NEVER USED)   sm101stf                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   sm101tme                    Assigned : 270 317
+Variable (used in/rexx) sm101tme                    Reference: 317 318 319 320
+
+Variable (set w/rexx)   smfdate                     Assigned : 313
+Variable (used in/rexx) smfdate                     Reference: 321
+
+Variable (set w/rexx)   smfdatetime                 Assigned : 321
+Variable (used in/rexx) smfdatetime                 Reference: 627 843
+
+Variable (set w/rexx)   smfin                       Assigned : 174 245 251
+Variable (used in/rexx) smfin                       Reference: 245 246
+Variable (in Stem Ref)  smfin                       Reference: 270 290 302 326 427 654
+
+Variable (set w/rexx)   smfinrc                     Assigned : 88 250
+Variable (used in/rexx) smfinrc                     Reference: 248 252 253 926 929 930
+
+Variable (set w/rexx)   smfrecoffset                Assigned : 296
+Variable (used in/rexx) smfrecoffset                Reference: 297 368 372 376 380 384 388 392 396 400 404 408 412
+
+Variable (set w/rexx)   smfrptrc                    Assigned : 99
+Variable (NEVER USED)   smfrptrc                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Built-In+/External use  STRIP                       Reference: F(627) F(843)
+
+Built-In+/External use  SUBSTR                      Reference: F(302) F(427) F(654)
+
+Built-In+/External use  VALUE                       Reference: F(958) F(964) F(979) F(981) F(984) F(985) F(986) F(987) F(993) F(994) F(1000)
+                        ...                                    F(1001) F(1004) F(1042)
+
+Variable (set w/rexx)   variablename                Assigned : 948 1018 1034
+Variable (used in/rexx) variablename                Reference: 950 952 958 964 973 979 981 984 985 986 987 988 994 1000 1001 1003 1004 1020 1022
+                        ...                                    1036 1038 1042
+Variable (in Stem Set)  variablename                Assigned : 958 959 965 966 1043
+Variable (in Stem Ref)  variablename                Reference: 956 960 963 967 1026 1028 1044
+
+Variable (set w/rexx)   vpseqt                      Assigned : 83
+Variable (used in/rexx) vpseqt                      Reference: 578 713 786 787
+
+Built-In+/External use  WORDPOS                     Reference: F(24) F(58) F(59) F(60)
+
+Variable (set w/rexx)   x                           Assigned : 675 676 677 678 679 680 681 685 686
+Variable (NEVER USED)   x                           No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   xxx                         Assigned : 975 986 989 1004
+Variable (used in/rexx) xxx                         Reference: 976 990 993
+Variable (in Stem Ref)  xxx                         Reference: 976 990
+
+Variable (set w/rexx)   yyy                         Assigned : 977 991
+Variable (used in/rexx) yyy                         Reference: 978 992
+Variable (in Stem Ref)  yyy                         Reference: 978 992
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 BPID.                                     Assigned : 416
+
+Stem-1 BPOOL.                                    Assigned : 45 51
+Stem-1 BPOOL.nextb                               Assigned : 78
+Stem-1 BPOOL.nextb                               Reference: 75
+Stem-1 BPOOL.qbsppid                             Reference: 687 842
+Stem-1 BPOOL.qbstpid                             Assigned : 502
+Stem-1 BPOOL.qbstpid                             Reference: 498
+
+Stem-1 LASTREFVALUE.                             Assigned : 35
+Stem-2 LASTREFVALUE.bufferpool.variablename      Assigned : 959 966 1043
+Stem-2 LASTREFVALUE.bufferpool.variablename      Reference: 960 967 1026 1028 1044
+
+Stem-1 LASTVALUE.                                Assigned : 32
+Stem-2 LASTVALUE.bufferpool.variablename         Assigned : 958 965
+Stem-2 LASTVALUE.bufferpool.variablename         Reference: 956 963
+Stem-1 LASTVALUE.xxx                             Reference: 976 990
+Stem-1 LASTVALUE.yyy                             Reference: 978 992
+
+Stem-1 LINE.#                                    Reference: 243
+Stem-1 LINE.APPENDLINE                           Reference: 912
+Stem-1 LINE.line                                 Assigned : 176 627
+Stem-1 LINE.line                                 Reference: 640
+Stem-1 LINE.rline                                Assigned : 843
+
+Stem-1 SMFIN.0                                   Reference: 246
+Stem-1 SMFIN.smfin                               Reference: 270 290 302 326 427 654
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

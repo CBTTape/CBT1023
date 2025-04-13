@@ -1,0 +1,2514 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.REXX(CHKAPF00)"      */
+/*      ---------------------       */
+/*  date/time of XREF was:          */
+/*     20231217 23:03:05            */
+/*      ---------------------       */
+
+/* REXX                                               CHKAPF00             */
+/* <CHKAPF00> Initial REXX program comments                         -      */
+/* CHKAPF00: Retrieves APF-LIST and checks each library for APF authorized */
+/*            programs.  Reports on these programs.                        */
+/*                                                                         */
+/*                                                                         */
+/* Description:                                                            */
+/*                                                                         */
+/* Requirements:                                                           */
+/*   Host Command Environments: (hcenv)                                    */
+/*               SDSF     SDSF                                             */
+/*               ISPEXEC                                                   */
+/*               REXXTOOL                                                  */
+/*               TSO                                                       */
+/*                                                                         */
+/* Optional:                                                               */
+/*               REXXTOOL                                                  */
+/*                                                                         */
+/* Parameters:                                                             */
+/*                                                                         */
+/* Return Codes:                                                           */
+/*                                                                         */
+/*                                                                         */
+/* Changes:                                                                */
+/* Date       Name     Vn/Lv Comment                                             */
+/* ---------- -------- ----- ----------------------------------------------      */
+/* 2021-06-06 RWSUHR   01.00 Started work on this.                               */
+/* 2021-06-07 RWSUHR   01.01 Continue                                            */
+/*                            Adding error traps                                 */
+/*                            Adding rexxtool hcenv and selected functions       */
+/* 2021-06-10 RWSUHR   01.02 Continue                                            */
+/* 2021-06-11 RWSUHR   01.06 Continue                                            */
+/* 2021-06-12 RWSUHR   01.07 Continue                                            */
+/* 2021-06-14 RWSUHR   01.08 Continue                                            */
+/* 2021-06-15 RWSUHR   01.15 the logic is working properly                       */
+/* 2021-06-16 RWSUHR   01.16 Format of member counts with rexxtools d2pic() is   */
+/*                            now conditional (only if rexxtools is available.)  */
+/* 2021-06-29 RWSUHR   01.17 Build CSV file with the findings.                   */
+/*                     01.18                                                     */
+/*                     01.19                                                     */
+/*                     01.20                                                     */
+/* 2021-06-30 RWSUHR   01.23 Added code to write csv file                        */
+/*                     01.24 Cleanup                                             */
+/* 2021-07-01 RWSUHR   01.23 Further cleanup                                     */
+/*                     01.27 removed unnecessary LMMFIND FREE command            */
+/*                            (end of member list had been reached, so free was  */
+/*                             superflous.)                                      */
+/* 2021-07-02 RWSUHR   01.28 Change the work data set name (add the system name) */
+/* 2021-10-19 SFRH66   01.29 remove trace 's'; fix variable name; fix syntax err */
+/*                                                                               */
+/* ------------------------------------------------------------------
+----+----1----+----2----+----3----+----4----+----5----+----6----+----7-
+                                                                           */
+start_program:
+  current_routine = "start_program:"
+         xtrc = "O" /*                                                       */
+      /* xtrc = trace("?I")                                                  */
+  shcenv = address()
+parse source info
+ last_update = '2021-09-02 12:24:46'              /* ISRINIT 12:24:46 */
+ pgm_version = 'v=01.29'                          /* ISRINIT 12:24:46 */
+ pgm_person  = 'SFRH48'                           /* ISRINIT 12:24:46 */
+ change_sysid= 'DR11'                             /* ISRINIT 12:24:46 */
+ member_name = 'CHKAPF00'                         /* ISRINIT 12:24:46 */
+      /* xtrc = "?I"                                                         */
+         xtrc = "O" /*                                                       */
+  xmsg = "ON" /*                                                             */
+  ISPF_table_rc = 0
+      /* xtrc = trace(xtrc)                                                  */
+/*                                                                           */
+/* Program Main Line                                                         */
+/* Error and Attention control                                               */
+/*                                                                           */
+      /* xtrc = trace("?i")                                                  */
+  arg arguments
+  call initialize arguments
+   initialize_rc = RESULT
+  /* say "V:" verbose "D:" database "G:" debug
+     */
+  call start_message
+   start_rc = RESULT
+    SIGNAL ON HALT    NAME   trap_halt_rtn
+    SIGNAL ON FAILURE NAME   trap_failure_rtn
+    SIGNAL ON NOVALUE NAME   trap_novalue_rtn
+    SIGNAL ON SYNTAX  NAME   trap_syntax_rtn
+    /*  SIGNAL ON ERROR   NAME   trap_error_rtn                          */
+/* Load REXXTOOLS environments                                             */
+/* Create startup environment and variables                                */
+
+  call set_variables
+   set_variables_rc = RESULT
+      /* xtrc = trace("?I")                                                  */
+  call check_rexxtools
+   check_rexxtools  = RESULT
+  call sdsf_routine
+   sdsf_routine_rc  = RESULT
+   /*
+      do nix = 1 to csv_line.0
+        say translate(format(length(csv_line.nix),3,0),"0"," ") "==>" csv_line.nix "<=="
+        end   /* do nix = 1 to csv_line.0                                           */
+         */
+      /* xtrc = trace("?i")                                                  */
+  call create_csv_file
+   create_csv_file_rc = RESULT
+  high_rc = max(sdsf_routine_rc,high_rc)
+  call end_message high_rc
+  ZISPFRC = high_rc
+  address "ISPEXEC" "VPUT (ZISPFRC) SHARED"
+
+  return(high_rc)   /* Main Line: start_program:                                      */
+
+/*                                                       */
+alloc_csv_file:
+  current_routine = "alloc_csv_file:"
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg argument
+  parse var argument csv_ddname " " remainder
+  csv_dsname = sysname ||".apflist.members.csv"
+  upper csv_dsname
+  atrk       = 15
+  alloc_parm = "MOD CATALOG REUSE TRACKS SPACE("|| atrk ||","|| atrk ||") RELEASE"
+  alloc_dcb  = "LRECL("|| csv_lrecl ||") recfm(V B)"
+      /* xtrc = trace("?I")                                                  */
+  hcenv      = address()
+  delcsv_cmd = "' DELETE ("|| userid() ||"."|| csv_dsname ||") SCR'"
+  delcsv_cmd_say = remquote(delcsv_cmd)
+  if rexxtools_available then do
+    address "REXXTOOL"
+    "OPTIONS MSGS"
+     options_rc = RC
+    if options_rc = 0 then do
+      end   /* if options_rc = 0 then do  */
+    else do
+      call check_rexxtools_hcenv_rc options_rc
+       check_rexxtools_hcenv_rc = RESULT
+      end   /* else do - if options_rc = 0 then do  */
+    xmsg = msg("ON")
+    address "IDCAMS"
+     address_rc = RC
+    if address_rc = 0 then do
+      interpret delcsv_cmd
+       delcsv_cmd       = RC
+      select   /* (1)          */
+       when delcsv_cmd =  0 then do
+         say display_date time() exec_name translate(format(delcsv_cmd,2,0),"0"," ") delcsv_cmd_say
+         say display_date time() exec_name translate(format(delcsv_cmd,2,0),"0"," ") "IDCAMS -" csv_dsname "DELETE successful."
+         do nix = 1 to $RXTIDCMS.0
+           say display_date time() exec_name translate(format(delcsv_cmd,2,0),"0"," ") "IDCAMS -" $RXTIDCMS.nix
+           end   /* do nix = 1 to $RXTIDCMS.0 */
+         end   /* if address_rc == 0 then do */
+       when delcsv_cmd =  8 then do
+         say display_date time() exec_name translate(format(delcsv_cmd,2,0),"0"," ") delcsv_cmd_say
+         say display_date time() exec_name translate(format(delcsv_cmd,2,0),"0"," ") "IDCAMS -" csv_dsname "Not found."
+         do nix = 1 to $RXTIDCMS.0
+           say display_date time() exec_name translate(format(delcsv_cmd,2,0),"0"," ") "IDCAMS -" $RXTIDCMS.nix
+           end   /* do nix = 1 to $RXTIDCMS.0 */
+         end   /* if address_rc == 0 then do */
+       when delcsv_cmd = 12 then do
+         say display_date time() exec_name translate(format(delcsv_cmd,2,0),"0"," ") delcsv_cmd_say
+         say display_date time() exec_name translate(format(delcsv_cmd,2,0),"0"," ") "IDCAMS - Syntax error."
+         do nix = 1 to $RXTIDCMS.0
+           say display_date time() exec_name translate(format(delcsv_cmd,2,0),"0"," ") "IDCAMS -" $RXTIDCMS.nix
+           end   /* do nix = 1 to $RXTIDCMS.0 */
+         end   /* if address_rc == 0 then do */
+       otherwise do
+         do nix = 1 to $RXTIDCMS.0
+           say display_date time() exec_name translate(format(delcsv_cmd,2,0),"0"," ") "IDCAMS -" $RXTIDCMS.nix
+           end   /* do nix = 1 to $RXTIDCMS.0 */
+         end   /* if address_rc == 0 then do */
+       end   /* select (1)          */
+     end   /* if address_rc == 0 then do */
+    else do
+      say display_date time exec_name translate(format(address_rc,2,0),"0"," ") "address 'IDCAMS' failed."
+      end   /* if address_rc == 0 then do */
+    address "REXXTOOL"
+    end   /* if rexxtools_available then do */
+  else do
+    address "TSO"
+    interpret delcsv_cmd
+     delcsv_cmd       = RC
+    end   /* else - if rexxtools_available then do */
+  alloc_csv_cmd = "'ALLOCATE F("|| csv_ddname ||") DA("|| csv_dsname ||")" alloc_parm alloc_dcb "'"
+  isp_alloc_cmd_say = remquote(alloc_csv_cmd)
+  interpret alloc_csv_cmd
+   alloc_csv_cmd_rc = RC
+  say display_date time() exec_name translate(format(alloc_csv_cmd_rc,2,0),"0"," ") isp_alloc_cmd_say
+  if rexxtools_available then do
+    call process_rexxtools_alloc_rc_rtn alloc_csv_cmd_rc
+     process_rexxtools_alloc_rc_rtn_rc = RESULT
+    end   /* if rexxtools_available then do */
+  else do
+    call process_tso_alloc_rc_rtn alloc_csv_cmd_rc
+     process_tso_alloc_rc_rtn_rc = RESULT
+    end   /* else - if rexxtools_available then do */
+  address (hcenv)
+        xtrc = trace(xtrc) /*                                                   */
+  return(0)   /* Main Line: start_program:                                      */
+
+/*                                                       */
+check_rexxtools_hcenv_rc:
+  current_routine = "check_rexxtools_hcenv_rc:"
+  parse upper arg argument
+  parse var argument chk_options_rc " " remainder
+  select   /* (1) select                      */
+   when chk_options_rc =   0 then do
+     say display_date time() exec_name translate(format(chk_options_rc,2,0),"0"," ") "Sucessful excution."
+     end   /* when chk_options_rc = 0 then do */
+   when chk_options_rc =  -3 then do
+     say display_date time() exec_name translate(format(chk_options_rc,2,0),"0"," ") "REXXTOOL host command environment not found. "
+     end   /* when chk_options_rc = 0 then do */
+   when chk_options_rc =  -4 then do
+     say display_date time() exec_name translate(format(chk_options_rc,2,0),"0"," ") "Zero length command string was passed."
+     end   /* when chk_options_rc = 0 then do */
+   when chk_options_rc =  -5 then do
+     say display_date time() exec_name translate(format(chk_options_rc,2,0),"0"," ") "Command verb not recognized.",
+                                       "Verify that you have sent the command to the proper host command environment."
+     end   /* when chk_options_rc = 0 then do */
+   when chk_options_rc =  -6 then do
+     say display_date time() exec_name translate(format(chk_options_rc,2,0),"0"," ") "Invalid keyword. Refer to command documentation."
+     end   /* when chk_options_rc = 0 then do */
+   when chk_options_rc =  -7 then do
+     say display_date time() exec_name translate(format(chk_options_rc,2,0),"0"," ") "Syntax error.",
+                                       "Refer to command documentation for the correct syntax."
+     end   /* when chk_options_rc = 0 then do */
+   otherwise do
+     say display_date time() exec_name translate(format(chk_options_rc,2,0),"0"," ") "Unknown command return code."
+     end   /* when chk_options_rc = 0 then do */
+   end   /* (1) select                      */
+  return(0)   /* Main Line: start_program:                                      */
+
+/*                                                       */
+write_csv_file:
+  current_routine = "write_csv_file:"
+      /* xtrc = trace("?i")                                                  */
+  parse upper arg argument
+  parse var argument csv_ddname " " remainder
+  hcenv = address()
+  execio_cmd = "'EXECIO * DISKW" csv_ddname "(FINIS STEM  csv_line.  '"
+  execio_cmd_say = remquote(execio_cmd)
+  interpret execio_cmd
+   execio_cmd_rc = RC
+  if execio_cmd_rc = 0 then do
+    say display_date time() exec_name translate(format(execio_cmd_rc,2,0),"0"," ") "TSOexecio" "Nr of records written:",
+                                      translate(format(csv_line.0,3,0),"0"," ")
+    end   /* if execio_cmd_rc = 0 then do  */
+  else do
+    say display_date time() exec_name "TSOexecio" translate(format(execio_cmd_rc,2,0),"0"," ") "EXECIO Failed."
+    end   /* if execio_cmd_rc = 0 then do  */
+  address (hcenv)
+   address_rc = RC
+        xtrc = trace(xtrc) /*                                                    */
+  return(0)   /* write_csv_file:                                                */
+
+/*                                                       */
+check_execio_rc:
+  current_routine = "check_execio_rc:"
+  parse upper arg argument
+  parse var argument execio_rc " " remainder
+  select   /* (1)   */
+   when execio_rc =  0 then do
+     say display_date time() exec_name "EXECIO0" translate(format(execio_rc,2,0),"0"," ") "Normal completion of requested operation."
+     end   /* when execio_rc =  0 then do   */
+   when execio_rc =  1 then do
+     say display_date time() exec_name "EXECIO1" translate(format(execio_rc,2,0),"0"," ") "Data was truncated during DISKW operation."
+     end   /* when execio_rc =  1 then do   */
+   when execio_rc =  2 then do
+     say display_date time() exec_name "EXECIO2" translate(format(execio_rc,2,0),"0"," ") "End-of-file reached before the specified number",
+                                       "of lines were read during a DISKR or DISKRU operation."
+     end   /* when execio_rc =  2 then do   */
+   when execio_rc =  4 then do
+     say display_date time() exec_name "EXECIO4" translate(format(execio_rc,2,0),"0"," ") "During a DISKR or DISKRU operation, an empty",
+                                       "data set was found in a concatenation of data sets. The file was not successfully opened and",
+                                       "no data was returned."
+     end   /* when execio_rc =  4 then do   */
+   when execio_rc = 20 then do
+     say display_date time() exec_name "EXECIO20" translate(format(execio_rc,2,0),"0"," ") "Severe error. EXECIO completed unsuccessfully",
+                                       "and a message is issued."
+     end   /* when execio_rc = 20 then do   */
+   otherwise do
+     say display_date time() exec_name "EXECIOX0" translate(format(execio_rc,2,0),"0"," ") "Unknown error rc."
+     end   /* otherwise do                  */
+   end   /* (1)   */
+  return(0)   /* Main Line: start_program:                                      */
+
+/*                                                       */
+free_csv_file:
+  current_routine = "free_csv_file:"
+  parse upper arg argument
+  parse var argument csv_ddname " " remainder
+  free_cmd = "'FREE F("|| csv_ddname ||")'"
+  free_cmd_say = remquote(free_cmd)
+  interpret free_cmd
+   free_cmd_rc = RC
+  if free_cmd_rc = 0 then do
+    say display_date time() exec_name translate(format(free_cmd_rc,2,0),"0"," ") "FREE Successful."
+    end   /* free_cmd_rc                                                       */
+  else do
+    say display_date time() exec_name translate(format(free_cmd_rc,2,0),"0"," ") "FREE Failed."
+    end   /* free_cmd_rc                                                       */
+  return(0)   /* Main Line: start_program:                                      */
+
+/*                                                       */
+create_csv_file:
+  current_routine = "write_csv_file:"
+  csv_ddname = "CSVFILE"
+  call alloc_csv_file  csv_ddname
+   alloc_csv_file_rc = RESULT
+  call write_csv_file  csv_ddname
+   write_csv_file_rc = RESULT
+  call free_csv_file   csv_ddname
+   free_csv_file_rc  = RESULT
+  return(0)   /* Main Line: start_program:                                      */
+
+/*                                                       */
+set_variables:
+  current_routine = "set_variables:"
+  squote         = "'"
+  dquote         = '"'
+  comma          = ','
+  period         = '.'
+  entity         = substr(sysname,1,4)
+  dis_proc       = substr(exec_name,1,4)
+  int_time       = time()
+  display_time   = translate(int_time,".",":")
+  dis_date       = "D"|| symd_sldate
+  dis_time       = "T"|| substr(int_time,1,2) || substr(int_time,4,2) || substr(int_time,7,2)
+  file_array.    = ""
+  empty_library  = 0
+  file_array.0   = 1
+  newix          = 1
+  open_flag      = 0
+  lmmlist_pass   = 0
+  mbrname        = ""
+  mbr_count      = 0
+  mbr_auth_count = 0
+  librow         = 0
+  mbrlist.       = ""
+  csv_lineix     = 0
+  csv_lrecl      = 0
+  high_rc        = 0
+  return(0)   /* set_variables:                                                        */
+
+/*                                                       */
+process_alloc_rtn:
+  current_routine = "process_alloc_rtn:"
+  parse upper arg argument
+  parse var argument ddname ' ' remainder
+  if   rexxtool_available then do
+    process_rexxtools_alloc_rtn_rc = 99
+    call process_rexxtools_alloc_rtn ddname
+     process_rexxtools_alloc_rc_rtn_rc = RESULT
+    end
+  alloc_rc = max(process_tso_alloc_rc_rtn_rc,process_rexxtools_alloc_rtn_rc,high_rc)
+  return(alloc_rc)   /* process_alloc_rtn:                                                    */
+
+/*                                                       */
+process_free_rtn:
+  current_routine = "process_free_rtn:"
+  parse upper arg argument
+  parse var argument ddname ' ' remainder
+  if   rexxtool_available then do
+    process_rexxtools_free_rtn_rc = 99
+    call process_rexxtools_free_rtn ddname
+     process_rexxtools_free_rtn_rc = RESULT
+    end
+  free_rc = max(process_tso_free_rc_rtn_rc,process_rexxtools_free_rtn_rc,high_rc)
+  return(free_rc)   /* process_free_rtn:                                                     */
+
+/*                                                       */
+process_rexxtools_free_rtn:
+  current_routine = "process_rexxtools_free_rtn:"
+  parse upper arg argument
+  parse var argument ddname ' ' remainder
+  hcenv = address()
+  address "REXXTOOLS"
+   address_rc = RC
+  free_cmd = "'FREE F("|| ddname ||")'"
+   free_cmd_rc = RC
+  address (hcenv)
+   address_rc = RC
+  free_rc = max(free_cmd_rc,high_rc)
+  return(free_rc)   /* process_free_rtn:                                                     */
+
+/*                                                       */
+process_tso_free_rtn:
+  current_routine = "process_rexxtools_free_rtn:"
+  parse upper arg argument
+  parse var argument ddname ' ' remainder
+  hcenv = address()
+  address "TSO"
+   address_rc = RC
+  free_cmd = "'FREE F("|| ddname ||")'"
+   free_cmd_rc = RC
+  address (hcenv)
+   address_rc = RC
+  free_rc = max(free_cmd_rc,high_rc)
+  return(free_rc)   /* process_free_rtn:                                                     */
+
+/*                                                       */
+process_tso_alloc_rc_rtn:
+  current_routine = "process_tso_alloc_rc_rtn:"
+  parse upper arg argument
+  parse var argument alloc_cmd_rc ' ' remainder
+  high_rc     = max(alloc_cmd_rc,high_rc)
+  msg_header  = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header  = length(msg_header)
+  select /* (1) alloc_cmd_rc */
+   when alloc_cmd_rc =  0 then do
+     cmd_string = left('"'|| isp_alloc_cmd_say ||'"',(linesize()-(l_msg_header+20)))
+     say msg_header "TSOCMDA1" cmd_string
+     end   /* when alloc_cmd_rc =  0 then do    */
+   when alloc_cmd_rc =  4 then do
+     cmd_string = left('"'|| isp_alloc_cmd_say ||'"',(linesize()-(l_msg_header+20)))
+     say msg_header "TSOCMDA2" cmd_string
+     end   /* when alloc_cmd_rc =  4 then do    */
+   when alloc_cmd_rc = 12 then do
+     cmd_string = left('"'|| isp_alloc_cmd_say ||'"',(linesize()-(l_msg_header+20)))
+     say msg_header "TSOCMDA3" cmd_string
+     do lix = 1 to alloc_msgs.0
+  /*   say left("",l_msg_header," ") "==>" alloc_msgs.lix       */
+       end   /* do lix = 1 to delete_msgs.0     */
+     high_rc = max(alloc_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when alloc_cmd_rc = 12 then do  */
+   otherwise do
+     cmd_string = left('"'|| isp_alloc_cmd_say ||'"',(linesize()-(l_msg_header+20)))
+     say msg_header "TSOCMDA4" cmd_string
+     high_rc = max(alloc_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* otherwise do              */
+   end   /* select - (1) alloc_cmd_rc */
+  return(0)   /* process_tso_alloc_rc_rtn:                                                               */
+
+/*                                                       */
+process_rexxtools_alloc_rc_rtn:
+  current_routine = "process_rexxtools_alloc_rc_rtn:"
+    /* xtrc = trace("?I")                                                                       */
+  parse upper arg argument
+  parse var argument alloc_cmd_rc ' ' remainder
+  high_rc         = max(alloc_cmd_rc,high_rc)
+  msg_header      = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header    = length(msg_header)
+  select /* (1) alloc_cmd_rc */
+   when alloc_cmd_rc =  0 then do
+     cmd_string = left(isp_alloc_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "REXXTLA1" cmd_string
+     end   /* when alloc_cmd_rc =  0 then do    */
+   when alloc_cmd_rc =  4 then do
+     cmd_string = left('"'|| isp_alloc_cmd_say ||'"',(linesize()-(l_msg_header+20)))
+     say msg_header "REXXTLA2" cmd_string
+     rc_04_msg = "The error was due to the unavailability of a resource, a problem with the current environment, or a routine failure.",
+                 "The S99INFO variable will contain additional information."
+     say msg_header "REXXTLAE" rc_04_msg
+     say msg_header "S99INFO:" S99INFO "S99ERROR:" S99ERROR
+     end   /* when alloc_cmd_rc =  4 then do    */
+   when alloc_cmd_rc =  8 then do
+     cmd_string = left('"'|| isp_alloc_cmd_say ||'"',(linesize()-(l_msg_header+20)))
+     say msg_header "REXXTLA3" cmd_string
+     rc_08_msg = "An installation routine denied the request."
+     say msg_header "REXXTLAE" rc_08_msg
+     high_rc = max(alloc_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when alloc_cmd_rc =  8 then do    */
+   when alloc_cmd_rc = 12 then do
+     cmd_string = left('"'|| isp_alloc_cmd_say ||'"',(linesize()-(l_msg_header+20)))
+     say msg_header "REXXTLA4" cmd_string
+     do lix = 1 to alloc_msgs.0
+  /*   say left("",l_msg_header," ") "==>" alloc_msgs.lix       */
+       end   /* do lix = 1 to delete_msgs.0     */
+     rc_12_msg = "Invalid parameter list error. This error can occur when you specify keywords that are mutually exclusive",
+                 "or when a required keyword is missing."
+     say msg_header "REXXTLAE" rc_12_msg
+     high_rc = max(alloc_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when alloc_cmd_rc = 12 then do  */
+   otherwise do
+     cmd_string = left('"'|| isp_alloc_cmd_say ||'"',(linesize()-(l_msg_header+20)))
+     say msg_header "REXXTLA5" cmd_string
+     high_rc = max(alloc_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* otherwise do              */
+   end   /* select - (1) alloc_cmd_rc */
+   high_rc = max(alloc_cmd_rc,high_rc)
+       xtrc = trace(xtrc) /*                                                                    */
+  return(high_rc)   /* process_rexxtools_alloc_rc_rtn:                                                         */
+
+/*                                                       */
+process_rexxtools_free_rc_rtn:
+  current_routine = "process_rexxtools_free_rc_rtn:"
+  parse upper arg argument
+  parse var argument free_cmd_rc ' ' remainder
+  high_rc         = max(free_cmd_rc,high_rc)
+  msg_header      = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header    = length(msg_header)
+  select /* (1) free_cmd_rc */
+   when free_cmd_rc =  0 then do
+     cmd_string = left(isp_free_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "REXXTLF1" cmd_string
+     end   /* when free_cmd_rc =   0 then do    */
+   when free_cmd_rc =  4 then do
+     cmd_string = left(isp_free_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "REXXTLF2" cmd_string
+     end   /* when free_cmd_rc =   4 then do    */
+   when free_cmd_rc =  8 then do
+     cmd_string = left(isp_free_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "REXXTLF3" cmd_string
+     end   /* when free_cmd_rc =   8 then do    */
+   when free_cmd_rc = 12 then do
+     cmd_string = left(isp_free_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "REXXTLF4" cmd_string
+     do lix = 1 to free_msgs.0
+  /*   say left("",l_msg_header," ") "==>" free_msgs.lix        */
+       end   /* do lix = 1 to delete_msgs.0     */
+     high_rc = max(free_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when free_cmd_rc = 12 then do   */
+   otherwise do
+     cmd_string = left(isp_free_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "REXXTLF5" cmd_string
+     high_rc = max(free_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* otherwise do              */
+   end   /* select - (1) free_cmd_rc */
+  return(0)   /* process_rexxtools_free_rc_rtn:                                                          */
+
+/*                                                       */
+process_tso_free_rc_rtn:
+  current_routine = "process_tso_free_rc_rtn:"
+  parse upper arg argument
+  parse var argument free_cmd_rc ' ' remainder
+  high_rc         = max(free_cmd_rc,high_rc)
+  msg_header      = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header    = length(msg_header)
+  select /* (1) free_cmd_rc */
+   when free_cmd_rc =   0 then do
+     cmd_string = left(isp_free_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "TSOCMDF1" cmd_string
+     end   /* when free_cmd_rc =   0 then do    */
+   when free_cmd_rc =   4 then do
+     cmd_string = left(isp_free_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "TSOCMDF2" cmd_string
+     end   /* when free_cmd_rc =   4 then do    */
+   when free_cmd_rc =   8 then do
+     cmd_string = left(isp_free_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "TSOCMDF3" cmd_string
+     end   /* when free_cmd_rc =   8 then do    */
+   when free_cmd_rc = 12 then do
+     cmd_string = left(isp_free_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "TSOCMDF4" cmd_string
+     do lix = 1 to free_msgs.0
+  /*   say left("",l_msg_header," ") "==>" free_msgs.lix        */
+       end   /* do lix = 1 to delete_msgs.0       */
+     high_rc = max(free_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when free_cmd_rc = 12 then do     */
+   otherwise do
+     cmd_string = left(isp_free_cmd_say,(linesize()-(l_msg_header+20)))
+     say msg_header "TSOCMDF5" cmd_string
+     high_rc = max(free_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* otherwise do              */
+   end   /* select - (1) free_cmd_rc */
+  return(free_cmd_rc)   /* process_tso_free_rc_rtn:        */
+
+/*                                                       */
+dummy_rtn:     /* for now  */
+  current_routine = "dummy_rtn:"
+     /* "S99ERROR - An error reason code in printable hexadecimal format."                                                    */
+     /* "S99INFO  - An error information code in printable hexadecimal format."                                               */
+     /* "S99ERSN  - An SMS reason code in printable hexadecimal format."                                                      */
+     /* "S99DDN   - The ddname used for the allocation."                                                                      */
+     /* "S99DSN   - The data set name used for the allocation."                                                               */
+     /* "S99MSG.  - An array that contains dynamic allocation messages."                                                      */
+     /* "OPTIONS  NOMSGS is in effect. The severity level of the messages returned is controlled by the MSGLEVEL keyword."    */
+  return(0)   /* dummy_rtn:                                                                              */
+
+/*                                                       */
+free_dsn:
+  current_routine = "free_dsn:"
+  /* say "free_dsn:"                                     */
+  xmsg = MSG("OFF")
+  address "TSO"
+  free_cmd = "'FREE F("|| listdd ||")'"
+  interpret free_cmd
+   free_cmd_rc = RC
+  if (free_cmd_rc <> 12) & (free_cmd_rc <> 0) then do
+    say display_date time() exec_name translate(format(free_cmd_rc,2,0),"0"," ") "TSO998W" free_cmd
+    say msg_header "TSO998W " cmd_string
+    end   /* if (free_cmd_rc <> 12) | (free_cmd_rc = 0) then do  */
+  xmsg = MSG(xmsg)
+  return(0)   /* free_dsn:                                             */
+
+/***************************************************************
+ *
+ * NAME =
+ *   msgrtn
+ *
+ * FUNCTION =
+ *   List all messages in the isfmsg and isfmsg2. variables
+ *
+ * INPUT =
+ *   req - Request being processed
+ *
+ * EXPOSED VARIABLES =
+ *   isfmsg                        - Short message
+ *   isfmsg2.                      - Numbered messages
+ *   rexxtools_available           -
+ *   xtrc                          -
+ *   xmsg                          -
+ *   verbose                       -
+ *   debug                         -
+ *   display_date                  -
+ *   exec_name                     -
+ *   squote                        -
+ *   dquote                        -
+ *   comma                         -
+ *   period                        -
+ *   open_flag                     -
+ * -------------------------------------------------------------
+ *   process_tso_alloc_rc          -
+ *   process_rexxtool_alloc_rc     -
+ *
+ * OUTPUT =
+ *   Messages written to terminal
+ *
+ ***************************************************************/
+
+msgrtn: Procedure expose xtrc xmsg verbose debug isfmsg isfmsg2. display_date exec_name high_rc,
+                         squote dquote comma period verbose new_list. open_flag csv_lineix csv_line. csv_line.0 csv_lrecl
+  Arg req
+  current_routine = "msgrtn:"
+  /*---------------------------*/
+  /* Process numbered messages */
+  /*---------------------------*/
+  /* EXPOSED VARIABLES =                                      */
+  /*                                                          */
+  /* verbose debug isfmsg isfmsg2. display_date exec_name,    */
+  /* squote dquote comma period                               */
+  /*                                                          */
+  /* Say "** Numbered messages associated with" req "follow ..*/
+  msg_header   = display_date time() exec_name
+  l_msg_header = length(msg_header)
+  if (verbose = "VERBOSE") & (debug = "DEBUG") then do
+    do ix = 1 to isfmsg2.0
+      say msg_header "   MSG1:" isfmsg2.ix
+      end   /* do ix = 1 to isfmsg2.0          */
+      /*                                     */
+    end   /* if verbose = "VERBOSE" then do  */
+
+  if isfmsg <> "" then do    /* If short message present */
+      say msg_header "   MSG2:" "** Short message associated with the request is:" isfmsg
+      /*                                     */
+    end   /* if isfmsg <> "" then do         */
+
+  return(0)   /* msgrtn: Procedure expose verbose debug isfmsg isfmsg2. display_date exec_name,   */
+
+
+/***************************************************************
+ *
+ * NAME =
+ *   process_columns_rtn
+ *
+ * FUNCTION =
+ *   List all rows and their column values
+ *
+ * INPUT =
+ *   numrows - number of rows to process
+ *   pfx     - column variable prefix or "." if none
+ *   ocols   - word delimited column names to process
+ *
+ * EXPOSED VARIABLES =
+ *   None
+ *
+ * OUTPUT =
+ *   Responses written to terminal
+ *
+ ***************************************************************/
+
+/*                                                                                            */
+process_columns_rtn:
+  current_routine = "process_columns_rtn:"
+  Arg numrows pfx ocols
+  msg_header   = display_date time() exec_name
+  l_msg_header = length(msg_header)
+  say msg_header "PROCOL00"    "   Number of rows to process for" list_name ": " numrows
+  l_record     = 0
+  l_max        = 0
+  l_temp       = 0
+  file_record  = ""
+  first_record = ""
+
+  Column1      = "HRDWARE"
+  Column2      = "UPDATEDATE"
+  Column3      = "UPDATETIME"
+  columns      = ocols
+  sdsf_columns = ""
+  first_time   = 1
+/* say "first_time set" first_time */
+  do col_ix = 1 to words(ocols)
+    sdsf_columns = sdsf_columns || word(columns,col_ix) ||'","'
+    end
+  first_record = first_record ||'"'|| Column1 ||'","'|| Column2 ||'","'|| Column3 ||'","'|| sdsf_columns
+  first_record = delstr(first_record,length(first_record)-1,2)
+  do row_ix = 1 to numrows          /* Loop for all rows */
+    call process_rows_rtn
+    end   /* do row_ix=1 to numrows */
+  do row_ix = 1 to numrows          /* Loop for all rows */
+    call process_apf_dataset
+    end   /* do row_ix = 1 to numrows */
+  return(0)   /* process_columns_rtn:                                */
+
+/*                                                                                            */
+process_apf_dataset:
+  current_routine = "process_apf_dataset:"
+      /* xtrc = trace("?I")            DSNAME "SYS1.LINKLIB"                 */
+  do row_ix = 1 to numrows
+    do col_ix = 1 to numcols
+      if word(new_list.row_ix.col_ix,1) = "DSNAME" then do
+        apf_data_set = word(new_list.row_ix.col_ix,2)
+        call process_apf_data_set apf_data_set
+         process_apf_data_set_rc = RESULT
+        end   /* if word(new_list.row_ix.col_ix,1) = "DSNAME" then do                           */
+        empty_library  = 0
+      end   /* do col_ix = 1 to numcols                                                         */
+    end   /* do col_ix = 1 to numcols                                                         */
+         xtrc = trace(xtrc) /*                                               */
+  return(0)   /* process_apf_dataset:                                        */
+
+/*                                                                                            */
+process_rows_rtn:
+  current_routine = "process_rows_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  numcols = words(ocols)
+  do col_ix = 1 to numcols /* Loop for all columns */
+    call process_cols_rtn
+     process_cols_rtn_rc = RESULT
+    end   /* do col_ix=1 to words(ocols) */
+      /* xtrc = trace(xtrc)                                                  */
+  return(0)   /* process_rows_rtn:                                           */
+
+/*                                                                                            */
+process_cols_rtn:
+  current_routine = "process_cols_rtn:"
+  /* say current_routine                                                                      */
+      /* xtrc = trace("?I")                                                  */
+  if pfx = "." then do        /* If no prefix */
+    pfx  = ""
+    end   /* if pfx="." then do  */
+  variable   = pfx || word(ocols,col_ix) ||"."|| row_ix
+  varpos     = pos(".",variable) - 1
+  interpret "varstem  = substr(variable,1,varpos)"
+  interpret "varvalue = value(variable)"
+  if varstem <> "TOKEN" then do                 /* skip the token column     */
+    call process_field_rtn
+    end   /* if varstem <> "TOKEN" then do */
+  else do   /*varstem == "TOKEN"    */
+    nop
+    end   /* else do varstem == "TOKEN"    */
+         xtrc = trace(xtrc) /*                                               */
+  return(0)   /* process_cols_rtn:                                           */
+
+/*                                                                                            */
+process_apf_data_set: procedure expose mbrname mbr_count mbr_auth_count xtrc row_ix col_ix,
+                                       open_flag apf_data_set lmmlist_pass xmsg high_rc,
+                                       trace_option rexxtools_available member name,
+                                       exec_name display_date squote csv_lineix csv_line. csv_line.0 csv_lrecl
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg argument
+  current_routine = "process_apf_data_set:"
+  apf_data_set    = word(argument,1)
+    /* say current_routine "-" row_ix "-" apf_data_set                                        */
+  call isp_alloc_rtn apf_data_set                                              /* Allocate APF library data set                           */
+   isp_alloc_rtn_rc = RESULT
+  if isp_alloc_rtn_rc = 0 then do
+    call isp_lminit_rtn apf_data_set                                           /* ISPEXEC LMINIT APF library data set                     */
+     isp_lminit_rtn_rc = RESULT
+    if isp_lminit_rtn_rc = 0 then do
+      call isp_lmopen_rtn                                                      /* ISPEXEC LMOPEN APF library data set                     */
+       isp_lmopen_rtn_rc = RESULT
+      if isp_lmopen_rtn_rc = 0 then do
+        call isp_lmmlist_rtn ispapfid "LIST"                                   /* ISPEXEC LMMLIST LIST APF library data set   (initial)   */
+         isp_lmmlist_rtn_rc = RESULT
+           /*          MBRNAME ZLTTR ZLAC ZLALIAS ZLSIZE ZLRMODE ZLAMODE ZLATTR ZLSSI  */
+        librow_cols = "MBRNAME ZLTTR ZLAC ZLALIAS ZLSIZE ZLAMODE ZLRMODE ZLATTR ZLSSI"
+        Subtitle_librow_cols = librow_cols
+        do while (isp_lmmlist_rtn_rc = 0)
+          librow = librow + 1
+          libcols     = words(librow_cols)
+          do libcol = 1 to libcols
+            interpret "mbrlist.librow.libcol =" word(librow_cols,libcol)
+              /* mbrname zlac zlalias zlamode zlrmode zlattr zlttr zlsize zlssi */
+            end   /* do libcol = 1 to libcols      */
+          librow_fields = MBRNAME ZLTTR ZLAC ZLALIAS ZLSIZE ZLAMODE ZLRMODE ZLATTR ZLSSI
+            /* xtrc = trace("?I")                                            */
+          call isp_lmmlist_rtn ispapfid "LIST"                                 /* ISPEXEC LMMLIST LIST APF library data set               */
+           isp_lmmlist_rtn_rc = RESULT
+          end   /* do while (isp_lmmlist_rtn_rc = 0)                 */
+           /* xtrcr = trace("R")                                           */
+     /* call isp_lmmlist_rtn ispapfid "FREE"                       */          /* ISPEXEC LMMLIST LIST APF library data set   (initial)   */
+     /*  isp_lmmlist_rtn_rc = RESULT                               */
+        end   /* if isp_lmopen_rtn_rc = 0 then do                  */
+      call isp_lmclose_rtn ispapfid
+       isp_lmclose_rtn_rc = RESULT
+      end   /* if isp_lmopen_rtn_rc = 0 then do                  */
+    call isp_free_rtn ispapfid
+     isp_free_rtn_rc = RESULT
+    end   /* if isp_alloc_rtn_rc = 0 then do  */
+      /* say apf_data_set mbr_count mbr_auth_count                         */
+    call format_result_line apf_data_set mbr_count mbr_auth_count
+    mbrname = left(" ",8)
+    apf_data_set   = 0
+    mbr_count      = 0
+    mbr_auth_count = 0
+         xtrc = trace(xtrc) /*                                               */
+  return(0)   /* process_apf_data_set: procedure                           */
+
+/*                                                                         */
+format_result_line:
+  previous_routine =current_routine
+  current_routine = "format_result_line:"
+  hcenv = address()
+        /* xtrc = trace("?I")                                                */
+  parse arg argument
+  parse var argument o_apf_data_set " " o_mbr_count " " o_mbr_auth_count
+  msg_id = "ISPAPFF0"
+  if rexxtools_available then do
+    address "REXXTOOL"
+    message_line = msg_id left(o_apf_data_set,44) d2pic(o_mbr_count,"zzz,zz9"),
+                                                  d2pic(o_mbr_auth_count,"zzz,zz9")
+    end   /* if rexxtools_available then do                                  */
+  else do
+    address "TSO"
+    message_line = msg_id left(o_apf_data_set,44) o_mbr_count,
+                                                  o_mbr_auth_count
+    end   /* elsed do - if rexxtools_available then do                       */
+      /* say message_line                                                    */
+      /* xtrc = trace("?I")                                                  */
+  csv_line_new = left(o_apf_data_set,44) || translate(right(o_mbr_count,10),"0"," ") ||,
+                       translate(right(o_mbr_auth_count,10),"0"," ")
+  csv_line_new = translate(csv_line_new,"00"x," ")
+  call add_line_to_csv csv_lineix csv_line_new
+   add_line_to_csv_rc = RESULT
+         xtrc = trace(xtrc) /*                                               */
+  address (hcenv)
+  return(0)   /* format_result_line:                                         */
+
+/*                                                                           */
+add_line_to_csv:
+  current_routine = "add_line_to_csv:"
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg argument
+  parse var argument csv_lineix " " line " " remainder
+  line = translate(line," ","00"x)
+  csv_lineix = csv_lineix + 1
+  csv_line.csv_lineix = line
+  if csv_lrecl < length(line) then do
+    csv_lrecl = length(line) + 4
+    end   /* if csv_lrecl > length(line) then do */
+  csv_line.0          = csv_lineix
+         xtrc = trace(xtrc) /*                                               */
+  return(0)   /* format_result_line:                                         */
+
+/*                                                                           */
+process_field_rtn:
+  current_routine = "process_field_rtn:"
+  newix  = file_array.0
+  first_time = 0
+  /* say "call process_record_rtn " database newix file_array.0 */
+  call process_record_rtn
+  parse var varvalue '"' newvalue '",' remainder
+  new_list.row_ix.col_ix = varstem ||" "|| newvalue ||" "
+  new_list.0.0 = col_ix
+  new_list.0   = row_ix
+    /* say varstem varvalue row_ix col_ix new_list.row_ix.col_ix             */
+      /* xtrc = trace(xtrc)                                                  */
+  return(0)   /* process_field_rtn: */
+
+/*                                                                           */
+process_record_rtn:
+  current_routine = "process_record_rtn:"
+        /* say "process_record_rtn:" file_array.0                                             */
+      /* xtrc = trace("?I")                                                  */
+            /*   */
+  if ((varstem = "CRDATE")     |,
+      (varstem = "REFDATE"))       then do
+    call process_text
+    end   /* if ((varstem = "CRDATE") | (varstem = "REFDATE")) then do     */
+  else do
+    if (datatype(varvalue,"NUM"))  then do
+      call process_nums
+      end   /* if (datatype(varvalue,"NUM"))  then do  */
+    else do
+      call process_text
+      end   /* else do  if (datatype(varvalue,"NUM"))  then do  */
+    end   /* else do  - if ((varstem = "CRDATE") | (varstem = "REFDATE")) then do */
+  if substr(file_record,length(file_record),1) = dquote then do
+    varvalue    = varvalue ||'",'
+    end   /* if substr(file_record,length(file_record),1) = '"' then do    */
+  else do
+    if substr(file_record,length(file_record),1) = comma  then do
+      nop
+      end   /* if substr(file_record,length(file_record),1) = '"' then do  */
+    end   /* else do - if substr(file_record,length(file_record),1) = dquote then do */
+      /* xtrc = trace(xtrc)                                                  */
+  return(0)   /* process_record_rtn:                                       */
+
+/*                                                                                 */
+process_nums:
+  current_routine = "process_nums:"
+    /* say current_routine                                                             */
+      /* xtrc = trace("?I")                                                  */
+      /* xtrc = trace("O")                                                   */
+  varvalue    =  varvalue ||','
+  file_record = file_record || varvalue
+      /* xtrc = trace(xtrc)                                                          */
+  return(0)   /* process_nums:    */
+
+/*                                                                                 */
+process_text:
+  current_routine = "process_text:"
+  /* say current_routine                                                               */
+      /*  */
+      /* xtrc = trace("?I")                                                  */
+  if length(varvalue) > 0 then do
+    varvalue    = '"'|| varvalue ||'",'
+    end   /* if length(varvalue) > 0 then do  */
+  else do
+    varvalue    = '" ",'
+    end   /* if length(varvalue) > 0 then do  */
+    file_record = file_record || varvalue
+      /* xtrc = trace(xtrc)                                                          */
+  return(0)   /* process_text:    */
+
+/*                                                                                 */
+isp_lmmlist_rtn:
+      /* xtrc = trace("?I")                                                  */
+  previous_routine = current_routine
+  current_routine = "isp_lmmlist_rtn:"
+    /* say current_routine                                                   */
+      /* xtrc = trace("O")                                                   */
+  parse upper arg argument
+  parse var argument ispapfid ' ' lmmlist_option ' ' remainder
+  if lmmlist_pass = 0 then do
+    mbrname       = left(" ",8)
+    lmmlist_pass  = lmmlist_pass + 1
+    end   /* if lmmlist_pass = 0 then do                                     */
+      /* say argument ' - ' ispapfid ' ' lmmlist_option                        */
+  msg_header      = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header    = length(l_msg_header)
+  hcenv = address()
+  address "ISPEXEC"
+  if (lmmlist_option   = "LIST"),
+     | (lmmlist_option = "FREE"),
+       then do
+    lmmlist_cmd     = "'LMMLIST DATAID("|| ispapfid ||") OPTION("|| lmmlist_option ||")",
+                      " STATS(YES) MEMBER(MBRNAME)'"
+    lmmlist_cmd_say = remquote(lmmlist_cmd)
+    interpret lmmlist_cmd
+     lmmlist_cmd_rc = RC
+    if lmmlist_cmd_rc = 0 then do
+      msg_id           = "ISPLMM00"
+      msg_text         = lmmlist_cmd_say "Member("|| mbrname ||") AC("|| zlac ||")"
+      call print_trace_line
+       print_trace_line_rc = RESULT
+      end   /* if lmmlist_cmd_rc = 0 then do                                   */
+    end   /* if (lmmlist_option = "LIST"),                                   */
+  else do
+    high_rc = max(high_rc,24)
+    msg_header      = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+    l_msg_header    = length(l_msg_header)
+    say msg_header "ISPLMMFE" lmmlist_option "is an unsupportd function for this program."
+    call print_trace_line
+      print_trace_line_rc = RESULT
+    signal error_exit_rtn
+    end   /* else do - if (lmmlist_option = "LIST"),                         */
+  call process_lmmlist_cmd_rc_rtn lmmlist_cmd_rc lmmlist_option
+   process_lmmlist_cmd_rc_rtn_rc = RESULT
+      /* *** process member list                          *** */
+  high_rc = max(process_lmmlist_cmd_rc_rtn_rc,high_rc)
+  select   /* select (1) process_lmmlist_cmd_rc_rtn_rc        */
+   when process_lmmlist_cmd_rc_rtn_rc = 0 then  do
+     if (lmmlist_option   = "LIST") then do
+       mbr_count = mbr_count + 1
+       if zlac = "01" then do
+         mbr_auth_count = mbr_auth_count + 1
+         end   /* if zlac = "01" then do       */
+       end   /* if (lmmlist_option   = "LIST") then do */
+     end   /* when process_lmmlist_cmd_rc_rtn_rc = 0 then  do   */
+   when process_lmmlist_cmd_rc_rtn_rc = 4 then  do
+     nop
+     end   /* when process_lmmlist_cmd_rc_rtn_rc = 4 then  do   */
+   when process_lmmlist_cmd_rc_rtn_rc = 8 then  do
+     nop
+     end   /* when process_lmmlist_cmd_rc_rtn_rc = 4 then  do   */
+   otherwise do
+     nop
+     end   /* otherwise do                                      */
+   end   /* select (1) process_lmmlist_cmd_rc_rtn_rc        */
+      /* *** end process member list                      *** */
+         /* say "MEMBER:" mbrname                                       */
+  high_rc = max(lmmlist_cmd_rc,process_lmmlist_cmd_rc_rtn_rc,high_rc)
+  address (hcenv)
+     /*  xtrc = trace(xtrc)                                                  */
+  return(high_rc)   /* isp_lmmlist_rtn:                                      */
+
+/*                                                                                 */
+isp_lmopen_rtn:
+      /* xtrc = trace("?I")                                                  */
+  current_routine = "isp_lmopen_rtn:"
+  parse upper arg argument
+  parse var argument arg_ispapfid ' ' remainder
+  msg_header     = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header   = length(l_msg_header)
+  hcenv = address()
+  address "ISPEXEC"
+   address_rc = rc
+  lmopen_cmd     = "'LMOPEN DATAID("|| ispapfid ||") OPTION(INPUT)'"
+  lmopen_cmd_say = remquote(lmopen_cmd)
+  interpret lmopen_cmd
+   lmopen_cmd_rc = RC
+  call process_lmopen_rc_rtn lmopen_cmd_rc
+   process_lmopen_rc_rtn_rc = RESULT
+  if process_lmopen_rc_rtn_rc = 0 then do
+    open_flag = 1
+    librow    = 0
+    mbrlist.  = ""
+    end   /* if process_lmopen_rc_rtn_rc = 0 then do                         */
+  high_rc = max(lmopen_cmd_rc,high_rc)
+  address (hcenv)
+   address_rc = rc
+         xtrc = trace(xtrc) /*                                               */
+  return(high_rc)    /* isp_lmopen_rtn:                                      */
+
+/*                                                                                 */
+isp_lmclose_rtn:
+  current_routine = "isp_lmclose_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg argument
+  parse var argument lmclose_cmd_rc ' ' remainder
+  process_apf_data_set = word(argument,1)
+  msg_header     = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header   = length(l_msg_header)
+  hcenv = address()
+  address "ISPEXEC"
+   address_rc = RC
+  lmclose_cmd    = "'LMCLOSE DATAID("|| ispapfid ||")'"
+  lmclose_cmd_say = remquote(lmclose_cmd)
+  interpret lmclose_cmd
+   lmclose_cmd_rc = RC
+  call process_lmclose_rc_rtn lmclose_cmd_rc
+   process_lmclose_rc_rtn_rc = RESULT
+  if process_lmclose_rc_rtn_rc = 0 then do
+    open_flag = 0
+    end   /* if process_lmopen_rc_rtn_rc = 0 then do                         */
+  high_rc = max(lmclose_cmd_rc,high_rc)
+  address (hcenv)
+   address_rc = RC
+         xtrc = trace(xtrc) /*                                               */
+  return(high_rc)    /* isp_lmclose_rtn:                                     */
+
+/*                                                                                 */
+isp_lminit_rtn:
+      /* xtrc = trace("?I")                                                  */
+  current_routine = "isp_lminit_rtn:"
+  parse upper arg argument
+  parse var argument lminit_cmd_rc ' ' remainder
+  process_apf_data_set = word(argument,1)
+  msg_header     = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header   = length(l_msg_header)
+  hcenv = address()
+  address "ISPEXEC"
+  lminit_cmd     = "'LMINIT DATAID(ISPAPFID)  DATASET(''"|| apf_data_set ||"'')'"
+  lminit_cmd_say = remquote(lminit_cmd)
+  interpret lminit_cmd
+   lminit_cmd_rc = RC
+  call process_lminit_rc_rtn lminit_cmd_rc
+   process_lminit_rc_rtn_rc = RESULT
+         xtrc = trace(xtrc) /*                                               */
+  high_rc = max(lminit_cmd_rc,high_rc)
+  address (hcenv)
+  return(high_rc)    /* isp_lminit_rtn:                                      */
+
+/*                                                                                 */
+isp_lmfree_rtn:
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg argument
+  parse var argument ispapfid ' ' remainder
+  current_routine = "isp_lmfree_rtn:"
+  process_apf_data_set = word(argument,1)
+  msg_header      = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header    = length(l_msg_header)
+  hcenv = address()
+  address "ISPEXEC"
+   address_rc = RC
+  lmfree_cmd      = "'LMFREE DATAID("|| ISPAPFID ||")'"
+  lmfree_cmd_say  = remquote(lmfree_cmd)
+  interpret lmfree_cmd
+   lmfree_cmd_rc  = RC
+  call process_lmfree_rc_rtn lmfree_cmd_rc
+   process_lmfree_rc_rtn_rc = RESULT
+  high_rc = max(lmfree_cmd_rc,process_lmfree_rc_rtn_rc,high_rc)
+  address (hcenv)
+   address_rc = RC
+         xtrc = trace(xtrc) /*                                               */
+  return(high_rc)    /* isp_lmfree_rtn:                                      */
+
+/*                                                                                 */
+process_lmopen_rc_rtn:
+  current_routine = "process_lmopen_rc_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg argument
+  parse var argument lmopen_rc " " reminder
+  msg_header = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header = length(msg_header)
+  select /* (1) lmopen_rc         */
+   when lmopen_rc =  0 then do
+     rc_00_msg = "LMOPEN  -" "Normal completion."
+       /* say msg_header rc_00_msg                                                     */
+     end   /* when lmopen_rc =  0 then do */
+   when lmopen_rc =  8 then do
+     say msg_header "ISPOPEN1" lmopen_cmd_say
+     rc_08_msg = "LMOPEN  -" "Data set could not be opened."
+     say msg_header "ISPINITE" rc_08_msg
+     high_rc = max(lmopen_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmopen_rc =  0 then do */
+   when lmopen_rc = 10 then do
+     say msg_header "ISPOPEN1" lmopen_cmd_say
+     rc_10_msg = "LMOPEN  -" "No data set is associated with the given data ID; that is, LMINIT has not been completed."
+     say msg_header "ISPINITE" rc_10_msg
+     high_rc = max(lmopen_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmopen_rc =  0 then do */
+   when lmopen_rc = 12 then do
+     say msg_header "ISPOPEN1" lmopen_cmd_say
+     rc_12_msg   = "LMOPEN  -" "One of these:"
+     rc_12_msg_1 = "LMOPEN  -" " -  The parameter value is invalid."
+     rc_12_msg_2 = "LMOPEN  -" " -  Data set is already open."
+     rc_12_msg_3 = "LMOPEN  -" " -  Cannot open concatenated data sets for output." "One of these:"
+     rc_12_msg_4 = "LMOPEN  -" " -  Cannot open a data set allocated SHR for output."
+     say msg_header "ISPOPE12" ispapfid rc_12_msg
+     say msg_header "        " rc_12_msg_1
+     say msg_header "        " rc_12_msg_2
+     say msg_header "        " rc_12_msg_3
+     say msg_header "        " rc_12_msg_4
+     high_rc = max(lmopen_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmopen_rc =  0 then do */
+   when lmopen_rc = 16 then do
+     say msg_header "ISPOPEN1" lmopen_cmd_say
+     rc_16_msg = "LMOPEN  -" "Truncation or translation error in accessing dialog variables."
+     say msg_header "ISPOPENE" rc_16_msg
+     high_rc = max(lmopen_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmopen_rc =  0 then do */
+   when lmopen_rc = 20 then do
+     say msg_header "ISPOPEN1" lmopen_cmd_say
+     rc_20_msg = "LMOPEN  -" "Severe error; unable to continue."
+     say msg_header "ISPOPEN1" rc_20_msg
+     high_rc = max(lmopen_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmopen_rc =  0 then do */
+   otherwise do
+     say msg_header "ISPOPEN1" "LMOPEN  -" lmopen_cmd_say
+     other_msg = "LMOPEN  -" "An undefined error has occurred."
+     say msg_header "ISPOPEN1" other_msg
+     high_rc = max(lmopen_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmopen_rc =  0 then do */
+   end   /* select  - (1) lmopen_rc         */
+   high_rc = max(lmopen_rc,high_rc)
+       xtrc = trace(xtrc) /*                                                       */
+  return(high_rc)    /* process_lmopen_rc_rtn:                               */
+
+/*                                                                                 */
+process_lmclose_rc_rtn:
+  current_routine = "process_lmclose_rc_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg argument
+  parse var argument lmclose_rc " " reminder
+  high_rc         = lmclose_cmd_rc
+  msg_header = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header = length(msg_header)
+  select /* (1) lmclose_rc        */
+   when lmclose_rc = 0 then do
+     rc_00_msg = "LMCLOSE -" "Normal completion."
+       /* say msg_header rc_00_msg                                                     */
+     end   /* when lmclose_rc = 0 then do */
+   when lmclose_rc = 8 then do
+     say msg_header "ISPCLOSE" lmclose_cmd_say
+     rc_08_msg = "LMCLOSE -" "Data set is not open."
+     say msg_header "ISPINITE" rc_08_msg
+     high_rc = max(lmclose_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmclose_rc = 0 then do */
+   when lmclose_rc = 10 then do
+     say msg_header "ISPCLOSE" lmclose_cmd_say
+     rc_10_msg = "LMCLOSE -" "No ISPF library or data set associated with the given data ID; that is, LMINIT has not been completed."
+     say msg_header "ISPCLOSE" rc_10_msg
+     high_rc = max(lmclose_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmclose_rc = 0 then do */
+   when lmclose_rc = 20 then do
+     say msg_header "ISPCLOSE" lmclose_cmd_say
+     rc_20_msg = "LMCLOSE -" "Severe error; unable to continue."
+     say msg_header "ISPCLOSE" rc_20_msg
+     high_rc = max(lmclose_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmclose_rc = 0 then do */
+   otherwise do
+     say msg_header "ISPCLOSE" lmclose_cmd_say
+     other_msg = "LMCLOSE -" "An undefined error has occurred."
+     say msg_header "ISPCLOSE" other_msg
+     high_rc = max(lmclose_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmclose_rc = 0 then do */
+   end   /* select  - (1) lmclose_rc        */
+   high_rc = max(lmclose_rc,high_rc)
+       xtrc = trace(xtrc) /*                                                       */
+  return(high_rc)    /* process_lmclose_rc_rtn:                              */
+
+/*                                                                                 */
+process_lminit_rc_rtn:
+  current_routine = "process_lminit_rc_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg argument
+  parse var argument lminit_rc " " reminder
+  high_rc         = max(lminit_cmd_rc,high_rc)
+  msg_header = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header = length(msg_header)
+  select /* (1) lminit_rc         */
+   when lminit_rc =  0 then do
+     rc_00_msg = "LMINIT  -" "Normal completion."
+       /* say msg_header rc_00_msg                                                     */
+     end   /* when lminit_rc =  0 then do */
+   when lminit_rc =  8 then do
+     say msg_header "ISPINIT1" lminit_cmd_say
+     rc_08_msg = "LMINIT  -",
+                 "Data ID not created; the error condition is described in 'System variables used to format error messages'."
+     say msg_header "ISPINITE" rc_08_msg
+     high_rc = max(lminit_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lminit_rc =  0 then do */
+   when lminit_rc = 12 then do
+     say msg_header "ISPINIT1" lminit_cmd_say
+     rc_12_msg = "LMINIT  -" "The parameter value is invalid."
+     say msg_header "ISPINITe" rc_12_msg
+     high_rc = max(lminit_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lminit_rc =  0 then do */
+   when lminit_rc = 16 then do
+     say msg_header "ISPINIT1" lminit_cmd_say
+     rc_16_msg = "LMINIT  -" "Truncation or translation error in accessing dialog variables."
+     say msg_header "ISPINIT1" rc_16_msg
+     high_rc = max(lminit_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lminit_rc =  0 then do */
+   when lminit_rc = 20 then do
+     say msg_header "ISPINIT1" lminit_cmd_say
+     rc_20_msg = "LMINIT  -" "Severe error; unable to continue."
+     say msg_header "ISPINIT1" rc_20_msg
+     high_rc = max(lminit_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lminit_rc =  0 then do */
+   otherwise do
+     say msg_header "ISPINIT1" lminit_cmd_say
+     other_msg = "LMINIT  -" "An undefined error has occurred."
+     say msg_header "ISPINIT1" other_msg
+     high_rc = max(lminit_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lminit_rc =  0 then do */
+   end   /* select  - (1) lminit_rc         */
+   high_rc = max(lminit_rc,high_rc)
+       xtrc = trace(xtrc) /*                                                       */
+  return(high_rc)    /* process_lminit_rc_rtn:                               */
+
+/*                                                                                 */
+process_lmmlist_cmd_rc_rtn:
+  current_routine = "process_lmmlist_cmd_rc_rtn:"
+      /*  xtrc = trace("?")                                                  */
+  parse upper arg argument
+  parse var argument lmmlist_cmd_rc " " lmmlist_option " " reminder
+  high_rc = max(lmmlist_cmd_rc,high_rc)
+  msg_header = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header = length(msg_header)
+
+  select /* (1) lmmlist_cmd_rc    */
+
+   when lmmlist_cmd_rc =  0 then do
+     rc_00_msg      = ispapfid "LMMLIST -" "Normal completion."
+     rc_00_msg_LIST = ispapfid "LMMLIST -" " - LIST option - Normal completion."
+     rc_00_msg_FREE = ispapfid "LMMLIST -" " - FREE option - Normal completion. The member list is freed successfully."
+     rc_00_msg_SAVE = ispapfid " - SAVE option - For a data ID, the LMMLIST service has been invoked with the SAVE option after being",
+                      "invoked with LIST option, but before being invoked with the FREE option."
+         /* say msg_header "ISPLMMF1" rc_00_msg                                            */
+     msg_id   = "ISPLMML0"
+     msg_text = rc_00_msg
+     msg_header = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+     l_msg_header = length(msg_header)
+     call print_trace_line
+      print_trace_line_rc  = RESULT
+     call process_subselect
+      process_subselect_rc = RESULT
+     end   /* when lmmlist_cmd_rc = 0 then do  */
+
+   when lmmlist_cmd_rc =  4 then do
+     rc_04_msg  = "ISPLMFE4" ispapfid "LMMLIST -" "Empty Member List."
+     say msg_header "ISPLMFE4" rc_04_msg
+     empty_library = 1
+     high_rc = max(lmmlist_cmd_rc,high_rc)
+     end   /* when lmmlist_cmd_rc = 4 then do */
+
+   when lmmlist_cmd_rc =  8 then do
+     say msg_header "ISPLMFE8" ispapfid lmmlist_cmd_say
+     rc_08_msg      = "LMMLIST -" "One of these:"
+     rc_08_msg_LIST = "LMMLIST -" " - LIST option - End of member list."
+     rc_08_msg_FREE = "LMMLIST -" " - FREE option - Member list does not exist."
+     rc_08_msg_SAVE = "LMMLIST -",
+                      " - SAVE option - For a data ID, the LMMLIST service has been invoked with the SAVE option after being invoked",
+                      "with LIST option, but before being invoked with the FREE option."
+     select   /* (2) lmmlist_option           */
+      when lmmlist_option = "LIST" then do
+        say msg_header "ISPLMF08" ispapfid lmmlist_option rc_08_msg_LIST
+        end   /* if lmmlist_option = "LIST" then do */
+      when lmmlist_option = "FREE" then do
+        say msg_header "ISPLMF08" ispapfid lmmlist_option rc_08_msg_FREE
+        signal error_exit_rtn
+        end   /* if lmmlist_option = "LIST" then do */
+      when lmmlist_option = "SAVE" then do
+        say msg_header "ISPLMF08" ispapfid lmmlist_option rc_08_msg_SAVE
+        end   /* if lmmlist_option = "LIST" then do */
+      otherwise do
+        say msg_header "ISPLMF08" ispapfid "lmmlist - invalid_option."
+        signal error_exit_rtn
+        end   /* if lmmlist_option = "LIST" then do */
+      end     /* (2) lmmlist_option           */
+
+     call process_lmmlist_option
+      process_lmmlist_option_rc = RESULT
+
+         /* say msg_header "ISPINIT1" rc_00_msg                                           */
+     high_rc = max(lmmlist_cmd_rc,high_rc)
+     end   /* when lmmlist_cmd_rc =  8 then do */
+
+   when lmmlist_cmd_rc = 10 then do
+     say msg_header "ISPLMF10" ispapfid rc_10_msg
+     rc_10_msg  = "LMMLIST -" "No data set is associated with the given data ID; that is, LMINIT has not been completed."
+     say msg_header "ISPLMML1" rc_10_msg   /*                                        */
+     high_rc = max(lmmlist_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmmlist_cmd_rc = 10 then do */
+
+   when lmmlist_cmd_rc = 12 then do
+     say msg_header "ISPLMF10" ispapfid lmmlist_cmd_say
+     rc_12_msg  = "LMMLIST -" "One of the following:"
+     rc_12_msg1 = "LMMLIST -" " - Data set is not open or is not open for input."
+     rc_12_msg2 = "LMMLIST -" " - A parameter value is invalid."
+     rc_12_msg3 = "LMMLIST -" " - Data set is not partitioned."
+     rc_12_msg4 = "LMMLIST -" " - LOCK parameter was specified."
+     say msg_header "ISPLMML1" rc_12_msg   /*                                        */
+     say msg_header "        " rc_12_msg1  /*                                        */
+     say msg_header "        " rc_12_msg2  /*                                        */
+     say msg_header "        " rc_12_msg3  /*                                        */
+     say msg_header "        " rc_12_msg4  /*                                        */
+     high_rc = max(lmmlist_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmmlist_cmd_rc = 12 then do */
+
+   when lmmlist_cmd_rc = 16 then do
+     say msg_header "ISPLMF20" ispapfid lmmlist_cmd_say
+     rc_16_msg = "LMMLIST -" "Severe error; unable to continue."
+     say msg_header "ISPINIT1" rc_16_msg  /*                                        */
+     high_rc = max(lmmlist_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmmlist_cmd_rc = 16 then do */
+
+   when lmmlist_cmd_rc = 20 then do
+     say msg_header "ISPLMF20" lmmlist_cmd_say
+     rc_20_msg = "LMMLIST -" "Severe error; unable to continue."
+     say msg_header "ISPINIT1" ispapfid rc_20_msg   /*                                       */
+     high_rc = max(lmmlist_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmmlist_cmd_rc = 20 then do */
+
+   otherwise do
+     other_msg = "LMMLIST -" "Undefined Error Occurred."
+     say msg_header "ISPLMFOO" other_msg
+     high_rc = max(lmmlist_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmmlist_cmd_rc = 0 then do */
+
+   end   /* select  - (1) lminit_rc         */
+       xtrc = trace(xtrc) /*                                                       */
+  return(high_rc)    /* process_cols_rtn */
+
+/*                                                                                 */
+process_lmmlist_option:
+  select   /* (2) lmmlist_option   */
+
+   when lmmlist_option = "LIST" then do
+       /* say msg_header "ISPLMMF1" rc_00_msg_LIST                                    */
+       /* say msg_header "ISPLMFF1" ispapfid lmmlist_option                           */
+       /* say msg_header "ISPLMMF1" rc_00_msg_LIST                                    */
+     high_rc = max(lmmlist_cmd_rc,high_rc)
+     end   /* when lmmlist_cmd_rc = 0 then do */
+
+   when lmmlist_option = "FREE" then do
+     say msg_header "ISPLMFF2" ispapfid lmmlist_option
+     high_rc = max(lmmlist_cmd_rc,high_rc)
+     end   /* when lmmlist_cmd_rc = 0 then do */
+
+   when lmmlist_option = "SAVE" then do
+     say msg_header "ISPLMFF3" ispapfid lmmlist_option "is not supported."
+     high_rc = max(lmmlist_cmd_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lmmlist_cmd_rc = 0 then do */
+
+   otherwise do
+     nop
+     signal error_exit_rtn
+     end   /* when lmmlist_cmd_rc = 0 then do */
+
+   end   /* select (2) lmmlist_option   */
+
+  return(high_rc)    /* process_lmmlist_option:                              */
+
+/*                                                                                 */
+process_lmfree_rc_rtn:
+  current_routine = "process_lmfree_rc_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg argument
+  parse var argument lmfree_cmd_rc " " reminder
+  high_rc = max(lmfree_cmd_rc,high_rc)
+  msg_header = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+  l_msg_header = length(msg_header)
+  select /* (1) lmfree_cmd_rc         */
+   when lminit_cmd_rc =  0 then do
+     rc_00_msg = "LMFREE  -" "Normal completion."
+       /* say msg_header "ISPFREE1" rc_00_msg                                           */
+     end   /* when lminit_rc =  0 then do */
+   when lminit_cmd_rc =  8 then do
+     say msg_header "ISPLMFE8" lmfree_cmd_say
+     rc_08_msg = "LMFREE  -" "Member not found."
+       /* say msg_header "ISPINIT1" rc_00_msg                                           */
+     high_rc = max(lminit_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lminit_rc =  0 then do */
+   when lminit_cmd_rc = 10 then do
+     say msg_header "ISPLMF10" lmfree_cmd_say
+     rc_10_msg = "LMFREE  -" "No ISPF library or data set is associated with the given data ID; that is, LMINIT has not been completed."
+       /* say msg_header "ISPINIT1" rc_00_msg                                           */
+     high_rc = max(lminit_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lminit_rc =  0 then do */
+   when lminit_cmd_rc = 20 then do
+     say msg_header "ISPLMF20" lmfree_cmd_say
+     rc_20_msg = "LMFREE  -" "Severe error; unable to continue."
+       /* say msg_header "ISPINIT1" rc_00_msg                                    */
+     high_rc = max(lminit_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lminit_rc =  0 then do */
+   otherwise do
+     other_msg = "LMFREE  -" "Undefined Error Occurred."
+     say msg_header "ISPLMFOO" other_msg
+     high_rc = max(lminit_rc,high_rc)
+     signal error_exit_rtn
+     end   /* when lminit_rc =  0 then do */
+   end   /* select  - (1) lminit_rc         */
+       xtrc = trace(xtrc) /*                                                       */
+  return(high_rc)    /* process_cols_rtn */
+
+/*                                                                                 */
+isp_alloc_rtn:
+  parse upper arg argument
+  current_routine = "isp_alloc_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  apf_data_set = word(argument,1)
+      /* xtrc = trace("?I")                                                  */
+  hcenv = address()
+  if rexxtools_available then do
+    address "REXXTOOL"
+    end   /* if rexxtools_available then do */
+  else do
+    address "TSO"
+    end   /* else do - if rexxtools_available then do */
+  ispddn    = "ISPAPFL0"
+  isp_alloc_cmd     = "'ALLOC F("|| ispddn ||")  DATASET(''"|| apf_data_set ||"'') SHR REUSE'"
+  isp_alloc_cmd_say = remquote(isp_alloc_cmd)
+  interpret isp_alloc_cmd
+   isp_alloc_cmd_rc = RC
+  if rexxtools_available then do
+    call process_rexxtools_alloc_rc_rtn isp_alloc_cmd_rc
+     isp_alloc_cmd_rc = RESULT
+    end   /* if rexxtools_available then do */
+  else do
+    call process_tso_alloc_rc_rtn isp_alloc_cmd_rc
+    isp_alloc_cmd_rc = RESULT
+    end   /* else do - if rexxtools_available then do */
+    /* say msg_header "ISPALC00" isp_alloc_cmd_say                           */
+  high_rc = max(isp_alloc_cmd_rc )
+         xtrc = trace(xtrc) /*                                               */
+  address (hcenv)
+  return(high_rc)    /* process_cols_rtn */
+
+/*                                                                                 */
+isp_free_rtn:
+  parse upper arg argument
+  current_routine = "isp_free_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  hcenv = address()
+  if rexxtools_available then do
+    address "REXXTOOL"
+    end   /* if rexxtools_available then do */
+  else do
+    address "TSO"
+    end   /* else do - if rexxtools_available then do */
+  ispddn    = "ISPAPFL0"
+  isp_free_cmd      = "'FREE F("|| ispddn ||")'"
+  isp_free_cmd_say = remquote(isp_free_cmd)
+  interpret isp_free_cmd
+   isp_free_cmd_rc = RC
+  if rexxtools_available then do
+    call process_rexxtools_free_rc_rtn isp_free_cmd_rc
+    isp_free_cmd_rc = RESULT
+    end   /* if rexxtools_available then do */
+  else do
+    call process_tso_free_rc_rtn isp_free_cmd_rc
+    isp_free_cmd_rc = RESULT
+    end   /* else do - if rexxtools_available then do */
+    /* say msg_header "ISPFREE1" isp_free_cmd_say                            */
+         xtrc = trace(xtrc) /*                                               */
+  high_rc = max(isp_alloc_cmd_rc )
+         xtrc = trace(xtrc) /*                                               */
+  address (hcenv)
+  return(high_rc)    /* process_cols_rtn */
+
+/*                                                                                 */
+sdsf_routine:
+  current_routine = "sdsf_routine:"
+  /***************************************************************
+  *
+  *  SDSF RGEN Generated EXEC
+  *
+  *  This exec was generated by the SDSF RGEN command on
+  *  Monday 2021-03-22 at 13:55:52.92.
+  *
+  *  5650-ZOS
+  *  SDSF level = z/OS 02.03.00 (HQX77B0)
+  *
+  *  Operation =
+  *
+  *    - Access primary panel LNK
+  *
+  ***************************************************************/
+  rc = isfcalls('ON')
+
+  sdsf_high_rc = 36
+
+      /* xtrc = trace("?I")                                                  */
+
+  if debug = "DEBUG" then do /* If debug mode */
+    verbose = "VERBOSE"  /* .. use SDSF verbose mode */
+    end
+
+/*----------------------------------------------*/
+/* Configure environment with special variables */
+/*----------------------------------------------*/
+  owner      = userid()
+  if (owner = "SFRJOB") & (hwname = "INZ14ZR1")  then do
+    dsn_pref = "SFRMVSDS"
+    end   /* if owner = "SFRJOB" then do  */
+  else do
+    dsn_pref = owner
+    end   /* else do                      */
+  isfprefix  = '*'            /* Corresponds to PREFIX command */
+  isfowner   = owner || "*"   /* Corresponds to OWNER command */
+  isfsysname = ''             /* Corresponds to SYSNAME command */
+
+  isfdest=' ' || ,            /* Dest name 1 */
+          ' ' || ,            /* Dest name 2 */
+          ' ' || ,            /* Dest name 3 */
+          ' '                 /* Dest name 4 */
+
+
+  /* Access the SDSF panels */
+  lists.1   = "APF"
+  lists.0   = 1
+  do lix = 1 to lists.0
+  list_name = lists.lix
+
+  Address SDSF "ISFEXEC" list_name "("|| verbose ||" DELAYED NOMODIFY)"
+   lrc = rc
+   /*
+  say display_date time() exec_name "SDSF CMD       :" isfcmd
+  say display_date time() exec_name "SDSF ISFCOLS   :" isfcols
+  say display_date time() exec_name "SDSF ISFDCOLS  :" isfdcols
+  say display_date time() exec_name "SDSF ISFDISPLAY:" isfdisplay
+  say display_date time() exec_name "SDSF ISFTITLES :" isftitles
+        */
+
+  call msgrtn  "ISFEXEC" list_name    /* List messages */
+  if lrc <> 0 then do  /* If command failed */
+    Say display_date time() exec_name translate(format(lrc,2,0),"0"," "),
+        "** ISFEXEC" list_name "failed with rc="|| translate(format(lrc,2,0),"0"," ") ||"."
+    high_rc = 20
+    signal error_exit_rtn
+    end
+
+  call process_columns_rtn isfrows "." sdsfocols /* List all rows and columns */
+   process_columns_rtn_rc = RESULT
+
+  /*
+  do ix = 1 to newix
+    say display_date time() exec_name length(file_array.ix) file_array.ix
+    end   /* do ix = 1 to newix  */
+      */
+
+  ocols        = ""
+  isfcols      = ""
+  isfdcols     = ""
+  file_array.  = ""
+  file_array.0 = 1
+  end   /* do lix = 1 to lists.0  */
+
+  rc = isfcalls('OFF')
+  sdsf_high_rc = max(process_columns_rtn_rc,rc)
+
+  return(sdsf_high_rc)   /* sdsf_routine:                                               */
+
+/*                                                                   */
+remquote: procedure expose xtrc xmsg squote high_rc
+  current_routine = "remquote:"
+         xtrc = trace("O")  /*                                               */
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg argument
+  argument = translate(argument,"00"x," ")
+  parse var argument cmd " " remainder
+  cmd_say   = cmd
+  squotei = squote || squote
+  squote_pos = pos(squotei,cmd_say,1)
+  do while squote_pos > 0
+    cmd_say = delstr(cmd_say,squote_pos,1)
+    squote_pos = pos(squotei,cmd_say,1)
+    end   /* do while squote_pos > 0 */
+  cmd_say  = translate(cmd_say," ","00"x)
+         xtrc = trace(xtrc) /*                                               */
+  return(cmd_say)   /* remquote: procedure                                   */
+
+/* Start_Message: Version 02.07 2020-05-06 RWSUHR                    */
+start_message:
+  current_routine = "start_message:"
+  rtime = 'TIME'('E')       /* Bypass the time() function in this program */
+  parse upper arg mp1
+  parse source info
+  parse value info with i1 i2 i3 i4 i5 i6 i7 i8 i9
+  if debug = "DEBUG" then do
+    say "Start-Message:" member_name debug "Mode entered."
+    message_ind = 1
+    end   /* if debug = "DEBUG",      */
+  else do
+    message_ind = 0
+    end   /* Else do    */
+  /* say "I1="|| i1 "I2="|| i2 "I3="|| i3 "I4="|| i4 "I5="|| i5,
+        "I6="|| i6 "I7="|| i7 "I8="|| i8 "I9="|| i9
+    pull a1
+      */
+  Info_env      = i1    /* TSO                                                                    */
+  Info_type     = i2    /* COMMAND, FUNCTION, SUBROUTINE                                          */
+  Info_name     = i3    /* Member Name                                                            */
+  Info_ddname   = i4    /* DD Name from which member was loaded                                   */
+  Info_dsname   = i5    /* DSN from which member was loaded                                       */
+  Info_u1       = i6    /* Name of EXEC as it was called, or ?                                    */
+  Info_Hostenv  = i7    /* Initial (default) host command environment (TSO or MVS)                */
+  Info_Addrenv  = i8    /* Name of the address space in uppercase. MVS, TSO/E, or ISPF            */
+  Info_u2       = i9    /* Eight character user token.  (PARSETOK)                                */
+  exec_name = i3
+  standard_Date = Date('S')
+  Start_msg     = 'Start_Message: Version 02.06 2019-05-02 RWSUHR' /*                             */
+  Sys_Proc      = sysvar('SYSPROC')    /* TSO PROC Name                                           */
+  Sys_lterm     = sysvar('SYSLTERM')   /* Number of lines available on screen                     */
+  Sys_wterm     = sysvar('SYSWTERM')   /* Width of screen                                         */
+  Sys_Env       = sysvar('SYSENV')     /* Whether exec is running in foreground or background     */
+  Sys_Nest      = sysvar('SYSNEST')    /* Whether exec was invoked from another exec or CLIST.    */
+  Sys_PCMD      = sysvar('SYSPCMD')    /* Name of most recently executed command                  */
+  Sys_SCMD      = sysvar('SYSSCMD')    /* Name of most recently executed subcommand               */
+  Sys_HSM       = sysvar('SYSHSM')     /* Level of Data Facility Hierarchical Storage Manager.    */
+  Sys_JES       = sysvar('SYSJES')     /* Name and level of JES installed.                        */
+  Sys_LRACF     = sysvar('SYSLRACF')   /* Level of RACF installed.                                */
+  Sys_RACF      = sysvar('SYSRACF')    /* Whether RACF is available.                              */
+  Sys_Node      = sysvar('SYSNODE')    /* Network node name of the installation's JES.            */
+  Sys_TSOE      = sysvar('SYSTSOE')    /* Level of TSO/E installed in the form.                   */
+  Sys_TERMID    = sysvar('SYSTERMID')  /* Terminal ID of the terminal where the REXX exec was.    */
+  customer      = sysvar('SYSNODE')    /* JES2 NJE Node name                                      */
+  ispf          = sysvar('SYSISPF')    /* Whether ISPF is available for exec                      */
+  smfid         = mvsvar('SYSSMFID')   /* System SMF Id                                           */
+  sysplex       = mvsvar('SYSPLEX')    /* The MVS sysplex name as found in the COUPLExx or        */
+  sysseclab     = mvsvar('SYSSECLAB')  /* The security label (SECLABEL) name of the TSO/E session */
+  sysclone      = mvsvar('SYSCLONE')   /* MVS system symbol representing its system name          */
+  sysname       = mvsvar('SYSNAME')    /* MVS system name                                         */
+  mvsrel        = mvsvar('SYSMVS')     /* MVS release                                             */
+  sms           = mvsvar('SYSSMS')     /* SMS Status                                              */
+  dfp           = mvsvar('SYSDFP')     /* DFP Level                                               */
+  opsys         = mvsvar('SYSOPSYS')   /* Current OS                                              */
+  symd_ldate    = standard_Date
+  symd_sldate   = substr(symd_ldate,3,length(symd_ldate)-2)
+  prefix        = "SYS3"
+  jobname       = mvsvar('SYMDEF','JOBNAME')
+  hwname        = mvsvar('SYMDEF','HRDWNAME')
+  hrdwname      = mvsvar('SYMDEF','HRDWNAME')
+  jobid         = getjobid()
+  racfgrp       = getgrpn()
+  prgnm         = getprgnm()
+  regk          = getregk()
+  jobid_short   = substr(jobid,1,1)||substr(jobid,4,length(jobid)-3)
+  display_date  = Translate('1234-56-78',Date('S'),'12345678')
+  if (Sys_Env == 'FORE') then do
+    if ((Info_type \= 'SUBROUTINE') &,
+      (Info_type \= 'FUNCTION')),
+        then do
+      x=cls()
+      end   /* if (Info_type \= 'SUBROUTINE') & (Info_type \= 'FUNCTION') then do */
+    end   /* if (Sys_Env == 'FORE') */
+  if info_ddname <> "?" then do
+    ldsi_rc       = listdsi("'"|| info_ddname ||"'" FILE)
+    end
+  else do
+    ldsi_rc       = 4
+    end
+  select
+   when ldsi_rc  =  0 then do
+    info_dsname = sysdsname
+    info_node.0 = 5
+    remainder = info_dsname
+    do x = 1 to info_node.0
+      parse value remainder  with info_node.x '.' remainder
+      info_node.0 = x
+      if remainder == '' then leave
+      end
+    end   /* when ldsi_rc  == 0 then do    */
+   when ldsi_rc  == 4 then do
+    info_node.0 = 5
+    remainder = info_dsname
+    do x = 1 to info_node.0
+      parse value remainder  with info_node.x '.' remainder
+      info_node.0 = x
+      if remainder == '' then leave
+      end
+     end
+   otherwise do
+     dispmsg = 'LISTDSI request failed for:' info_ddname 'with Reason code:' sysreason
+     x = message(dispmsg)
+     end
+   end   /* select */
+ say display_date 'TIME'(),
+       exec_name 'Started - Last update on' last_update,
+                pgm_version 'by' pgm_person 'from' info_ddname info_dsname
+ say display_date 'TIME'() Start_Msg
+ if mp1 \= "NOMSG" then do
+   nomsg = 1
+    say '                   ',
+        '        ' '           Running on CPC/CEC:' hwname  'PLEX:' sysplex,
+                              'Sysname:' sysname 'SMF-ID:' smfid
+    say '                   ',
+        '        ' '           OP Sys:' opsys 'MVS Rel:' mvsrel
+    say '                   ',
+        '        ' '           JES Node:' sys_node  'JES Lvl:' Sys_JES
+    say '                   ',
+        '        ' '           SMS:' sms 'DFPLVL:' dfp
+    say '                   ',
+        '        ' '           Jobname:' jobname 'JobID:' jobid 'Region:' regk ||'K'
+    say '                   ',
+        '        ' '           User ID:' userid() 'RACF Grp:' racfgrp,
+                              'Programmer Name:' prgnm
+   end
+ else do
+   nomsg = 0
+   end
+ if Sys_Env == 'FORE' then do
+   Environment = 'Foreground' symd_sldate
+   end
+ else do
+   Environment = 'Batch'
+   prefix      = info_node.1
+   end
+ if nomsg then do
+   say display_date 'TIME'() exec_name 'Running in' Environment
+   say display_date 'TIME'() exec_name 'Working Environment Prefix:' prefix
+   end
+  etime = 'TIME'('E')   /* Bypass the time() function in this program */
+/* say 'Start_Message: Elapsed time=' etime
+     */
+  return(0)   /* start_message:                                                    */
+/*                                                                                 */
+message:
+  current_routine = "message:"
+     say 'LISTDSI request failed for:' info_ddname 'with Reason code:' sysreason
+     say '   Listdsi Message 1:' sysmsglvl1
+     say '   Listdsi Message 2:' sysmsglvl2
+ /*  */
+ return(0)   /* message:                                                           */
+
+/*                      */
+end_message:
+  current_routine = "end_message:"
+parse arg high_rc
+  end_msg = 'End_message 2019-05-02 01.25 RWSUHR'
+  if high_rc = '' then high_rc = 0
+  if datatype(high_rc,"NUM") then do
+    say display_date time() exec_name translate(format(High_RC,2,0),"0"," ")  'Ended - RC=' High_rc
+    end
+  else do
+    say  display_date time() exec_name 'Invalid Return Code:' high_rc
+    say  display_date time() exec_name 'Terminating, rc=16'
+    high_rc = 16
+    signal error_exit_rtn
+    end
+  if (Sys_Env == 'FORE') then do
+    NOP
+    end
+  else do
+    /* "FREE DA('"|| prefix ||".VBREXX.EXEC')"
+         */
+    end
+  return(High_rc)
+
+/*                                                            */
+initialize:
+  current_routine = "initialize:"
+      /* xtrc = trace("?I")                                                  */
+  parse upper arg parameters
+  nxtrc         = trace("N")
+  xtrc          = trace(nxtrc)
+  parmix        = words(parameters)
+  alloc_msgs.   = ""
+  delete_msgs.  = ""
+  alloc_msgs.0  = 0
+  delete_msgs.0 = 0
+  xtrce         = "O"
+  debug         = ""
+  database      = "ACC"
+  verbose       = ""
+  trace_option  = verbose
+  if parmix > 3 then do
+    say member_name ||": max number of 3 arguments exceeded! Number="|| translate(format(parmix,2,0),"0"," ")
+    say member_name ||": Valid arguments are: ACCESS | DB2 VERBOSE, and DEBUG"
+    high_rc = 16
+    signal error_exit_rtn
+    end   /* if parmix > 3 then do   */
+  if parmix > 0 then do
+    do pix = 1 to parmix
+      argument = word(parameters,pix)
+      upper argument
+      /* say member_name ||": Arguments given " argument      */
+      verbose  = ""
+      select
+       when argument  = "VERBOSE"   then do
+         verbose      = "VERBOSE"
+         trace_option = "VERBOSE"
+         end   /* when argument = "VERBOSE" then do */
+       when argument  = "DEBUG"     then do
+         debug        = argument
+         end   /* when argument  = "DEBUG" then do */
+       when argument  = "DB2"       then do
+         database = "DB2"
+         end   /* when argument = "DB2"  then do */
+       when abbrev(argument,"ACC") then do
+         database     = "ACC"
+         end   /* when argument = "ACCESS" then do */
+       otherwise do
+         Invalid argument: argument
+        high_rc = 16
+        signal error_exit_rtn
+         end   /* when argument = "ACCESS" then do */
+       end   /* select                         */
+      end   /* do n = 1 to arg()    */
+    end   /* if arg() > 0 then do */
+  else do
+    say member_name ||": No arguments given."
+    end   /* else do - if arg() > 0 then do */
+          xtrc = trace("O")  /*                                              */
+  return(0)   /* initialize: procedure expose member_name database debug verbose xtrc   */
+
+/*                                                                                      */
+
+/*                                                                  */
+check_rexxtools:
+  current_routine = "check_rexxtools:"
+  rxtools_rc = 32
+  rxt_rc     = rxquery()         /* Make sure the REXXTOOLs environment is available                                */
+  hcenv      = address()
+      /* xtrc = trace(xtrc)                                                  */
+  /* Load REXXTOOLS environments                                        */
+  if  rxt_rc = 0 then do
+    call rxaddhst "ADD" "IDCAMS"
+    call rxaddhst "ADD" "REXXTOOL"
+    say display_date time() exec_name "REXXTOOLS product appears to be available on CPC/CEC:" hwname sysname
+    rexxtools_available = 1
+    address rexxtool "OPTIONS NOMSGS"
+    end   /* if  rxt_rc = 0 then do   */
+  else do
+    say display_date time() exec_name "REXXTOOLS product is NOT available on CPC/CEC:" hwname sysname
+    rexxtools_available = 0
+    /*  exit(16)     */
+    end   /* else do - if  rxt_rc = 0 then do        */
+  address (hcenv)
+  rxtools_rc      = rxt_rc
+      /* xtrc = trace(xtrc)                                                  */
+  return(rxtools_rc)   /* check_rexxtools: end                            */
+
+/*                                                                   */
+process_subselect:
+  current_rountine = "process_subselect:"
+
+  select   /* (2) lmmlist_option   */
+
+   when lmmlist_option = "LIST" then do
+     msg_id     = "ISPLMMF1"
+     msg_header = rc_00_msg_LIST
+     call print_trace_line
+      print_trace_line_rc = RESULT
+     end   /* when lmmlist_cmd_rc = 0 then do */
+
+   when lmmlist_option = "FREE" then do
+     msg_id     = "ISPLMMF2"
+     msg_header = rc_00_msg_FREE
+     call print_trace_line
+      print_trace_line_rc = RESULT
+     end   /* when lmmlist_cmd_rc = 0 then do */
+
+   when lmmlist_option = "SAVE" then do
+     msg_id     = "ISPLMMF3"
+     msg_header = rc_00_msg_SAVE
+     call print_trace_line
+      print_trace_line_rc = RESULT
+     end   /* when lmmlist_option = "SAVE" then do  */
+
+   otherwise do
+     msg_id     = "ISPLMMFE"
+     msg_header = "Undefined Error!"
+     call print_trace_line
+      print_trace_line_rc = RESULT
+     signal error_exit_rtn
+     end   /* when lmmlist_cmd_rc = 0 then do */
+
+   end   /* select (2) lmmlist_option   */
+
+  return(0)            /* process_subselect:                              */
+
+/* Error traps and exit routines                                     */
+/*                                                                   */
+/*                                                                   */
+error_exit_rtn:
+  current_routine = "error_exit_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  say "line #" sigl "LINE from which branch (SIGNAL) occurred."
+  if high_rc < 12 then do
+    High_rc = 12
+    end   /* if high_rc < 12 then do */
+  say display_date time() exec_name "Error_exit: RC=" translate(format(high_rc,4,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+/*                                                                   */
+trap_error_rtn:
+  current_routine = "trap_error_rtn:"
+      /* txrc = trace("O")                                                   */
+         High_rc = 12
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Failure_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_exit_rtn
+  exit(High_rc)
+       /*                                                                   */
+trap_failure_rtn:
+  current_routine = "trap_failure_rtn:"
+      /* txrc = trace("O")                                                   */
+  High_rc = 12
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Failure_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+/*                                                                   */
+trap_halt_rtn:
+  current_routine = "trap_halt_rtn:"
+         txrc = trace("O") /*                                                */
+  High_rc = 1
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Halt_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+
+/*                                                                   */
+trap_novalue_rtn:
+  current_routine = "trap_novalue_rtn:"
+      /* txrc = trace("O")                                                   */
+  High_rc = 16
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Novalue_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+
+/*                                                                   */
+trap_syntax_rtn:
+  previous_routine = current_routine
+  current_routine = "trap_syntax_rtn:"
+      /* txrc = trace("O")                                                   */
+  trap_rc = RC
+  say "trap_syntax_rtn:" "line #" sigl "Condition Name:(" condition("C") ") Description:("  condition("I"),
+                         ") Instruction:(" condition("D") ") Status:" condition("S"),
+                         ") Error Message text:(" ERRORTEXT(high_rc) ") (see z/OS TSO/E Messages.)"
+  say "                " "RC   #" trap_rc
+  high_rc = high_rc = high_rc + trap_rc
+  say "                " "High_RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+
+
+
+/*                      */
+end_message:
+  current_routine = "end_message:"
+parse arg high_rc
+  end_msg = 'End_message 2019-05-02 01.25 RWSUHR'
+  if high_rc = '' then high_rc = 0
+  if datatype(high_rc,"NUM") then do
+    say display_date time() exec_name translate(format(High_RC,2,0),"0"," ")  'Ended - RC=' High_rc
+    end
+  else do
+    say  display_date time() exec_name 'Invalid Return Code:' high_rc
+    say  display_date time() exec_name 'Terminating, rc=16'
+    high_rc = 16
+    signal error_exit_rtn
+    end
+  if (Sys_Env == 'FORE') then do
+    NOP
+    end
+  else do
+    /* "FREE DA('"|| prefix ||".VBREXX.EXEC')"
+         */
+    end
+  return(High_rc)
+
+/*                                                                  */
+check_rexxtools:
+  current_routine = "check_rexxtools:"
+  rxtools_rc = 32
+  rxt_rc     = rxquery()         /* Make sure the REXXTOOLs environment is available                                */
+  hcenv      = address()
+      /* xtrc = trace(xtrc)                                                  */
+  /* Load REXXTOOLS environments                                        */
+  if  rxt_rc = 0 then do
+    call rxaddhst "ADD" "IDCAMS"
+    call rxaddhst "ADD" "REXXTOOL"
+    say display_date time() exec_name "REXXTOOLS product appears to be available on CPC/CEC:" hwname sysname
+    rexxtools_available = 1
+    address rexxtool "OPTIONS NOMSGS"
+    end   /* if  rxt_rc = 0 then do   */
+  else do
+    say display_date time() exec_name "REXXTOOLS product is NOT available on CPC/CEC:" hwname sysname
+    rexxtools_available = 0
+    /*  exit(16)     */
+    end   /* else do - if  rxt_rc = 0 then do        */
+  address (hcenv)
+  rxtools_rc      = rxt_rc
+      /* xtrc = trace(xtrc)                                                  */
+  return(rxtools_rc)   /* check_rexxtools: end                            */
+
+/* Error traps and exit routines                                    */
+/*                                                                  */
+/*                                                                   */
+error_exit_rtn:
+  current_routine = "error_exit_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  say ">>> error_exit_rtn: "
+  say "line #" sigl "LINE from which branch (SIGNAL) occurred."
+  if high_rc < 12 then do
+    High_rc = 12
+    end   /* if high_rc < 12 then do */
+  say display_date time() exec_name "Error_exit: RC=" translate(format(high_rc,4,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+
+/*                                                                   */
+trap_error_rtn:
+  current_routine = "trap_error_rtn:"
+  say ">>> trap_error_rtn: "
+      /* txrc = trace("O")                                                   */
+         High_rc = 12
+         say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                           "Instruction:" condition("D") "Status:" condition("S"),
+                           "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+         say "RC   #" RC
+         say "Failure_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+         signal error_exit_rtn
+         exit(High_rc)
+       /*                                                                   */
+       trap_failure_rtn:
+         current_routine = "trap_failure_rtn:"
+         say ">>> trap_failure_rtn: "
+      /* txrc = trace("O")                                                   */
+  High_rc = 12
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Failure_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+
+/*                                                                   */
+trap_halt_rtn:
+  current_routine = "trap_halt_rtn:"
+  say ">>> trap_halt_rtn:    "
+         txrc = trace("O") /*                                                */
+  High_rc = 1
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Halt_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+
+/*                                                                   */
+trap_novalue_rtn:
+  current_routine = "trap_novalue_rtn:"
+  say ">>> trap_novalue_rtn: "
+      /* txrc = trace("O")                                                   */
+  High_rc = 16
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Novalue_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+
+/*                                                                                 */
+isp_alloc_rtn:
+  parse upper arg argument
+  current_routine = "isp_alloc_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  apf_data_set = word(argument,1)
+  high_rc = 0
+      /* xtrc = trace("?I")                                                  */
+  hcenv = address()
+  if rexxtools_available then do
+    address "REXXTOOL"
+    end   /* if rexxtools_available then do */
+  else do
+    address "TSO"
+    end   /* else do - if rexxtools_available then do */
+  ispddn    = "ISPAPFL0"
+  isp_alloc_cmd     = "'ALLOC F("|| ispddn ||")  DATASET(''"|| apf_data_set ||"'') SHR REUSE'"
+  isp_alloc_cmd_say = remquote(isp_alloc_cmd)
+  interpret isp_alloc_cmd
+   isp_alloc_cmd_rc = RC
+  if rexxtools_available then do
+    call process_rexxtools_alloc_rc_rtn isp_alloc_cmd_rc
+     isp_alloc_cmd_rc = RESULT
+    end   /* if rexxtools_available then do */
+  else do
+    call process_tso_alloc_rc_rtn isp_alloc_cmd_rc
+    isp_alloc_cmd_rc = RESULT
+    end   /* else do - if rexxtools_available then do */
+    /* say msg_header "ISPALC00" isp_alloc_cmd_say                           */
+  high_rc = max(isp_alloc_cmd_rc,high_rc)
+         xtrc = trace(xtrc) /*                                               */
+  address (hcenv)
+  return(high_rc)    /* process_cols_rtn */
+
+
+
+/* Start_Message: Version 02.07 2020-05-06 RWSUHR                    */
+/*                                                                                 */
+message:
+  current_routine = "message:"
+     say 'LISTDSI request failed for:' info_ddname 'with Reason code:' sysreason
+     say '   Listdsi Message 1:' sysmsglvl1
+     say '   Listdsi Message 2:' sysmsglvl2
+ /*  */
+ return(0)
+
+/*                      */
+end_message:
+  current_routine = "end_message:"
+parse arg high_rc
+  end_msg = 'End_message 2019-05-02 01.25 RWSUHR'
+  if high_rc = '' then high_rc = 0
+  if datatype(high_rc,"NUM") then do
+    say display_date time() exec_name translate(format(High_RC,2,0),"0"," ")  'Ended - RC=' High_rc
+    end
+  else do
+    say  display_date time() exec_name 'Invalid Return Code:' high_rc
+    say  display_date time() exec_name 'Terminating, rc=16'
+    high_rc = 16
+    signal error_exit_rtn
+    end
+  if (Sys_Env == 'FORE') then do
+    NOP
+    end
+  else do
+    /* "FREE DA('"|| prefix ||".VBREXX.EXEC')"
+         */
+    end
+  return(High_rc)
+
+/*                                                                  */
+check_rexxtools:
+  current_routine = "check_rexxtools:"
+  rxtools_rc = 32
+  rxt_rc     = rxquery()         /* Make sure the REXXTOOLs environment is available                                */
+  hcenv      = address()
+      /* xtrc = trace(xtrc)                                                  */
+  /* Load REXXTOOLS environments                                        */
+  if  rxt_rc = 0 then do
+    call rxaddhst "ADD" "IDCAMS"
+    call rxaddhst "ADD" "REXXTOOL"
+    say display_date time() exec_name "REXXTOOLS product appears to be available on CPC/CEC:" hwname sysname
+    rexxtools_available = 1
+    address rexxtool "OPTIONS NOMSGS"
+    end   /* if  rxt_rc = 0 then do   */
+  else do
+    say display_date time() exec_name "REXXTOOLS product is NOT available on CPC/CEC:" hwname sysname
+    rexxtools_available = 0
+    /*  exit(16)     */
+    end   /* else do - if  rxt_rc = 0 then do        */
+  address (hcenv)
+  rxtools_rc      = rxt_rc
+      /* xtrc = trace(xtrc)                                                  */
+  return(rxtools_rc)   /* check_rexxtools: end                            */
+
+/* Error traps and exit routines                                    */
+/*                                                                  */
+/*                                                                   */
+error_exit_rtn:
+  current_routine = "error_exit_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  say ">>> error_exit_rtn: "
+  say "line #" sigl "LINE from which branch (SIGNAL) occurred."
+  if high_rc < 12 then do
+    High_rc = 12
+    end   /* if high_rc < 12 then do */
+  say display_date time() exec_name "Error_exit: RC=" translate(format(high_rc,4,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+/*                                                                   */
+trap_error_rtn:
+  current_routine = "trap_error_rtn:"
+  say ">>> trap_error_rtn: "
+      /* txrc = trace("O")                                                   */
+         High_rc = 12
+         say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                           "Instruction:" condition("D") "Status:" condition("S"),
+                           "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+         say "RC   #" RC
+         say "Failure_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+         signal error_exit_rtn
+         exit(High_rc)
+       /*                                                                   */
+       trap_failure_rtn:
+         current_routine = "trap_failure_rtn:"
+         say ">>> trap_failure_rtn: "
+      /* txrc = trace("O")                                                   */
+  High_rc = 12
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Failure_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+/*                                                                   */
+trap_halt_rtn:
+  current_routine = "trap_halt_rtn:"
+  say ">>> trap_halt_rtn:    "
+         txrc = trace("O") /*                                                */
+  High_rc = 1
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Halt_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+/*                                                                   */
+trap_novalue_rtn:
+  current_routine = "trap_novalue_rtn:"
+  say ">>> trap_novalue_rtn: "
+      /* txrc = trace("O")                                                   */
+  High_rc = 16
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Novalue_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+
+
+/*                                                                                 */
+isp_alloc_rtn:
+  parse upper arg argument
+  current_routine = "isp_alloc_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  apf_data_set = word(argument,1)
+  high_rc = 0
+      /* xtrc = trace("?I")                                                  */
+  hcenv = address()
+  if rexxtools_available then do
+    address "REXXTOOL"
+    end   /* if rexxtools_available then do */
+  else do
+    address "TSO"
+    end   /* else do - if rexxtools_available then do */
+  ispddn    = "ISPAPFL0"
+  isp_alloc_cmd     = "'ALLOC F("|| ispddn ||")  DATASET(''"|| apf_data_set ||"'') SHR REUSE'"
+  isp_alloc_cmd_say = remquote(isp_alloc_cmd)
+  interpret isp_alloc_cmd
+   isp_alloc_cmd_rc = RC
+  if rexxtools_available then do
+    call process_rexxtools_alloc_rc_rtn isp_alloc_cmd_rc
+     isp_alloc_cmd_rc = RESULT
+    end   /* if rexxtools_available then do */
+  else do
+    call process_tso_alloc_rc_rtn isp_alloc_cmd_rc
+    isp_alloc_cmd_rc = RESULT
+    end   /* else do - if rexxtools_available then do */
+    /* say msg_header "ISPALC00" isp_alloc_cmd_say                           */
+  high_rc = max(isp_alloc_cmd_rc,high_rc)
+         xtrc = trace(xtrc) /*                                               */
+  address (hcenv)
+  return(high_rc)    /* process_cols_rtn */
+
+/*                                                                  */
+check_rexxtools:
+  current_routine = "check_rexxtools:"
+  rxtools_rc = 32
+  rxt_rc     = rxquery()         /* Make sure the REXXTOOLs environment is available                                */
+  hcenv      = address()
+      /* xtrc = trace(xtrc)                                                  */
+  /* Load REXXTOOLS environments                                        */
+  if  rxt_rc = 0 then do
+    call rxaddhst "ADD" "IDCAMS"
+    call rxaddhst "ADD" "REXXTOOL"
+    say display_date time() exec_name "REXXTOOLS product appears to be available on CPC/CEC:" hwname sysname
+    rexxtools_available = 1
+    address rexxtool "OPTIONS NOMSGS"
+    end   /* if  rxt_rc = 0 then do   */
+  else do
+    say display_date time() exec_name "REXXTOOLS product is NOT available on CPC/CEC:" hwname sysname
+    rexxtools_available = 0
+    /*  exit(16)     */
+    end   /* else do - if  rxt_rc = 0 then do        */
+  address (hcenv)
+  rxtools_rc      = rxt_rc
+      /* xtrc = trace(xtrc)                                                  */
+  return(rxtools_rc)   /* check_rexxtools: end                            */
+
+/* Error traps and exit routines                                    */
+/*                                                                  */
+/*                                                                   */
+error_exit_rtn:
+  current_routine = "error_exit_rtn:"
+      /* xtrc = trace("?I")                                                  */
+  say ">>> error_exit_rtn: "
+  say "line #" sigl "LINE from which branch (SIGNAL) occurred."
+  if high_rc < 12 then do
+    High_rc = 12
+    end   /* if high_rc < 12 then do */
+  say display_date time() exec_name "Error_exit: RC=" translate(format(high_rc,4,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+/*                                                                   */
+trap_error_rtn:
+  current_routine = "trap_error_rtn:"
+  say ">>> trap_error_rtn: "
+      /* txrc = trace("O")                                                   */
+         High_rc = 12
+         say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                           "Instruction:" condition("D") "Status:" condition("S"),
+                           "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+         say "RC   #" RC
+         say "Failure_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+         signal error_exit_rtn
+         exit(High_rc)
+       /*                                                                   */
+       trap_failure_rtn:
+         current_routine = "trap_failure_rtn:"
+         say ">>> trap_failure_rtn: "
+      /* txrc = trace("O")                                                   */
+  High_rc = 12
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Failure_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+/*                                                                   */
+trap_halt_rtn:
+  current_routine = "trap_halt_rtn:"
+  say ">>> trap_halt_rtn:    "
+         txrc = trace("O") /*                                                */
+  High_rc = 1
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Halt_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+/*                                                                   */
+trap_novalue_rtn:
+  current_routine = "trap_novalue_rtn:"
+  say ">>> trap_novalue_rtn: "
+      /* txrc = trace("O")                                                   */
+  High_rc = 16
+  say "line #" sigl "Condition Name:" condition("C") "Description:"  condition("I"),
+                    "Instruction:" condition("D") "Status:" condition("S"),
+                    "Error Message text:" ERRORTEXT(high_rc) "(see z/OS TSO/E Messages.)"
+  say "RC   #" RC
+  say "Novalue_trap_rtn: RC=" translate(format(high_rc,2,0),"0"," ")
+  signal error_term_rtn
+  exit(High_rc)
+
+/*                                                                   */
+close_and_free_all:
+  call isp_lmclose_rtn ispapfid
+   exec_lmclose_rtn_rc = RESULT
+  call isp_lmfree_rtn ispapfid
+   exec_lmfree_rtn_rc  = RESULT
+  high_rc = max(exec_lmclose_rtn_rc,exec_lmfree_rtn_rc,high_rc)
+  return(high_rc)
+
+/*                                                                   */
+msg_term_rtn:
+  current_routine = "msg_term_rtn:"
+      /* txrc = trace("O")                                                   */
+  say "Last Routine:" current_routine
+      /* xtrc = trace("?I")                                                  */
+  if open_flag then do
+    call close_and_free_all
+    end   /* if open_flag then do             */
+  signal error_term_rtn
+
+/*                                                                   */
+error_term_rtn:
+      /* xtrc = trace("?I")                                                  */
+  say "Last Routine:" current_routine
+  current_routine = "error_term_rtn:"
+      /* txrc = trace("O")                                                   */
+      /* xtrc = trace("?I")                                                  */
+  if open_flag then do
+    call close_and_free_all
+    end   /* if open_flag then do             */
+  ZISPFRC = high_rc
+  address "ISPEXEC" "VPUT (ZISPFRC) SHARED"
+  exit(high_rc)
+
+/*                                                       */
+print_trace_line: procedure expose msg_id msg_header l_msg_header msg_text msg_id,
+                                   xtrc trace_option current_routine high_rc,
+                                   display_date exec_name csv_lineix csv_line. csv_line.0 csv_lrecl
+      /*                                                       */
+  previous_routine = current_routine
+  current_routine  = "print_trace_line:"
+      /* say ">>>>" current_routine previous_routine               */
+      /* xtrc = trace("?I")                                                  */
+  SIGNAL OFF SYNTAX
+      /* say ">>>>>" previous_routine msg_header msg_id msg_text   */
+  if (trace_option = "VERBOSE") then do
+    msg_header       = display_date time() exec_name translate(format(high_rc,2,0),"0"," ")
+    l_msg_header     = length(msg_header)
+    if (msg_id = "") then do
+      msg_id   = "CHKAPFG9"
+      message  = msg_id "Generic trace message."
+      end   /* if (msg_id = "") then do         */
+    else do
+      message = msg_header msg_id msg_text
+      nop
+      end   /* else do - if (msg_id = "") then do      */
+    say message
+    end   /* if (trace_option = "VERBOSE") then do */
+  else do
+    message = msg_header msg_id msg_text
+    nop
+    end   /* else do - if (trace_option = "VERBOSE") then do */
+      /*  xtrc = trace("O")                              */
+
+  return(0)   /* print_trace_line:                                                     */
+/*                                                       */
+/* *** end of program ***                                */
+/*                                                       */

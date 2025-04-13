@@ -1,0 +1,696 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(CMDTBLUP)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(CMDTBLUP)
+   -----------------------------------------
+
+READY
+    CMDTBLUP
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH48.CBT.REXXEXEC.PDS(CMDTBLUP)"      */
+    Generated scan code/comment:   /*      ---------------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                      */
+    Generated scan code/comment:   /*     20231217 23:06:30                        */
+    Generated scan code/comment:   /*      ---------------------------------       */
+     1 *-* /* CMDTBLUP*************************************************** Rexx */
+     2 *-* /*   Created by: IAPPINI,R.                                         */
+     3 *-* /*   When: 12/09/92                                                 */
+     4 *-* /*   What: CMDTBLUP is a Rexx EXEC dialog process ISPF command      */
+     5 *-* /*         tables.                                                  */
+     6 *-* /********************************************************************/
+     7 *-* Trace OFF
+     8 *-* Address "TSO"
+     9 *-* Arg p1
+    10 *-* Parse Source environment . exec_name .
+    12 *-* If Sysvar(Sysispf) ¬= "ACTIVE"
+       *-*  Then
+       *-*  Do
+    13 *-*   "ISPF CMD(%"exec_name p1")"
+    14 *-*   Exit
+    15 *-*  End
+    17 *-* If Words(p1) = 0
+       *-*  Then
+       *-*  Do
+    18 *-*   Say "You must enter the NAME of the table to be processed."
+    19 *-*   Exit
+    20 *-*  End
+    22 *-* Call Get_tbl_data
+    23 *-* If rc = 0
+       *-*  Then
+       *-*  Do
+    24 *-*   Call Process_tbl_data
+    25 *-*   Call Rebuild_tbl
+    26 *-*  End
+    27 *-* Exit
+    29 *-* Process_tbl_data:
+    30 *-* Call Build_temp_tbl
+    31 *-* spannam = pannam
+    32 *-* pannam  = "PSICMDIS"
+    33 *-* Address "ISPEXEC"
+    34 *-* zscan = "ALL"
+    35 *-* "VPUT (ZSCAN)"
+    36 *-* "TBTOP   " tblnam
+    37 *-* "TBDISPL " tblnam "PANEL("pannam")"
+    38 *-* tbdcc = rc
+    39 *-* pannamd = "PSICMIN1"
+    40 *-* Call Make_selection
+    41 *-* pannam = spannam
+    42 *-* names  = snames
+    43 *-* tblnam = stblnam
+    44 *-* keys   = ""
+    45 *-* Return
+    47 *-* Make_selection:
+    48 *-* Do i_tbdisp = 1 By 1 While tbdcc < 8
+    49 *-*  Call Process_options
+    50 *-*  Select
+    51 *-*  When ztdsels > 1
+       *-*   Then
+       *-*   Do
+    52 *-*    "TBDISPL " tblnam
+    53 *-*   End
+    54 *-*  Otherwise
+       *-*   Do
+    55 *-*    "TBDISPL " tblnam "PANEL("pannam")"
+    56 *-*    tbdcc = rc
+    57 *-*   End
+    58 *-*  End /* End of Select ... */
+    59 *-* End i_tbdisp
+    60 *-* Return
+    62 *-* Process_options:
+    63 *-* se_cols = Space(zfd1 zfd2 zfd3)
+    64 *-* If zsz = ""
+       *-*  Then
+       *-*  zsz = Left(zcmd,1)
+    65 *-* Select
+    66 *-* When se_cols ¬= ""
+       *-*  Then
+       *-*  Do
+    67 *-*   If zcmd = ""
+       *-*    Then
+       *-*    zcmd = "SEARCH "
+    68 *-*    /* ZCTVERB   +ZCTTRUNC  +ZCTACT  */
+    69 *-*   If zfd1 ¬= ""
+       *-*    Then
+       *-*    zcmd = Word(zcmd,1) "ZCTVERB("zfd1")"
+    70 *-*   If zfd2 ¬= ""
+       *-*    Then
+       *-*    zcmd = Word(zcmd,1) "ZCTTRUNC("zfd2")"
+    71 *-*   If zfd3 ¬= ""
+       *-*    Then
+       *-*    zcmd = Word(zcmd,1) "ZCTACT("zfd3")"
+    72 *-*   Call Position_table
+    73 *-*  End
+    74 *-* When Pos(zsz,"BIS") \= 0
+       *-*  Then
+       *-*  Do
+    75 *-*   "DISPLAY PANEL("pannamd")"
+    76 *-*  End
+    77 *-* When Pos(zsz,"CM") \= 0
+       *-*  Then
+       *-*  Do
+    78 *-*   "DISPLAY PANEL("pannamd")"
+    79 *-*   sortf = Word(zctact,1)
+    80 *-*   "TBMOD "tblnam "ORDER"
+    81 *-*   zedsmsg = zctverb "modified"
+    82 *-*   zedlmsg = ""
+    83 *-*   "SETMSG MSG(ISRZ000)"
+    84 *-*  End
+    85 *-* When Pos(zsz,"D") \= 0
+       *-*  Then
+       *-*  Do
+    86 *-*   "TBDELETE "tblnam
+    87 *-*   zedsmsg = zctverb "deleted"
+    88 *-*   zedlmsg = ""
+    89 *-*   "SETMSG MSG(ISRZ000)"
+    90 *-*  End
+    91 *-* When Pos(zsz,"R") \= 0
+       *-*  Then
+       *-*  Call Position_table
+    92 *-* When Pos(zsz,"A") \= 0
+       *-*  Then
+       *-*  Do
+    93 *-*   "DISPLAY PANEL("pannamd")"
+    94 *-*   sortf = Word(zctact,1)
+    95 *-*   "TBADD "tblnam "ORDER"
+    96 *-*   zedsmsg = zctverb "added"
+    97 *-*   zedlmsg = ""
+    98 *-*   "SETMSG MSG(ISRZ000)"
+    99 *-*  End
+   100 *-* Otherwise
+       *-*  Do
+   101 *-*   zedsmsg = zsz "invalid"
+   102 *-*   zedlmsg = "Valid options are Browse, Inquiry, Select,",                           "Change, Modify, Delete, Add."
+   104 *-*   "SETMSG MSG(ISRZ000)"
+   105 *-*  End
+   106 *-* End
+       *-* /* End of Select ... */
+   107 *-* Return
+   109 *-* Position_table:
+   110 *-* Parse Var zcmd function value
+   111 *-* Address "ISPEXEC"
+   112 *-* zscan  = "SCAN"
+   113 *-* If Right(value,1) = ")"
+       *-*  Then,
+   114 *-*  Parse Var value column  "(" value ")" .
+   115 *-* Select
+   116 *-* When Pos(Left(function,1),"FL") > 0
+       *-*  Then
+       *-*  Do
+   117 *-*   zctverb = value"*"
+   118 *-*   "TBSCAN "tblnam "ARGLIST("column") CONDLIST(GE)"
+   119 *-*  End
+   120 *-* When Abbrev("SEARCH",function)
+       *-*  Then
+       *-*  Do
+   121 *-*   "TBVCLEAR "tblnam
+   122 *-*   namecond = ""
+   123 *-*   Do i_v = 1 By 1 To Words(value)
+   124 *-*    w_value = Strip(Word(value,i_v),"B")
+   125 *-*    If Right(w_value,1) = ")"
+       *-*     Then,
+   126 *-*     Parse Upper Var w_value varname "(" varvalue ")" .
+   127 *-*    Else
+       *-*     varvalue = ""
+   128 *-*    Select
+   129 *-*    When varvalue ¬= ""
+       *-*     Then
+       *-*     Do
+   130 *-*      namecond = namecond","varname",EQ"
+   131 *-*      xx = varname" = '"varvalue"*'"
+   132 *-*      Interpret xx
+   133 *-*     End
+   134 *-*    Otherwise
+       *-*     Do
+   135 *-*      namecond = ",ZCTVERB,EQ"
+   136 *-*      zctverb = value"*"
+   137 *-*     End
+   138 *-*    End /* End of Select ... */
+   139 *-*   End i_v
+   140 *-*   namecond = Right(namecond,Length(namecond)-1)
+   141 *-*   "TBSARG "tblnam "NAMECOND("namecond")"
+   142 *-*   "TBTOP "tblnam
+   143 *-*  End
+   144 *-* When Abbrev("RESET",function)
+       *-*  Then
+       *-*  Do
+   145 *-*   "TBVCLEAR "tblnam
+   146 *-*   zctverb = value"*"
+   147 *-*   "TBSARG "tblnam "NAMECOND(ZCTVERB,EQ)"
+   148 *-*   "TBTOP "tblnam
+   149 *-*  End
+   150 *-* Otherwise
+       *-*  Do
+   151 *-*   zedsmsg = "Invalid command"
+   152 *-*   zedlmsg = function "is invalid; valid commands are:",                      valid_primary_commands"."
+   154 *-*   "SETMSG MSG(ISRZ000)"
+   155 *-*  End
+   156 *-* End /* End of Select ... */
+   157 *-* Return
+   159 *-* Rebuild_tbl:
+   160 *-* Call Alloc_isptabl
+   161 *-* Address "ISPEXEC"
+   162 *-* /*                                                                         "TBSTATS "tblnam "CDATE(CDATNAME)    CTIME(CT
+IMNAME)    ",                       "UDATE(UDATNAME)    UTIME(UTIMNAME)    ",                               "USER(USERNAME)     ROW
+CREAT(RCRTNAME) ",                               "ROWCURR(RCURNAME)  ROWUPD(RUPDNAME)   ",                               "TABLEUPD(
+TUPDNAME) SERVICE(SERVNAME)  ",                               "RETCODE(RETCNAME)  STATUS1(STA1NAME)  ",
+   "STATUS2(STA2NAME)  STATUS3(STA3NAME)  "                       Say       tblnam "CDATE("CDATNAME") CTIME("CTIMNAME")  ",
+                "UDATE("UDATNAME")  UTIME("UTIMNAME")  ",                               "USER("USERNAME")   ROWCREAT("RCRTNAME") ",
+                             "ROWCURR("RCURNAME") ROWUPD("RUPDNAME") ",                              "TABLEUPD("TUPDNAME") SERVICE(
+"SERVNAME") ",                            "RETCODE("RETCNAME") STATUS1("STA1NAME") ",                             "STATUS2("STA2NAM
+E") STATUS3("STA3NAME") "                    Say "TBSTATS rc("rc")"                                                */
+   179 *-* "TBERASE " tblnam           /* Delelet original table */
+   180 *-* "TBCREATE" tblnam "KEYS("keys") NAMES"names
+   181 *-* If rc \= 0
+       *-*  Then
+       *-*  Do
+   182 *-*   /*    Say "TBOPEN rc("rc") *** Error for table("tblnam")."              */    zedsmsg = "Table error"
+   184 *-*   zedlmsg = "Table("tblnam") can not be created."
+   185 *-*   "SETMSG MSG(ISRZ001)"
+   186 *-*   rc = 4
+   187 *-*   Return
+   188 *-*  End
+   189 *-*  /* "TBSORT  " tblnam "FIELDS(ZCTACT,C,A ZCTVERB,C,A)"                   */
+   191 *-* "TBTOP  TEMPTBL" /* Position CRP to 1st row */
+   192 *-* "TBSKIP TEMPTBL"         /*                         */
+   193 *-* tbgrc = rc
+   195 *-* Do While tbgrc = 0
+   196 *-*  "TBADD "tblnam "MULT("rownum") ORDER"
+   197 *-*  "TBSKIP TEMPTBL"
+   198 *-*  tbgrc =rc
+   199 *-* End
+   200 *-* "TBCLOSE "tblnam
+   201 *-* "TBCLOSE  TEMPTBL"
+   202 *-* Address "TSO" "FREE FI(ISPTABL)"
+   203 *-* Return
+   205 *-* Alloc_isptabl:
+   206 *-* /* Determine if the member exists in the ISPTLIB allocation */
+   207 *-* zz = Outtrap(cmdt.)
+   208 *-* xx = Membydd(tblnam "ISPTLIB")
+   209 *-* zz = Outtrap("OFF")
+   210 *-* If xx ¬= 0
+       *-*  Then
+       *-*  Do
+   211 *-*   Say "Target table not pre-allocated."
+   212 *-*   Say "Terminating "exec_name"."
+   213 *-*   Exit
+   214 *-*  End
+   215 *-* Parse Var cmdt.1 "(" atblnam ")" . "(" adsnam ")" .
+   216 *-* Address "TSO" "ALLOC FI(ISPTABL) DA('"adsnam"') SH REUSE"
+   217 *-* Return
+   219 *-* Get_tbl_data:
+   220 *-* tblnam = Word(p1,1)  /* First entry is the TABLE name*/
+   221 *-* pannam = cmdtbldi
+   222 *-* appldesc = "Table "tblnam
+   223 *-* entries = "Add Browse Change Delete"
+   224 *-* Address "ISPEXEC"
+   225 *-* "TBOPEN " tblnam  "NOWRITE"
+   226 *-* If rc \= 0
+       *-*  Then
+       *-*  Do
+   227 *-*   /*    Say "TBOPEN rc("rc") *** Error for table("tblnam")."              */    zedsmsg = "Table error"
+   229 *-*   zedlmsg = "Table("tblnam") can not be opened."
+   230 *-*   "SETMSG MSG(ISRZ001)"
+   231 *-*   rc = 4
+   232 *-*   Return
+   233 *-*  End
+   234 *-* "TBQUERY" tblnam "KEYS(KEYS) NAMES(NAMES) ROWNUM(ROWNUM)"
+   235 *-* If rc \= 0
+       *-*  Then
+       *-*  Do
+   236 *-*   /*    Say "TBQUERY rc("rc") **** Error for table("tblnam")."            */    zedsmsg = "Table error"
+   238 *-*   zedlmsg = "TBQUERY rc("rc") table("tblnam")."
+   239 *-*   "SETMSG MSG(ISRZ001)"
+   240 *-*   rc = 4
+   241 *-*   Return
+   242 *-*  End
+   243 *-* xnames = Substr(names,2,Length(names)-1)
+   244 *-* /* Say "KEYS("keys") NAMES("xnames") ROWNUM("rownum")"                  */
+   246 *-* "TBTOP " tblnam
+   247 *-* "TBSKIP" tblnam
+   248 *-* "TBGET " tblnam /*"SAVENAME(XNAMES)"*/
+   249 *-* tbgcc = rc
+   250 *-* Do i_tbget = 1 By 1 While tbgcc = 0
+   251 *-*  sort_fld = Word(zctact,1)
+   252 *-*  Select
+   253 *-*  When sort_fld = "ALIAS"
+       *-*   Then
+       *-*   sort_fld = ""
+   254 *-*  Otherwise
+       *-*   Nop
+   255 *-*  End /* End of Select ... */
+   256 *-*  tbget.i_tbget = Left(sort_fld,7)Left(zctverb,9),                                        Left(zcttrunc,3)Left(zctact,50)
+Left(zctdesc,60)
+   258 *-*  "TBSKIP" tblnam
+   259 *-*  "TBGET "tblnam /*"SAVENAME(XNAMES)" */
+   260 *-*  tbgcc = rc
+   261 *-* End i_tbget
+   262 *-* tbget.0 = rownum
+   263 *-* "TBCLOSE " tblnam  /* Close input table */
+   264 *-* Return
+   266 *-* Build_temp_tbl:
+   267 *-* Address "ISPEXEC"
+   268 *-* stblnam = tblnam  /* Save this table name */
+   269 *-* tblnam  = "TEMPTBL"
+   270 *-* snames  = names   /* Save Names of variables */
+   271 *-* keys    = "(SORTF ZCTVERB)"
+   272 *-* names   = "(ZCTTRUNC ZCTACT ZCTDESC)"
+   273 *-* "TBCREATE "tblnam "NOWRITE KEYS"keys "NAMES"names
+   274 *-* "TBSORT "tblnam "FIELDS(SORTF,C,A ZCTVERB,C,A)"
+   275 *-* If rownum = 0
+       *-*  Then
+       *-*  rownum = 1
+   276 *-* mult = "MULT("rownum")"
+   277 *-* Do i_tbadd = 1 By 1 While i_tbadd <= rownum
+   278 *-*  Parse Var tbget.i_tbadd sortf +7 zctverb +9 zcttrunc +3 zctact,                   +50 zctdesc +60 .
+   280 *-*  sortf    = Space(sortf)
+   281 *-*  zctverb  = Space(zctverb)
+   282 *-*  zcttrunc = Space(zcttrunc)
+   283 *-*  zctact   = Space(zctact)
+   284 *-*  zctdesc  = Space(zctdesc)
+   285 *-*  "TBADD "tblnam mult "ORDER"
+   286 *-*  mult = ""
+   287 *-* End i_tbadd
+   288 *-* Return
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Built-In+/External use  ABBREV                      Reference: F(120) F(144)
+
+Address Envir.Constant: ADDRESS "ISPEXEC"           Reference: 33 111 161 224 267
+
+Address Envir.Constant: ADDRESS "TSO"               Reference: 8
+
+Address Envir.Constant: ADDRESS 'TSO' <cmd>         Reference: 202 216
+
+Variable (set w/rexx)   adsnam                      Assigned : 215
+Variable (used in/rexx) adsnam                      Reference: 216
+
+Label (internal label)  ALLOC_ISPTABL               Defined  : 205
+Label (int. label ref)  ALLOC_ISPTABL               Reference: C(160)
+
+Variable (set w/rexx)   appldesc                    Assigned : 222
+Variable (NEVER USED)   appldesc                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   atblnam                     Assigned : 215
+Variable (NEVER USED)   atblnam                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  BUILD_TEMP_TBL              Defined  : 266
+Label (int. label ref)  BUILD_TEMP_TBL              Reference: C(30)
+
+Variable (NEVER SET)    CMDTBLDI                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) CMDTBLDI                    Reference: 221
+
+Variable (set w/rexx)   column                      Assigned : 114
+Variable (used in/rexx) column                      Reference: 118
+
+Variable (set w/rexx)   entries                     Assigned : 223
+Variable (NEVER USED)   entries                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   environment                 Assigned : 10
+Variable (NEVER USED)   environment                 No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   exec_name                   Assigned : 10
+Variable (used in/rexx) exec_name                   Reference: 13 212
+
+Variable (set w/rexx)   function                    Assigned : 110
+Variable (used in/rexx) function                    Reference: 116 120 144 152
+
+Label (internal label)  GET_TBL_DATA                Defined  : 219
+Label (int. label ref)  GET_TBL_DATA                Reference: C(22)
+
+Variable (set w/rexx)   i_tbadd                     Assigned : 277
+Variable (used in/rexx) i_tbadd                     Reference: 277 287
+Variable (in Stem Ref)  i_tbadd                     Reference: 278
+
+Variable (set w/rexx)   i_tbdisp                    Assigned : 48
+Variable (used in/rexx) i_tbdisp                    Reference: 59
+
+Variable (set w/rexx)   i_tbget                     Assigned : 250
+Variable (used in/rexx) i_tbget                     Reference: 261
+Variable (in Stem Set)  i_tbget                     Assigned : 256
+
+Variable (set w/rexx)   i_v                         Assigned : 123
+Variable (used in/rexx) i_v                         Reference: 124 139
+
+Variable (set w/rexx)   keys                        Assigned : 44 271
+Variable (used in/rexx) keys                        Reference: 180 273
+
+Built-In+/External use  LEFT                        Reference: F(64) F(116) F(256)
+
+Built-In+/External use  LENGTH                      Reference: F(140) F(243)
+
+Label (internal label)  MAKE_SELECTION              Defined  : 47
+Label (int. label ref)  MAKE_SELECTION              Reference: C(40)
+
+Built-In+/External use  MEMBYDD                     Reference: F(208)
+
+Variable (set w/rexx)   mult                        Assigned : 276 286
+Variable (used in/rexx) mult                        Reference: 285
+
+Variable (set w/rexx)   namecond                    Assigned : 122 130 135 140
+Variable (used in/rexx) namecond                    Reference: 130 140 141
+
+Variable (set w/rexx)   names                       Assigned : 42 272
+Variable (used in/rexx) names                       Reference: 180 243 270 273
+
+Built-In+/External use  OUTTRAP                     Reference: F(207) F(209)
+
+Variable (set w/rexx)   p1                          Assigned : 9
+Variable (used in/rexx) p1                          Reference: 13 17 220
+
+Variable (set w/rexx)   pannam                      Assigned : 32 41 221
+Variable (used in/rexx) pannam                      Reference: 31 37 55
+
+Variable (set w/rexx)   pannamd                     Assigned : 39
+Variable (used in/rexx) pannamd                     Reference: 75 78 93
+
+Built-In+/External use  POS                         Reference: F(74) F(77) F(85) F(91) F(92) F(116)
+
+Label (internal label)  POSITION_TABLE              Defined  : 109
+Label (int. label ref)  POSITION_TABLE              Reference: C(72) C(91)
+
+Label (internal label)  PROCESS_OPTIONS             Defined  : 62
+Label (int. label ref)  PROCESS_OPTIONS             Reference: C(49)
+
+Label (internal label)  PROCESS_TBL_DATA            Defined  : 29
+Label (int. label ref)  PROCESS_TBL_DATA            Reference: C(24)
+
+SpecialVar(set no-XREF) rc                           *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(set w/ code) rc                          Assigned : 186 231 240
+SpecialVar(used w/rexx) rc                          Reference: 23 38 56 181 193 198 226 235 238 249 260
+
+Label (internal label)  REBUILD_TBL                 Defined  : 159
+Label (int. label ref)  REBUILD_TBL                 Reference: C(25)
+
+Built-In+/External use  RIGHT                       Reference: F(113) F(125) F(140)
+
+Variable (set w/rexx)   rownum                      Assigned : 275
+Variable (used in/rexx) rownum                      Reference: 196 262 275 276 277
+
+Variable (set w/rexx)   se_cols                     Assigned : 63
+Variable (used in/rexx) se_cols                     Reference: 66
+
+Variable (set w/rexx)   snames                      Assigned : 270
+Variable (used in/rexx) snames                      Reference: 42
+
+Variable (set w/rexx)   sortf                       Assigned : 79 94 278 280
+Variable (used in/rexx) sortf                       Reference: 280
+
+Variable (set w/rexx)   sort_fld                    Assigned : 251 253
+Variable (used in/rexx) sort_fld                    Reference: 253 256
+
+Built-In+/External use  SPACE                       Reference: F(63) F(280) F(281) F(282) F(283) F(284)
+
+Variable (set w/rexx)   spannam                     Assigned : 31
+Variable (used in/rexx) spannam                     Reference: 41
+
+Variable (set w/rexx)   stblnam                     Assigned : 268
+Variable (used in/rexx) stblnam                     Reference: 43
+
+Built-In+/External use  STRIP                       Reference: F(124)
+
+Built-In+/External use  SUBSTR                      Reference: F(243)
+
+Variable (NEVER SET)    SYSISPF                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSISPF                     Reference: 12
+
+Built-In+/External use  SYSVAR                      Reference: F(12)
+
+Variable (set w/rexx)   tbdcc                       Assigned : 38 56
+Variable (used in/rexx) tbdcc                       Reference: 48
+
+Variable (set w/rexx)   tbgcc                       Assigned : 249 260
+Variable (used in/rexx) tbgcc                       Reference: 250
+
+Variable (set w/rexx)   tbgrc                       Assigned : 193 198
+Variable (used in/rexx) tbgrc                       Reference: 195
+
+Variable (set w/rexx)   tblnam                      Assigned : 43 220 269
+Variable (used in/rexx) tblnam                      Reference: 36 37 52 55 80 86 95 118 121 141 142 145 147 148 179 180 184 196 200 208 222 225
+                        ...                                    229 234 238 246 247 248 258 259 263 268 273 274 285
+
+Variable (NEVER SET)    VALID_PRIMARY_COMMANDS      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) VALID_PRIMARY_COMMANDS      Reference: 152
+
+Variable (set w/rexx)   value                       Assigned : 110 114
+Variable (used in/rexx) value                       Reference: 113 114 117 123 124 136 146
+
+Variable (set w/rexx)   varname                     Assigned : 126
+Variable (used in/rexx) varname                     Reference: 130 131
+
+Variable (set w/rexx)   varvalue                    Assigned : 126 127
+Variable (used in/rexx) varvalue                    Reference: 129 131
+
+Built-In+/External use  WORD                        Reference: F(69) F(70) F(71) F(79) F(94) F(124) F(220) F(251)
+
+Built-In+/External use  WORDS                       Reference: F(17) F(123)
+
+Variable (set w/rexx)   w_value                     Assigned : 124
+Variable (used in/rexx) w_value                     Reference: 125 126
+
+Variable (set w/rexx)   xnames                      Assigned : 243
+Variable (NEVER USED)   xnames                      No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   xx                          Assigned : 131 208
+Variable (used in/rexx) xx                          Reference: 132 210
+
+Variable (set w/rexx)   zcmd                        Assigned : 67 69 70 71
+Variable (used in/rexx) zcmd                        Reference: 64 67 69 70 71 110
+
+Variable (set w/rexx)   zctact                      Assigned : 278 283
+Variable (used in/rexx) zctact                      Reference: 79 94 251 256 283
+
+Variable (set w/rexx)   zctdesc                     Assigned : 278 284
+Variable (used in/rexx) zctdesc                     Reference: 256 284
+
+Variable (set w/rexx)   zcttrunc                    Assigned : 278 282
+Variable (used in/rexx) zcttrunc                    Reference: 256 282
+
+Variable (set w/rexx)   zctverb                     Assigned : 117 136 146 278 281
+Variable (used in/rexx) zctverb                     Reference: 81 87 96 256 281
+
+Variable (set w/rexx)   zedlmsg                     Assigned : 82 88 97 102 152 184 229 238
+Variable (NEVER USED)   zedlmsg                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   zedsmsg                     Assigned : 81 87 96 101 151 182 227 236
+Variable (NEVER USED)   zedsmsg                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (NEVER SET)    ZFD1                        Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ZFD1                        Reference: 63 69
+
+Variable (NEVER SET)    ZFD2                        Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ZFD2                        Reference: 63 70
+
+Variable (NEVER SET)    ZFD3                        Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ZFD3                        Reference: 63 71
+
+Variable (set w/rexx)   zscan                       Assigned : 34 112
+Variable (NEVER USED)   zscan                       No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   zsz                         Assigned : 64
+Variable (used in/rexx) zsz                         Reference: 64 74 77 85 91 92 101
+
+Variable (NEVER SET)    ZTDSELS                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ZTDSELS                     Reference: 51
+
+Variable (set w/rexx)   zz                          Assigned : 207 209
+Variable (NEVER USED)   zz                          No Ref.  : If actually referenced, it must be via a cmd.
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 CMDT.              Reference: 207
+Stem-1 CMDT.#             Reference: 215
+
+Stem-1 TBGET.0            Assigned : 262
+Stem-1 TBGET.i_tbadd      Reference: 278
+Stem-1 TBGET.i_tbget      Assigned : 256
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

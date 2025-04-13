@@ -1,0 +1,1688 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(DB2SKEL)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(DB2SKEL)
+   -----------------------------------------
+
+READY
+    DB2SKEL
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.REXX(DB2SKEL)"      */
+    Generated scan code/comment:   /*      --------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:         */
+    Generated scan code/comment:   /*     20231217 23:03:18           */
+    Generated scan code/comment:   /*      --------------------       */
+     1 *-* /*Rexx*/
+     2 *-* /* written by:  - Peter Harroun   IBM Global Services-West (Boulder)*/
+     3 *-* /*              - Richard Humphris  State of Indiana               */
+     4 *-* /*                                                                 */
+     5 *-* /* skeleton for writting db2 rexx code.                            */
+     6 *-* /*                                                                 */
+     7 *-* /* --------------------------------------------------------------- */
+     8 *-* /* opened files:                                                   */
+     9 *-* /*    SQLSTATS (required) but only written to when variable        */
+    10 *-* /*                          SQLoptions = 'SQL'                     */
+    11 *-* /*                                                                 */
+    12 *-* /*           - this is a vb file.  Writes to it are done via:      */
+    13 *-* /*                x = write2DDvb('SQLSTATS' some text)             */
+    14 *-* /*           - this will contain the sql statements this code      */
+    15 *-* /*           executed.                                             */
+    16 *-* /*                                                                 */
+    17 *-* /*    OUTFILE1 (demonstration)                                     */
+    18 *-* /*           - this is a vb file.  Writes to it are done via:      */
+    19 *-* /*                x = write2DDvb('OUTFILE1' some text)             */
+    20 *-* /*           - for demo, row info is written to file.              */
+    21 *-* /*                                                                 */
+    22 *-* /*    OUTFILE2 (demonstration)                                     */
+    23 *-* /*           - this is a fb 80 file.  Writes to it are done via:   */
+    24 *-* /*                x = write2DDfb80('OUTFILE2' some text)           */
+    25 *-* /*           - for demo, row info is written to file.              */
+    26 *-* /*                                                                 */
+    27 *-* /* --------------------------------------------------------------- */
+    28 *-* /* standard (required) routines:                                   */
+    29 *-* /*                                                                 */
+    30 *-* /*  syntax:    for trapping syntax errors                          */
+    31 *-* /*             1.gives diagnostics                                 */
+    32 *-* /*             2.closes any open output files, if OpenOutputDD called*/
+    33 *-* /*             3.exits with bad rc.                                */
+    34 *-* /*                                                                 */
+    35 *-* /*  startup: 1.start of rexx routine (after setting syntax trap)   */
+    36 *-* /*           2.connects to db2 subsystem                           */
+    37 *-* /*           3.issues command "signal BeginProcessing"             */
+    38 *-* /*                                                                 */
+    39 *-* /*  BeginProcessing:                                               */
+    40 *-* /*           note:  entered from "startup:" via signal command.    */
+    41 *-* /*           1.  <where code should be added>                      */
+    42 *-* /*           2.  when done, issues command "signal cleanup".       */
+    43 *-* /*                                                                 */
+    44 *-* /*  CleanUp:                                                       */
+    45 *-* /*           Note:  entered by "signal cleanup" from:              */
+    46 *-* /*             - "beginProcessing"                                 */
+    47 *-* /*             - and/or from any detected error condition that     */
+    48 *-* /*                 used a "signal cleanup" statement.              */
+    49 *-* /*           Note:  pendingRc either still 0 or set to a bad rc.   */
+    50 *-* /*           1.disconnects from db2 subsystem                      */
+    51 *-* /*           2.closes files                                        */
+    52 *-* /*           3.and returns with rc = pendingRc                     */
+    53 *-* /*                                                                 */
+    54 *-* /*  openOutputDD:  for opening an output dataset                  */
+    55 *-* /*             1.adds ddname to open datasets (so we can close)    */
+    56 *-* /*             2.sets up blocking of output                        */
+    57 *-* /*             3.returns to caller.                                */
+    58 *-* /*                                                                 */
+    59 *-* /*  write2DDfb80 takes a variable length rec to write and makes    */
+    60 *-* /*               it full 80 bytes, so execio won't complain later. */
+    61 *-* /*             1.if output rec > 80 bytes, truncate but give warning*/
+    62 *-* /*             2.ensure it's 80 bytes long                         */
+    63 *-* /*             2.call write2DD                                     */
+    64 *-* /*             3.returns to caller.                                */
+    65 *-* /*                                                                 */
+    66 *-* /*  Write2DDvb: for writting to an output dataset (w/blocking)     */
+    67 *-* /*             (used for variable length rec datasets)             */
+    68 *-* /*             1.adds record to blocked recs for dataset           */
+    69 *-* /*             2.if > 100 records, write out block of records      */
+    70 *-* /*             3.returns to caller.                                */
+    71 *-* /*                                                                 */
+    72 *-* /*  closeDD:   for closing an output dataset.                      */
+    73 *-* /*             1.if file open, writes remaining recs in buffer     */
+    74 *-* /*                             and closes dataset.                 */
+    75 *-* /*             2.returns to caller.                                */
+    76 *-* /*                                                                 */
+    77 *-* /*  oneLineSql:execute sql statement (and do error handling).      */
+    78 *-* /*                                                                 */
+    79 *-* /*  sql:     1.  Either clear new SQL statement                    */
+    80 *-* /*               or add a line to new SQL statement                */
+    81 *-* /*           2.  return (sql statement to be used later in zSQL:)  */
+    82 *-* /*                                                                 */
+    83 *-* /*  zSql:    1.prepare sql statement (created by calls to "SQL:")  */
+    84 *-* /*           2.open cursor (so rows can be fetched later)          */
+    85 *-* /*           3.return to caller                                    */
+    86 *-* /*                                                                 */
+    87 *-* /*  prtSqlCA:  sql statement error diagnostics                     */
+    88 *-* /*                                                                 */
+    89 *-* /* --------------------------------------------------------------- */
+    90 *-* /*                                                                 */
+    91 *-* /* (demo) routines:                                                */
+    92 *-* /*                                                                 */
+    93 *-* /*  Sample:  opens some files, executes some sql; writes data to   */
+    94 *-* /*           output files.                                         */
+    95 *-* /*                                                                 */
+    96 *-* /* --------------------------------------------------------------- */
+    97 *-* /*                                                                 */
+    98 *-* /* Error recovery improvements:                                    */
+    99 *-* /* Error recovery improvements:                                    */
+   100 *-* /*    1.  Default command enviornment changed to TSO               */
+   101 *-* /*                                                                 */
+   102 *-* /*        a.  This improves error recovery as "unknown" commands   */
+   103 *-* /*           are reported under TSO.  Which were "ignored" under   */
+   104 *-* /*           address 'dsnrexx'.                                    */
+   105 *-* /*        b.  Actual db2 commands are executed explicity as:       */
+   106 *-* /*                address 'dsnrexx' ...db2 command ...             */
+   107 *-* /*                                                                 */
+   108 *-* /*    2.  rexx syntax error recovery provided.  Instead of one     */
+   109 *-* /*        line of code, it provides a glimpse into the rexx program*/
+   110 *-* /*        around the line that got the syntax error.               */
+   111 *-* /*                                                                 */
+   112 *-* /*    3.  improvement when sql fails, as we can display sql in     */
+   113 *-* /*        a nicer format.  (see "building SQL has changed).        */
+   114 *-* /*                                                                 */
+   115 *-* /* --------------------------------------------------------------- */
+   116 *-* /*                                                                 */
+   117 *-* /* Building sql has changed:                                       */
+   118 *-* /* Building sql has changed:                                       */
+   119 *-* /*                                                                 */
+   120 *-* /*   BEFORE:                                                       */
+   121 *-* /*   BEFORE:                                                       */
+   122 *-* /*    Before we simply set a variable "SQL" to a sql statement.    */
+   123 *-* /*    And the assignment statement typically was composed of       */
+   124 *-* /*    multiple lines of sql code (ending with rexx commas to       */
+   125 *-* /*    continue the rexx assignment statement.                      */
+   126 *-* /*                                                                 */
+   127 *-* /*    Then we called zsql to prepare and open the cursor, like     */
+   128 *-* /*    this:                                                        */
+   129 *-* /*                                                                 */
+   130 *-* /*        sql = 'line of sql code'  ,                              */
+   131 *-* /*              'line of sql code'  ,                              */
+   132 *-* /*              '...             '  ,                              */
+   133 *-* /*              'line of sql code'                                 */
+   134 *-* /*        call zsql                                                */
+   135 *-* /*                                                                 */
+   136 *-* /*    But this had two problems:                                   */
+   137 *-* /*                                                                 */
+   138 *-* /*        a.  confusing, because sometimes commas were embedded    */
+   139 *-* /*          and meant for SQL code.  And sometimes commas were     */
+   140 *-* /*          "rexx commas" to continue the rexx assignement stmt.   */
+   141 *-* /*                                                                 */
+   142 *-* /*        b.  and if an error occured in zsql, the sql statement   */
+   143 *-* /*          was hard to read as all the "line" formatting          */
+   144 *-* /*          disappeared when rexx created the SQL variable.        */
+   145 *-* /*                                                                 */
+   146 *-* /*   NOW:                                                          */
+   147 *-* /*   NOW:                                                          */
+   148 *-* /*    This was solved by having seperate function calls to "sql"   */
+   149 *-* /*    for each line of sql code.                                   */
+   150 *-* /*                                                                 */
+   151 *-* /*       aa. problem (a) is solved.  No confusing rexx commas to   */
+   152 *-* /*          continue SQL statement.                                */
+   153 *-* /*                                                                 */
+   154 *-* /*       bb. no problems with an extra "ending" rexx comma or      */
+   155 *-* /*          forgetting to add a rexx comma.                        */
+   156 *-* /*                                                                 */
+   157 *-* /*       cc. problem (b) is solved.  The sql function addes code   */
+   158 *-* /*          to automatically allow error recovery to be able to    */
+   159 *-* /*          produce more readable (formatted) sql code that was    */
+   160 *-* /*          executed.  And it also provides all the rexx code      */
+   161 *-* /*          involved with creating the sql statement ... including */
+   162 *-* /*          condional rexx code which may have (or may not have)   */
+   163 *-* /*          contributed to creating the entire sql statement.      */
+   164 *-* /*                                                                 */
+   165 *-* /*       dd.  The SQL option allows you to see the sql as comments */
+   166 *-* /*          in the generated racf rules.  It allows you to see the */
+   167 *-* /*          rexx code (with variables) and the final generated SQL>*/
+   168 *-* /*          This is "especially" nice in that the rexx code may be */
+   169 *-* /*          conditional code (with some optional clauses) that you */
+   170 *-* /*          may (or may not) find in the generated sql code.  In   */
+   171 *-* /*          addition, it is fairly easy to extract the generated   */
+   172 *-* /*          code to run in SPUFI or QMF (etc) if you want to see   */
+   173 *-* /*          what was actually returned to this rexx exec.          */
+   174 *-* /*            In addition, the rexx code/sql code has line numbers */
+   175 *-* /*          so you can easily find which statement in this rexx    */
+   176 *-* /*          exec was executed.  Note:  as a lot of the code is     */
+   177 *-* /*          written as a subroutine, the same sql may be executed  */
+   178 *-* /*          more than once but checking a different authority; for */
+   179 *-* /*          example:  routine sys_attr checks many different       */
+   180 *-* /*          authorities like SYSADMAUTH, SYSOPRAUTH, SYSCTRLAUTH   */
+   181 *-* /*          etc..                                                  */
+   182 *-* /*                                                                 */
+   183 *-* /*    So now the way or preparing a sql statement and opening a    */
+   184 *-* /*    cursor looks like this:                                      */
+   185 *-* /*        x=sql('New statement')      /* required for new stmt*/   */
+   186 *-* /*        x=sql('line of sql code')                                */
+   187 *-* /*        x=sql('line of sql code')                                */
+   188 *-* /*        if something then x=sql('line of sql code')              */
+   189 *-* /*        x=sql('line of sql code')                                */
+   190 *-* /*        x=sql('line of sql code')                                */
+   191 *-* /*        call zsql                                                */
+   192 *-* /*                                                                 */
+   193 *-* /*                                                                 */
+   194 *-* /*    In addition.                                                 */
+   195 *-* /*    ------------ before we only allowed one cursor to be open    */
+   196 *-* /*    at a time.  Now, there is an option on the "New Statement"   */
+   197 *-* /*    that allows you to specify a different cursor.               */
+   198 *-* /*                                                                 */
+   199 *-* /*    The default for x=sql("New Statement") is for cursor 1       */
+   200 *-* /*                                                                 */
+   201 *-* /*    BUT NOW you can explicitly specify cursor 1 like:            */
+   202 *-* /*                    x=sql("New Statement; Stmt/Cursor=1')        */
+   203 *-* /*                                                                 */
+   204 *-* /*    OR you can specify a different cursor like:                  */
+   205 *-* /*                    x=xql("New Statement; Stmt/Cursor=2')        */
+   206 *-* /*                                                                 */
+   207 *-* /*    The only restrictions are:                                   */
+   208 *-* /*           1) Stmt/cursor=#:  the number must be between 1 to 100*/
+   209 *-* /*           2) after the x=('New statement<; Stmt/cursor=#>')     */
+   210 *-* /*          that you must add all sql statements for this cursor   */
+   211 *-* /*          before "call zsql" which will create/open cursor for   */
+   212 *-* /*          this statement.                                        */
+   213 *-* /*           3) when calling prtsqlca it should specify which      */
+   214 *-* /*          cursor the failing sqlerror is for.                    */
+   215 *-* /*                                                                 */
+   216 *-* /*        x=sql('New statement')      /* required for new stmt*/   */
+   217 *-* /*    OR  x=sql('New statement; stmt/cursor=#')                    */
+   218 *-* /*                                                                 */
+   219 *-* /*    then...                                                      */
+   220 *-* /*        x=sql('line of sql code')                                */
+   221 *-* /*        x=sql('line of sql code')                                */
+   222 *-* /*        if something then x=sql('line of sql code')              */
+   223 *-* /*        x=sql('line of sql code')                                */
+   224 *-* /*        x=sql('line of sql code')                                */
+   225 *-* /*        call zsql                                                */
+   226 *-* /*                                                                 */
+   227 *-* /*                                                                 */
+   228 *-* /* --------------------------------------------------------------- */
+   229 *-* /*                                                                 */
+   230 *-* /*                                                             */
+   231 *-* /*  */
+   232 *-* /* set up some important variables and/or stem variables */
+   233 *-* /* set up error routines (signal on syntax)              */
+   234 *-* /* and branch to 'startup'                               */
+   236 *-* connected = 0    /* not connected to db2 subsystem */
+   238 *-* openDDs = 0      /* Number of open output datasets.             */
+   239 *-* /* Typically, output datasets where we buffer  */
+   240 *-* /* ... the output in groups of 100 records.    */
+   241 *-* /* number of open datasets we want closed later*/
+   242 *-* /* ... also closed if/when syntax error occurs */
+   243 *-* /* used by SYNTAX         routine */
+   244 *-* /* used by OpenOutputDD   routine */
+   245 *-* /* used by CloseDD        routine */
+   246 *-* /* used by write2DD       routine */
+   248 *-* openDDs.=''      /* ddname of open file */
+   249 *-* openDDsStatus.=''/* status of open file */
+   250 *-* openDDindex. = 0 /* indexe to openDDs.# */
+   251 *-* openDDlrecl. = 0 /* did call to writeDDfb80 set this to 80 instead?*/
+   252 *-* openDDoverflow.=0/* did call to writeDDfb80 overflow lrecl length ?*/
+   254 *-* debugIO = 0 /* issue some extra diagnostics if set to 1 */
+   256 *-* SQLoption = 'SQL' /* write sql to SQLSTATS if SQLOPTION = 'SQL' */
+   258 *-* signal on syntax /* set trap for syntax errors */
+   259 *-* signal startUp   /* "branch" over the syntax handling routine */
+   261 *-* /* -------                 */
+   262 *-* /* syntax:                 */
+   263 *-* /* -------                 */
+   264 *-* /* syntax:  error handling */
+   265 *-* /*                                                                   */
+   266 *-* /*   rc    is set to the syntax error number;                        */
+   267 *-* /*         ... equivelent to IRX00nnL as rc = 00, 01 to 99           */
+   268 *-* /*   sigl  is set to the line number in error                        */
+   269 *-* syntax:
+   270 *-* trace 'n' /* end tracing immediately */
+   271 *-* /* production subroutine; included with skeleton */
+   272 *-* /* --------------------------------------------- */
+   274 *-* say 'IRX00'right('00'rc,2)'I Error running exec' ,                                         execName 'line' sigl':' error
+text(rc)
+   276 *-* syntaxLow = max(sigl-7,1)            /* -7 before (or pgm start) */
+   277 *-* syntaxHigh= min(sigl+7,sourceline()) /* +7 after  (or pgm end)   */
+   278 *-* do syntaxII = syntaxLow to syntaxHigh/* -7 lines back to +7 lines*/
+   279 *-*  if syntaxII <> sigl
+   280 *-*   then
+       *-*   say 'line   ' right(syntaxii,length(syntaxHigh))':' ,                                     sourceline(syntaxII)
+   282 *-*  else
+       *-*   say 'line==>' right(syntaxii,length(syntaxHigh))':' ,                                     sourceline(syntaxII)
+   284 *-* end
+   286 *-* /* as there is a syntax error... don't use "cleanup" but do the */
+   287 *-* /* ...same cleanup work here                                    */
+   289 *-* if connected = 1 /* if we are connected to db2, then disconnect */
+   290 *-*  then
+       *-*  do
+   291 *-*   connected = 0
+   292 *-*   call oneLineSQL "DISCONNECT"
+   293 *-*  end
+   295 *-*  /* close (most) open files and write last buffer out */
+   296 *-*  /* ------------------------------------------------- */
+   297 *-* do i = 1 by 1 for openDDs
+   298 *-*  ddname = openDDs.i
+   299 *-*  if ddname = ''
+       *-*   then
+       *-*   iterate /* if already closed, skip this*/
+   300 *-*  if openDDsStatus.i <> 'OPENED'
+       *-*   then
+       *-*   iterate
+   302 *-*  say ' '
+   303 *-*  if openDDlrecl.i = 0
+   304 *-*   then
+       *-*   say 'closing ddname='ddname
+   305 *-*  else
+       *-*   do
+   306 *-*    say 'closing ddname='ddname 'fb='openDDlrecl.i
+   307 *-*    if openDDoverflow.i > 0
+   308 *-*     then
+       *-*     say 'note:  'openDDoverflow.i 'records were truncated'
+   309 *-*   end
+   311 *-*  address 'TSO' "EXECIO" bufferRecs.ddname.0 ,                                        "DISKW" ddname '(FINIS STEM BUFFERR
+ECS.'ddname'.'
+   313 *-*  if rc <> 0
+   314 *-*   then
+       *-*   say 'error closing/writting to ddname='ddname ,                                                         ||';rc='rc
+   316 *-* end
+   318 *-* say 'exiting exec with rc=12'
+   319 *-* exit 12
+   321 *-* /* --------                                                    */
+   322 *-* /* startUp:    start of pgm... skipped error routine "syntax:" */
+   323 *-* /* --------                                                    */
+   324 *-* Startup:
+   325 *-* /* production subroutine; included with skeleton */
+   326 *-* /* --------------------------------------------- */
+   328 *-* address 'TSO'
+   330 *-* arg theargs
+   331 *-* say 'called with args: "'strip(theArgs)'"'
+   332 *-* pendingRc = 0
+   334 *-* parse var theargs . 'SSID='ssid .
+   336 *-* /* Set addressability to DB2 Rexx function */
+   337 *-* ADDRESS TSO "SUBCOM DSNREXX"
+   338 *-* If RC = 1
+       *-*  Then
+       *-*  S_RC = RXSUBCOM('ADD','DSNREXX','DSNREXX')
+   339 *-* Else
+       *-*  Do
+   340 *-*   Say 'StartUp:  Can not access DB2 Rexx Function.  Ending pgm'
+   341 *-*   Say '    probable cause, steplib missing SDSNLOAD dataset'
+   342 *-*   pendingRc = 8
+   343 *-*   signal cleanUp
+   344 *-*  End
+   346 *-* If ssid=""
+       *-*  Then
+       *-*  Do
+   347 *-*   Say "SSID for subsystem must be specified, so we can connect" ,                        'to it'
+   349 *-*   say 'ssid is a 1-4 character subsystem identifier, for a' ,            'specific db2 subsystem'
+   351 *-*   pendingRc = 8
+   352 *-*   signal CleanUp
+   353 *-*  End
+   355 *-* address dsnrexx "CONNECT "ssid
+   356 *-* if rc = 0
+   357 *-*  then
+       *-*  connected = 1 /* remember we connected to subsystem */
+   358 *-* else
+       *-*  do
+   359 *-*   /* failing to connect to a subsystem is a problem */
+   360 *-*   say '"CONNECT' ssid'" failed with rc='rc
+   361 *-*   say "either subsystem is down or unavailable, or ssid" ,            '"'ssid'" is invalid'
+   363 *-*   say 'aborting with rc=8'
+   364 *-*   pendingRc = 8
+   365 *-*   signal Cleanup
+   366 *-*  end
+   368 *-* /* open our standard "SQLSTATS" file.  */
+   369 *-* /*   for error messages                */
+   370 *-* /*   for SQL statement information     */
+   371 *-* /*   etc.                              */
+   372 *-* rc = openOutputDD('SQLSTATS')
+   374 *-* signal begin_processing /* skeleton setup complete, begin usercode*/
+   377 *-* /* ----------------                                       */
+   378 *-* /* ----------------                                       */
+   379 *-* /* begin_processing:                                    */
+   380 *-* /* ----------------                                       */
+   381 *-* /* ----------------                                       */
+   382 *-* /*                                                        */
+   383 *-* /*            1. work completed.                          */
+   384 *-* /*            2. close filed and exit with pendingRc      */
+   385 *-* /*            3. ddname EXCLIST input read and parsed.    */
+   386 *-* /*            4. output files opened                      */
+   387 *-* begin_processing:
+   388 *-* /* production subroutine; included with skeleton */
+   389 *-* /* --------------------------------------------- */
+   390 *-* /* BUT, Add your user code here.                 */
+   391 *-* /*      Add your user subroutines/functions at   */
+   392 *-* /*        then end of this code.                 */
+   393 *-* /* --------------------------------------------- */
+   396 *-* /* sample user code */
+   397 *-* /* ---------------- */
+   398 *-* sampleCode = 1 /* execute sample code, change to 0 later */
+   399 *-* /*                      ----------------- */
+   400 *-* if sampleCode = 1
+   401 *-*  then
+       *-*  do
+   402 *-*   /* only execute this when sampleCode set to 1 */
+   403 *-*   /* ------------------------------------------ */
+   405 *-*   /* open 2 output files, OUTFILE1, OUTFILE2 */
+   406 *-*   rc = openOutputDD('OUTFILE1')
+   407 *-*   rc = openOutputDD('OUTFILE2')
+   409 *-*   /* call sample, to do some DB2 SQL code; and write to OUTFILE1 */
+   410 *-*   call sample /* create sql, open cursor, read rows, close cursor*/
+   411 *-*   /* and write to output file OUTFILE1               */
+   412 *-*   /* ...note, output files will automatically be closed by CleanUp*/
+   414 *-*  end
+   415 *-*  /* end sample user code */
+   416 *-*  /* -------------------- */
+   422 *-*  /* ------------------------ */
+   423 *-*  /* write your own code here */
+   424 *-*  /* ------------------------ */
+   425 *-*  /* maybe open some output files */
+   426 *-*  /* maybe call some sql routines */
+   427 *-*  /* ...note, output files will automatically be closed by CleanUp*/
+   430 *-*  /* ------------------------ */
+   431 *-*  /* end of your code.        */
+   432 *-*  /* ------------------------ */
+   434 *-* signal Cleanup /* now do cleanup (will close all OPENDD files)*/
+   435 *-* /* ...and exit.  Probably with rc=0            */
+   437 *-* /* ----------------                                       */
+   438 *-* /* ----------------                                       */
+   439 *-* /* Clean_up:                                            */
+   440 *-* /* ----------------                                       */
+   441 *-* /* ----------------                                       */
+   442 *-* /*                                                        */
+   443 *-* /*            1. work completed and/or forcing early end  */
+   444 *-* /*            2. close files and exit with pendingRc      */
+   445 *-* cleanUP:
+   446 *-* trace 'n' /* end tracing immediately */
+   447 *-* /* production subroutine; included with skeleton     */
+   448 *-* /*    will exit with pendingRc (either 0 or non-zero)*/
+   449 *-* /* --------------------------------------------------*/
+   451 *-* if connected = 1 /* if we are connected to db2, then disconnect */
+   452 *-*  then
+       *-*  call OneLineSQL "DISCONNECT"
+   454 *-*  /* close (most) open files and write last buffer out */
+   455 *-*  /* ------------------------------------------------- */
+   456 *-* do i = 1 by 1 for openDDs
+   457 *-*  ddname = openDDs.i
+   458 *-*  if ddname = ''
+       *-*   then
+       *-*   iterate /* if already closed, skip this*/
+   459 *-*  if openDDsStatus.i <> 'OPENED'
+       *-*   then
+       *-*   iterate
+   461 *-*  rc = closeDD(ddname) /* if file still open, close it */
+   462 *-*  openDDs.i = '' /* ddname no longer open */
+   463 *-* end
+   465 *-* Exit pendingRc /* either exit w/rc=0 or some error rc */
+   468 *-* sample:
+   469 *-* /* issue some SQL code and write to some output files */
+   471 *-* /* this SQL assumes you can select from SYSIBM.SYSTABLES */
+   472 *-* /*          -------         ---------------------------- */
+   474 *-* x=sql('NEW statement') /* start new sql statement */
+   475 *-* /* ----------------------- */
+   476 *-* x=sql("SELECT T.DBNAME, T.CREATOR, COUNT(*)")
+   477 *-* x=sql("FROM SYSIBM.SYSTABLES  T")
+   478 *-* x=sql("GROUP BY T.DBNAME, T.CREATOR")
+   479 *-* x=sql("WITH UR                     ") /* don't use any locking on SYSTABLES */
+   481 *-* call ZSQL /* executes prepare and opens cursor C1, you can override and open*/
+   482 *-* /*    a different cursor.  See zSQL for more information          */
+   484 *-* rowsReturned = 0
+   485 *-* Do Until SQLCODE \= 0
+   486 *-*  address dsnrexx "EXECSQL FETCH C1 INTO :databaseName, :tableCreator, :count"
+   487 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   488 *-*    rowsReturned = rowsReturned + 1
+   489 *-*    parse upper var databaseName databaseName .
+   490 *-*    parse upper var tableCreator tableCreator .
+   491 *-*    parse upper var count count .
+   493 *-*    cmd='database='left(databaseName,8)', has' right(count,8) 'tables created by' tableCreator
+   494 *-*    x = Write2DDvb('OUTFILE1' cmd)   /* write data to outfile1, a vb file*/
+   495 *-*    x = write2DDfb80('OUTFILE2' cmd) /* write data to outfile2, a fb file*/
+   496 *-*   End
+   497 *-* End /* do until */
+   498 *-* call showRowCount /* show rowsReturned */
+   499 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   500 *-* Else
+       *-*  call prtsqlca 'FETCH C1' /* generate error diagnostics; and fail exec */
+   501 *-* call OneLineSQL "EXECSQL CLOSE C1"
+   502 *-* return
+   505 *-* OneLineSQL:
+   506 *-* /* production subroutine; included with skeleton */
+   507 *-* /* --------------------------------------------- */
+   509 *-* /* used only for one line of sql code zsql, where we declare */
+   510 *-* /* a cursor for use... before we prepare/open cursor for a   */
+   511 *-* /* sql statement.                                            */
+   512 *-* /*                                                           */
+   513 *-* /* We didn't want to use prtsqlca for error recovery before  */
+   514 *-* /* the sql statement was even prepared.  So this is called   */
+   515 *-* /* like this (from zsql):                                    */
+   516 *-* /*                                                           */
+   517 *-* /*        call OneLineSQL "EXECSQL DECLARE C1 CURSOR FOR S1" */
+   518 *-* /*                                                           */
+   519 *-* /* always returns if sqlcode >= 0                            */
+   520 *-* /* Otherwise, it shows diagnostics and rexx exec ends.       */
+   521 *-* /*                                                           */
+   522 *-* /*                                                           */
+   523 *-* parse arg oneLineSQLcode
+   525 *-* if word(oneLineSQLcode,1) = 'CONNECT'    ,   | word(oneLineSQLcode,1) = 'DISCONNECT'
+   527 *-*  then
+       *-*  nop            /* let us connect/disconnect */
+   528 *-* else
+       *-*  if connect = 0 /* otherwise, if not connected, its an issue */
+   529 *-*   then
+       *-*   do
+   530 *-*    say 'OneLineSQLcode:  called to issue sql statement while not connected'
+   531 *-*    say 'OneLineSQLcode:  statement was "'oneLineSQLcode'"'
+   532 *-*    say 'OneLineSQLcode:  called from line:' sigl'; exit w/rc=8'
+   533 *-*    pendingRc = 8
+   534 *-*    signal CleanUP
+   535 *-*   end
+   537 *-* address dsnrexx oneLineSqlCode /* execute it */
+   538 *-* if sqlcode >= 0
+   539 *-*  then
+       *-*  do
+   540 *-*   if sqlOption = 'SQL'
+   541 *-*    then
+       *-*    x = write2DDvb('SQLSTATS' ,                         'SQL statement "'oneLineSqlCode'"; rc='sqlcode)
+   543 *-*   return
+   544 *-*  end
+   546 *-*  /* error recovery for simple sql */
+   547 *-* say ' '
+   548 *-* say ' '
+   549 *-* say ' '
+   550 *-* say '** --------------------'
+   551 *-* say '** start error analysis'
+   552 *-* say '** --------------------'
+   553 *-* say ' '
+   554 *-* Say '** Error SQL statement'
+   555 *-* Say '** failing SQL statement follows:'
+   556 *-* say oneLineSQLcode
+   557 *-* say '** end failing SQL statement'
+   558 *-* say ' '
+   559 *-* Say 'SQLCODE = 'SQLCODE
+   560 *-* Say 'SQLERRMC = 'SQLERRMC
+   561 *-* Say 'SQLERRP = 'SQLERRP
+   562 *-* Say 'SQLERRD = 'SQLERRD.1',',                                                               || SQLERRD.2',',
+                                                    || SQLERRD.3',',
+ || SQLERRD.4',',                                                                || SQLERRD.5',',
+                              || SQLERRD.6
+   569 *-* Say 'SQLWARN = 'SQLWARN.1',',                                                               || SQLWARN.2',',
+                                                    || SQLWARN.3',',
+ || SQLWARN.4',',                                                                || SQLWARN.5',',
+                              || SQLWARN.6',',                                                                || SQLWARN.7',',
+                                                           || SQLWARN.8',',
+        || SQLWARN.9',',                                                                || SQLWARN.10
+   580 *-* Say 'SQLSTATE= 'SQLSTATE
+   582 *-* say 'called from line' sigl
+   583 *-* say ' '
+   584 *-* say 'code near call to OneLineSql'
+   585 *-* say ' '
+   586 *-* prbl = sigl
+   588 *-* syntaxLow = max(prbL-12,1)           /*-12 before (or pgm start */
+   589 *-* syntaxHigh= min(prbL+4,sourceline()) /* +4 after  (or pgm end   */
+   590 *-* do syntaxII = syntaxLow to syntaxHigh/* show subset of lines    */
+   591 *-*  if syntaxII <> prbL
+   592 *-*   then
+       *-*   say 'line   ' right(syntaxii,length(syntaxHigh))':' ,                                   sourceline(syntaxII)
+   594 *-*  else
+       *-*   say 'line==>' right(syntaxii,length(syntaxHigh))':' ,                                   sourceline(syntaxII)
+   596 *-* end
+   597 *-* say ' '
+   599 *-* pendingRc = 999
+   600 *-* signal CleanUp /* cleanup and exit w/rc=999 */
+   602 *-* ZSQL:
+   603 *-* /* production subroutine; included with skeleton */
+   604 *-* /* --------------------------------------------- */
+   606 *-* zsqlSigl = sigl /* helps prtsqlca give us info */
+   608 *-* /* normally:   declare c1 cursor for s1"      */
+   609 *-* /* but may be: declare c2 cursor for s2", etc */
+   610 *-* call OneLineSQL "EXECSQL DECLARE C"sqlStmtValue ,                                                       "CURSOR FOR S"sq
+lStmtValue
+   612 *-* trace 'n'
+   614 *-* if sqlOption = 'SQL'
+   615 *-*  then
+       *-*  do /* "display" sql statement in output */
+   616 *-*   if datatype(zsqlsigl,'W')
+   617 *-*    then
+       *-*    do
+   618 *-*     cmd='/* **rexx code generating SQL statement began at' ,                            sqlstmt.sqlStmtValue.startSQLcal
+ler ,                                           'ended at'                          ,                                           sql
+stmt.sqlStmtValue.lastSQLcaller  ,                                           ' */'
+   623 *-*     x=Write2DDvb('SQLSTATS' cmd)
+   624 *-*     x=Write2DDvb('SQLSTATS' ' ')
+   625 *-*     cmd='/*   ** rexx code follows:  */'
+   626 *-*     x=Write2DDvb('SQLSTATS' cmd)
+   627 *-*     iiiStart = sqlstmt.sqlStmtValue.startSQLcaller
+   628 *-*     iiiEnd   = sqlstmt.sqlStmtValue.lastSQLcaller
+   629 *-*     do iii = iiiStart by 1 to iiiEnd
+   630 *-*      cmd= '/*'   iii'-->'sourceline(iii) '*/'
+   631 *-*      x=Write2DDvb('SQLSTATS' cmd)
+   632 *-*     end
+   633 *-*     cmd='/*   ** End of rexx code ** */'
+   634 *-*     x=Write2DDvb('SQLSTATS' cmd)
+   635 *-*     x=Write2DDvb('SQLSTATS' ' ')
+   636 *-*     cmd='/* **resolved rexx SQL code; statement began at' ,                             sqlstmt.sqlStmtValue.startSQLcal
+ler ,                                           'ended at'                          ,                                           sql
+stmt.sqlStmtValue.lastSQLcaller  ,                                           ' */'
+   641 *-*     x=Write2DDvb('SQLSTATS' cmd)
+   642 *-*     x=Write2DDvb('SQLSTATS' ' ')
+   643 *-*     cmd='/*   ** resolved SQL code follows:  */'
+   644 *-*     x=Write2DDvb('SQLSTATS' cmd)
+   645 *-*     iiiStart = sqlstmt.sqlStmtValue.startSQLcaller
+   646 *-*     iiiEnd   = sqlstmt.sqlStmtValue.lastSQLcaller
+   647 *-*     do iii = iiiStart by 1 to iiiEnd
+   648 *-*      /* ex:  SQLSTMT0.iii = 0 */
+   649 *-*      /*   or SQLSTMT1.iii = 0 */
+   650 *-*      /*   or etc.         = 0 */
+   651 *-*      /* --------------------- */
+   652 *-*      if value('sqlStmt'sqlStmtValue'SiglIndx.'iii) = 0
+   653 *-*       then
+       *-*       iterate
+   654 *-*      mmm = value('sqlStmt'sqlStmtValue'SiglIndx.'iii)
+   655 *-*      rsql = sqlStmt.sqlStmtValue.mmm
+   656 *-*      do while length(rsql) > 72
+   657 *-*       rsql1 = left(rsql,72)
+   658 *-*       rsql  = substr(rsql,73)
+   659 *-*       cmd= '/*'   iii'-->'rsql1'<-- */'
+   660 *-*       x=Write2DDvb('SQLSTATS' cmd)
+   661 *-*      end
+   662 *-*      cmd= '/*'   iii'-->'left(rsql,72)'<-- */'
+   663 *-*      x=Write2DDvb('SQLSTATS' cmd)
+   664 *-*     end
+   665 *-*     cmd='/*   ** End of resolved SQL code ** */'
+   666 *-*     x=Write2DDvb('SQLSTATS' cmd)
+   667 *-*     x=Write2DDvb('SQLSTATS' ' ')
+   669 *-*    end
+   670 *-*  end
+   671 *-*  /* generate "sql" statement from sqlstmt. */
+   672 *-* GenSql = ''
+   673 *-* do iii=1 by 1 for sqlstmt.sqlStmtValue.0
+   674 *-*  GenSql = genSql sqlstmt.sqlStmtValue.iii
+   675 *-* end
+   676 *-* x = value('GenSql'sqlStmtValue,genSql) /* set GENSQL1, etc */
+   677 *-* address dsnrexx "EXECSQL PREPARE S"sqlStmtValue /* s# */ ,                                                 "INTO :outsql
+ca FROM :gensql"
+   679 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'PREPARE S'sqlStmtValue
+   680 *-* if sqlOption = 'SQL'
+   681 *-*  then
+       *-*  x=Write2DDvb('SQLSTATS' 'Prepare for "S'sqlStmtValue'"; rc=0 ')
+   683 *-* address dsnrexx "EXECSQL OPEN C"sqlStmtValue
+   684 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'OPEN C'sqlStmtValue
+   685 *-* if sqlOption = 'SQL'
+   686 *-*  then
+       *-*  x=Write2DDvb('SQLSTATS' 'OPEN Cursor "C'sqlStmtValue'"; rc=0 ')
+   688 *-* zsqlSigl = ''   /* zsql no longer active */
+   689 *-* Return  /* zsql */
+   691 *-* prtsqlca:
+   692 *-* /* production subroutine; included with skeleton */
+   693 *-* /* --------------------------------------------- */
+   695 *-* trace 'n'
+   696 *-* say ' '
+   697 *-* say ' '
+   698 *-* say ' '
+   699 *-* say '** --------------------'
+   700 *-* say '** start error analysis'
+   701 *-* say '** --------------------'
+   702 *-* say ' '
+   703 *-* Say '** Error SQL statement - ' arg(1)
+   705 *-* parse upper arg word1 word2 word3
+   706 *-* if word1 = 'PREPARE'
+   707 *-*  then
+       *-*  parse upper arg . ' S'stmtCursorNum .
+   708 *-* else
+       *-*  parse upper arg . ' C'stmtCursorNum .
+   710 *-* Say '** failing SQL statement follows:'
+   711 *-* say value('GenSql'stmtCursorNum) /* Gensql1 or GenSql2, etc */
+   712 *-* say '** end failing SQL statement'
+   713 *-* say ' '
+   714 *-* if datatype(zsqlsigl,'W')
+   715 *-*  then
+       *-*  do
+   716 *-*   say '** rexx code generating failing statement began at' ,                          sqlstmt.stmtCursorNum.startSQLcall
+er ,                                          'ended at'                           ,                                          sqlst
+mt.stmtCursorNum.lastSQLcaller
+   720 *-*   say ' '
+   721 *-*   say '** rexx code follows:'
+   722 *-*   iiiStart = sqlstmt.stmtCursorNum.StartSQLcaller
+   723 *-*   iiiEnd   = sqlstmt.stmtCursorNum.lastSQLcaller
+   724 *-*   do iii = iiiStart by 1 to iiiEnd
+   725 *-*    say iii'-->'sourceline(iii)
+   726 *-*   end
+   727 *-*   say '** end of rexx code **'
+   728 *-*   say ' '
+   729 *-*   say '/* **resolved rexx SQL code; statement began at' ,                             sqlstmt.stmtCursorNum.startSQLcall
+er ,                                          'ended at'                           ,                                          sqlst
+mt.stmtCursorNum.lastSQLcaller  ,                                          ' */'
+   734 *-*   say ' '
+   735 *-*   say '/*   ** resolved SQL code follows:  */'
+   736 *-*   iiiStart = sqlstmt.stmtCursorNum.StartSQLcaller
+   737 *-*   iiiEnd   = sqlstmt.stmtCursorNum.lastSQLcaller
+   738 *-*   do iii = iiiStart by 1 to iiiEnd
+   739 *-*    if value('sqlStmt'stmtCursorNum'SiglIndx.'iii) = 0
+   740 *-*     then
+       *-*     iterate
+   741 *-*    mmm = value('sqlStmt'stmtCursorNum'SiglIndx.'iii)
+   742 *-*    rsql = sqlStmt.stmtCursorNum.mmm
+   743 *-*    do while length(rsql) > 72
+   744 *-*     rsql1 = left(rsql,72)
+   745 *-*     rsql  = substr(rsql,73)
+   746 *-*     say  '/*'   iii'-->'rsql1'<-- */'
+   747 *-*    end
+   748 *-*    say  '/*'   iii'-->'left(rsql,72)'<-- */'
+   749 *-*   end
+   750 *-*   say '/*   ** End of resolved SQL code ** */'
+   751 *-*   say ' '
+   752 *-*  end
+   753 *-* Say 'SQLCODE = 'SQLCODE
+   754 *-* Say 'SQLERRMC = 'SQLERRMC
+   755 *-* Say 'SQLERRP = 'SQLERRP
+   756 *-* Say 'SQLERRD = 'SQLERRD.1',',                                                               || SQLERRD.2',',
+                                                    || SQLERRD.3',',
+ || SQLERRD.4',',                                                                || SQLERRD.5',',
+                              || SQLERRD.6
+   763 *-* Say 'SQLWARN = 'SQLWARN.1',',                                                               || SQLWARN.2',',
+                                                    || SQLWARN.3',',
+ || SQLWARN.4',',                                                                || SQLWARN.5',',
+                              || SQLWARN.6',',                                                                || SQLWARN.7',',
+                                                           || SQLWARN.8',',
+        || SQLWARN.9',',                                                                || SQLWARN.10
+   774 *-* Say 'SQLSTATE= 'SQLSTATE
+   776 *-* if zsqlsigl = 'ZSQLSIGL' | zsqlsigl = ''
+   777 *-*  then
+       *-*  prbL= sigl
+   778 *-* else
+       *-*  do
+   779 *-*   prbL = zsqlSigl
+   780 *-*   say ' '
+   781 *-*   say 'problem detected in ZSQL: routine'
+   782 *-*  end
+   783 *-* say ' '
+   784 *-* say 'code near call to ZSQL: and/or call to PRTSQLCA at' prbL
+   785 *-* say ' '
+   787 *-* syntaxLow = max(prbL-12,1)           /*-12 before (or pgm start */
+   788 *-* syntaxHigh= min(prbL+4,sourceline()) /* +4 after  (or pgm end   */
+   789 *-* do syntaxII = syntaxLow to syntaxHigh/* show subset of lines    */
+   790 *-*  if syntaxII <> prbL
+   791 *-*   then
+       *-*   say 'line   ' right(syntaxii,length(syntaxHigh))':' ,                                   sourceline(syntaxII)
+   793 *-*  else
+       *-*   say 'line==>' right(syntaxii,length(syntaxHigh))':' ,                                   sourceline(syntaxII)
+   795 *-* end
+   796 *-* say ' '
+   797 *-* say '** scroll up to "** start error analysis" to see start of'
+   798 *-* say '** ... the diagnostic messages for this problem.        '
+   800 *-* pendingRc = 999
+   801 *-* signal CleanUp /* cleanup and exit w/rc=999 */
+   802 *-* Return
+   804 *-* OpenOutputDD:
+   805 *-* /* production subroutine; included with skeleton */
+   806 *-* /* --------------------------------------------- */
+   808 *-* /* function:  rc = openOutputDD('ddname')                  */
+   809 *-* /*    where ddname = ddname you want to open               */
+   810 *-* /*                                                         */
+   811 *-* /* example:   rc = openOutputDD('OUTPUT1')                 */
+   812 *-* /*                                                         */
+   813 *-* /* actions:                                                */
+   814 *-* /*    1)  check to see if already "opened" with OpenOutputDD*/
+   815 *-* /*           if so, exit now.                              */
+   816 *-* /*    2)  open output file                                 */
+   817 *-* /*           if failed to open, write message, set rc +exit*/
+   818 *-* /*    3)  add +1 to OpenDDS (# of open files)              */
+   819 *-* /*    4)  set variables for blocking, open status, etc.    */
+   820 *-* /*    5)  return                                           */
+   821 *-* arg openDDname .
+   822 *-* if openDDname = ''
+   823 *-*  then
+       *-*  do
+   824 *-*   say 'OpenOutputDD:  Function called without a ddname; exit now'
+   825 *-*   say '  called from line:' sigl
+   826 *-*   pendingRc = 8
+   827 *-*   signal cleanUP
+   828 *-*  end
+   829 *-* i =openDDindex.openDDname
+   830 *-* if i > 0
+   831 *-*  then
+       *-*  do
+   832 *-*   /* only allow file to be opened once */
+   833 *-*   if openDDsStatus.i = 'OPENED'
+   834 *-*    then
+       *-*    return
+   836 *-*   say 'OpenOutputDD:  ddname already opened + closed; ddname=' ,                 || '"'openDDname'"'
+   838 *-*   say '  OpenOutputDD called from line:' sigl
+   839 *-*   say '  exiting with rc = 8'
+   840 *-*   pendingrc = 8
+   841 *-*   signal cleanUP
+   842 *-*  end
+   844 *-* address 'TSO' "EXECIO 0 DISKW" openDDname '(OPEN'
+   845 *-* if rc <> 0
+   846 *-*  then
+       *-*  do
+   847 *-*   say 'OpenOutputDD:  error opening ddname='openDDname ,                                                        ||';rc='
+rc
+   849 *-*   say '  called from line:' sigl
+   850 *-*   pendingRc = 8  /* set bad rc */
+   851 *-*   signal cleanUp /* add end exec now */
+   852 *-*  end
+   854 *-*  /* add to open files */
+   855 *-* openDDs = openDDs + 1
+   856 *-* openDDs.openDDs      = openDDname /* remember ddname of open file*/
+   857 *-* openDDsStatus.openDDs = 'OPENED'  /* remember file is open */
+   858 *-* openDDindex.openDDname = openDDs  /* set index for fast lookup */
+   859 *-* if debugIO = 1
+       *-*  then
+       *-*  say 'OpenOutputDD:  openDDindex.'openDDname'= ' openDDs
+   861 *-*  /* initialize output buffer for file */
+   862 *-* bufferRecs.openDDname.0 = 0
+   863 *-* return 0
+   866 *-* CloseDD:
+   867 *-* /* production subroutine; included with skeleton */
+   868 *-* /* --------------------------------------------- */
+   870 *-* /* function:  rc = CloseDD('ddname')                       */
+   871 *-* /*    where ddname = ddname you want to open               */
+   872 *-* /*                                                         */
+   873 *-* /* example:   rc = CloseDD('OUTPUT1')                      */
+   874 *-* /*                                                         */
+   875 *-* /* actions:                                                */
+   876 *-* /*    1)  check to see if already closed, if so, exit now  */
+   877 *-* /*           if so, exit now.                              */
+   878 *-* /*    2)  close output file                                */
+   879 *-* /*           if failed to close,write message, set rc +exit*/
+   880 *-* /*    3)  set blocking recs to -1 (indicate it's closed)   */
+   881 *-* /*    5)  return                                           */
+   882 *-* arg closeDDname .
+   883 *-* if closeDDname = ''
+   884 *-*  then
+       *-*  do
+   885 *-*   say 'CloseDD: Function called without a ddname; exit now'
+   886 *-*   say '  called from line:' sigl'; exiting w/rc=8'
+   887 *-*   pendingRc = 8
+   888 *-*   signal cleanUP
+   889 *-*  end
+   891 *-* i = openDDindex.closeDDname
+   892 *-* if debugIO = 1
+       *-*  then
+       *-*  say 'CloseDD:  openDDindex.'CloseDDname'= ' openDDindex.closeDDname
+   894 *-* if i = 0
+   895 *-*  then
+       *-*  do
+   896 *-*   say 'CloseDD:  Function called with a ddname "'closeDDname'"' ,           'that was never opened'
+   898 *-*   say '  called from line:' sigl'; exiting w/rc=8'
+   899 *-*   pendingRc = 8
+   900 *-*   signal cleanUP
+   901 *-*  end
+   903 *-* if openDDsStatus.i <> 'OPENED'
+   904 *-*  then
+       *-*  return /* ddname was already closed */
+   906 *-*  /* time to close this file that was opened */
+   907 *-* openDDsStatus.i = 'CLOSED'
+   909 *-* say ' '
+   910 *-* if openDDlrecl.i = 0
+   911 *-*  then
+       *-*  say 'closing ddname='CloseDDname
+   912 *-* else
+       *-*  do
+   913 *-*   say 'closing ddname='CloseDDname 'fb='openDDlrecl.i
+   914 *-*   if openDDoverflow.i > 0
+   915 *-*    then
+       *-*    say 'note:  'openDDoverflow.i 'records were truncated'
+   916 *-*  end
+   919 *-* address 'TSO' "EXECIO" bufferRecs.CloseDDname.0 ,                                    "DISKW" closeDDname '(FINIS STEM BU
+FFERRECS.'closeDDname'.'
+   921 *-* if rc <> 0
+   922 *-*  then
+       *-*  do
+   923 *-*   say 'CloseDD: error closing/writting to ddname='closeDDname ,                                                 ||';rc='
+rc
+   925 *-*   pendingRc = 8
+   926 *-*   signal cleanUP
+   927 *-*  end
+   928 *-* return 0
+   930 *-* write2DDfb80:
+   931 *-* /* production subroutine; included with skeleton */
+   932 *-* /* --------------------------------------------- */
+   934 *-* /* function:  rc = write2DDfb80('ddname' text)             */
+   935 *-* /*    where ddname = ddname is ddname you want to write to */
+   936 *-* /*                   followed by a comma.                  */
+   937 *-* /*          text   = some text you want to write to ddname */
+   938 *-* /*                   must immediately follow the comma.    */
+   939 *-* /*                                                         */
+   940 *-* /*    Note: input text can be any length.  But we will make*/
+   941 *-* /*       it 80 bytes in length (and truncate excess) or pad*/
+   942 *-* /*       text to make it 80 bytes.                         */
+   943 *-* /*    Note: text longer than 80 bytes will generate a      */
+   944 *-* /*       warning message (the first time).  And we will    */
+   945 *-* /*       count number of records we had to truncate.       */
+   946 *-* /*       And we will set the pendingRc to a 4.             */
+   947 *-* /*                                                         */
+   948 *-* /*    example:                                             */
+   949 *-* /*            rc = write2DDfb80('OUTPUT2' sometext)        */
+   950 *-* /*                                                         */
+   951 *-* /* actions:                                                */
+   952 *-* /*    1)  checks to make sure DD name is open.             */
+   953 *-* /*           if so, exit now.                              */
+   954 *-* /*                                                         */
+   955 *-* /*    2)  ensure text is 80 bytes long, and call           */
+   956 *-* /*           write2dd with info.                           */
+   957 *-* /*                                                         */
+   958 *-* /*    3)  then returns                                     */
+   959 *-* arg write2DDname .
+   960 *-* parse arg . outputText
+   962 *-* openDDindex = openDDindex.write2DDname
+   963 *-* if debugIO = 1
+       *-*  then
+       *-*  say 'Write2DDfb80:  openDDindex.'write2DDname ,                                                                || '= '
+openDDindex.write2DDname
+   965 *-* if openDDindex = 0 | openDDsStatus.openDDindex <> 'OPENED'
+   966 *-*  then
+       *-*  if write2DDname = 'SQLSTATS'
+   967 *-*   then
+       *-*   do
+   968 *-*    if openDDsStatus.openDDindex <> 1
+   969 *-*     then
+       *-*     say 'WriteDDfb80: expected output file SQLSTATS to be' ,                    'open; writting data to sysprint instead
+'
+   971 *-*    openDDsStatus.openDDindex = 1 /*print this only once */
+   972 *-*    say 'SQLSTATS:' outputText
+   973 *-*    return 0
+   974 *-*   end
+   975 *-*  else
+       *-*   do
+   976 *-*    /* this is what should happen if file is not open */
+   977 *-*    say 'WriteDDfb80: Function called with ddname=' ,                               ||'"'write2DDname'" but file not open
+'
+   979 *-*    say '  called from line:' sigl'; exiting w/rc=8'
+   980 *-*    pendingRc = 8
+   981 *-*    signal cleanUP
+   982 *-*   end
+   984 *-* if openDDlrecl.openDDindex = 0 /* first time, this is unset */
+   985 *-*  then
+       *-*  openDDlrecl.openDDindex = 80 /* ...remember lrecl is 80 */
+   986 *-* else
+       *-*  if openDDlrecl.openDDindex <> 80 /* set to different lrecl?*/
+   987 *-*   then
+       *-*   do                     /* ... yes this is a problem */
+   988 *-*    /* a file can have only one lrecl */
+   989 *-*    say 'WriteDDfb80: Function called with ddname=' ,                               ||'"'write2DDname'" but file lrecl se
+t to' ,                                        openDDlrecl.opendDDindex 'not 80'
+   992 *-*    say '  called from line:' sigl'; exiting w/rc=8'
+   993 *-*    pendingRc = 8
+   994 *-*    signal cleanUP
+   995 *-*   end
+   997 *-* if length(outputText) > 80
+   998 *-*  then
+       *-*  do
+   999 *-*   openDDoverflow.OpenDDindex = openDDoverflow.OpenDDindex + 1 /* times rec > lrecl */
+  1000 *-*   if openDDoverlow.OpenDDindex = 1 /* 1st time, send warning message */
+  1001 *-*    then
+       *-*    do
+  1002 *-*     say 'WriteDDfb80:  called to write 80 byte records to ddname=' ,                      || writeDDname
+  1004 *-*     say 'WriteDDfb80:  but record larger than 80 bytes, truncated'
+  1005 *-*     say 'WriteDDfb80:  called from line:' sigl'; pending rc=4'
+  1006 *-*     say 'WriteDDfb80:  1st 80 bytes ="'left(outputText,80)'"'
+  1007 *-*     say 'WriteDDfb80:  remaining' length(outputText) - 80 ,                      'bytes = "'substr(outputText,81)'"'
+  1009 *-*     if pendingRc < 4
+  1010 *-*      then
+       *-*      pendingRc = 4
+  1011 *-*    end
+  1012 *-*   outputText = left(outputText,80) /* trunc to 80 byte rec */
+  1013 *-*  end
+  1015 *-* if length(outputText) < 80
+  1016 *-*  then
+       *-*  outputText = left(outputText,80) /* pad up to lrecl=80 */
+  1018 *-* bufferRecs = bufferRecs.write2DDname.0 + 1
+  1019 *-* /* ----------*/
+  1020 *-* bufferRecs.write2DDname.bufferRecs = outputText /* 80byte rec*/
+  1021 *-* /* ----------*/
+  1022 *-* bufferRecs.write2DDname.0 = bufferRecs
+  1024 *-* if bufferRecs.writeDDname.0 > 100
+  1025 *-*  then
+       *-*  do
+  1026 *-*   /* buffer full; write out buffer */
+  1027 *-*   /* ----------------------------- */
+  1028 *-*   address 'TSO' "EXECIO" bufferRecs.write2DDname.0 ,                                   "DISKW" write2DDname '(STEM BUFFE
+RRECS.'write2DDname'.'
+  1031 *-*   /* reset number of records in output buffer */
+  1032 *-*   /* ---------------------------------------- */
+  1033 *-*   bufferRecs.write2DDname.0 = 0
+  1035 *-*   if rc <> 0 /* check if execio failed */
+  1036 *-*    then
+       *-*    do
+  1037 *-*     say 'WriteDDfb80:  error writting to ddname='write2DDname ,                                                   ||';rc
+='rc
+  1039 *-*     say '  called from line:' sigl'; exiting w/rc=8'
+  1040 *-*     pendingRc = 8
+  1041 *-*     signal CleanUp
+  1042 *-*    end
+  1043 *-*    /* write to write2DDfb80 worked */
+  1044 *-*    /* ---------------------------- */
+  1045 *-*  end
+  1046 *-*  /* either output line buffered, or buffer written out */
+  1047 *-* return 0 /* updated output buffer for outddname */
+  1051 *-* Write2DDvb:
+  1052 *-* /* production subroutine; included with skeleton */
+  1053 *-* /* --------------------------------------------- */
+  1055 *-* /* function:  rc = Write2DDvb('ddname' text)               */
+  1056 *-* /*    where ddname = ddname is ddname you want to write to */
+  1057 *-* /*          text   = some text you want to write to ddname */
+  1058 *-* /*                                                         */
+  1059 *-* /* example:                                                */
+  1060 *-* /*            Note:  ddname OUTPUT1 opened via OPENDD function*/
+  1061 *-* /*            rc = Write2DDvb('OUTPUT1 some text to write') */
+  1062 *-* /*                                                         */
+  1063 *-* /* example:                                                */
+  1064 *-* /*            Note:  ddname OUTPUT2 opened via OPENDD function*/
+  1065 *-* /*                                                         */
+  1066 *-* /*            sometext = 'some text to write'              */
+  1067 *-* /*            rc = Write2DDvb('OUTPUT2' sometext)          */
+  1068 *-* /*                                                         */
+  1069 *-* /* actions:                                                */
+  1070 *-* /*    1)  checks to make sure DD name is open.             */
+  1071 *-* /*           if so, exit now.                              */
+  1072 *-* /*                                                         */
+  1073 *-* /*    2)  add text (after ddname) to output buffer for     */
+  1074 *-* /*           this ddname.                                  */
+  1075 *-* /*                                                         */
+  1076 *-* /*    2)  if output buffer full (for this ddname) it then  */
+  1077 *-* /*           writes out buffer to output ddname.  And      */
+  1078 *-* /*           sets the output buffer to empty.              */
+  1079 *-* /*                                                         */
+  1080 *-* /*    5)  then returns                                     */
+  1081 *-* arg write2DDname .
+  1082 *-* parse arg . outputText
+  1084 *-* openDDindex = openDDindex.write2DDname
+  1085 *-* if debugIO = 1
+       *-*  then
+       *-*  say 'Write2DDvb:  openDDindex.'write2DDname ,                                                              || '= ' open
+DDindex.write2DDname
+  1087 *-* if openDDindex = 0 | openDDsStatus.openDDindex <> 'OPENED'
+  1088 *-*  then
+       *-*  if write2DDname = 'SQLSTATS'
+  1089 *-*   then
+       *-*   do
+  1090 *-*    if openDDsStatus.openDDindex <> 1
+  1091 *-*     then
+       *-*     say 'Write2DDvb: expected output file SQLSTATS to be' ,                    'open; writing data to sysprint instead'
+  1093 *-*    openDDsStatus.openDDindex = 1 /* warn us only once */
+  1094 *-*    say 'SQLSTATS:' outputText /*send data to sysprint */
+  1095 *-*    return 0
+  1096 *-*   end
+  1097 *-*  else
+       *-*   do
+  1098 *-*    /* this is what should happen if file is not open */
+  1099 *-*    say 'Write2DDvb: Function called with a ddname "'write2DDname'"',              'that is not open'
+  1101 *-*    say '  called from line:' sigl'; exiting w/rc=8'
+  1102 *-*    pendingRc = 8
+  1103 *-*    signal cleanUP
+  1104 *-*   end
+  1106 *-* if openDDlrecl.openDDindex <> 0 /* fixed length records ? */
+  1107 *-*  then
+       *-*  do                     /* ... yes this is a problem */
+  1108 *-*   say 'Write2DDvb:  caller should have called:' ,           'WriteDDfb'openDDlrecl.OpenDDindex 'instead of Write2DDvb'
+  1110 *-*   say '  called from line:' sigl'; exiting w/rc=8'
+  1111 *-*   pendingRc = 8
+  1112 *-*   signal cleanUP
+  1113 *-*  end
+  1115 *-* bufferRecs = bufferRecs.write2DDname.0 + 1
+  1116 *-* bufferRecs.write2DDname.bufferRecs = outputText
+  1117 *-* bufferRecs.write2DDname.0 = bufferRecs
+  1119 *-* if bufferRecs.writeDDname.0 > 100
+  1120 *-*  then
+       *-*  do
+  1121 *-*   /* buffer full; write out buffer */
+  1122 *-*   /* ----------------------------- */
+  1123 *-*   address 'TSO' "EXECIO" bufferRecs.write2DDname.0 ,                                   "DISKW" write2DDname '(STEM BUFFE
+RRECS.'write2DDname'.'
+  1126 *-*   /* reset number of records in output buffer */
+  1127 *-*   /* ---------------------------------------- */
+  1128 *-*   bufferRecs.write2DDname.0 = 0
+  1130 *-*   if rc <> 0 /* check if execio failed */
+  1131 *-*    then
+       *-*    do
+  1132 *-*     say 'Write2DDvb:  error writting to ddname='write2DDname ,                                                    ||';rc
+='rc
+  1134 *-*     say '  called from line:' sigl'; exiting w/rc=8'
+  1135 *-*     pendingRc = 8
+  1136 *-*     signal CleanUp
+  1137 *-*    end
+  1138 *-*    /* write to write2DD worked */
+  1139 *-*    /* ------------------------ */
+  1140 *-*  end
+  1141 *-*  /* either output line buffered, or buffer written out */
+  1142 *-* return 0 /* updated output buffer for outddname */
+  1147 *-* sql:
+  1148 *-* /* production subroutine; included with skeleton */
+  1149 *-* /* --------------------------------------------- */
+  1151 *-* /* function.  collects sql statement in readable form */
+  1152 *-* /*    ...we'll set (and append) to stem SQLSTMT       */
+  1153 *-* /*    which will be executed later                    */
+  1154 *-* /* if called with argument "new statement" we will    */
+  1155 *-* /*    set stem SQLSTMT.0 = 0                          */
+  1156 *-* /*    set stem SQLSTMT.startSQLcaller = sigl          */
+  1157 *-* /* otherwise                                          */
+  1158 *-* /*    we will increament SQLSTMT.0 and set next line  */
+  1159 *-* /*    SQLSTMT.# to the callers argument               */
+  1160 *-* /*    set stem SQLSTMT.lastSQLcaller = sigl           */
+  1161 *-* parse upper arg sql1 sql2 ';' option '=' value .
+  1162 *-* if sql1 sql2 = 'NEW STATEMENT'
+  1163 *-*  then
+       *-*  do
+  1164 *-*   if option = 'STMT/CURSOR'
+  1165 *-*    then
+       *-*    do
+  1166 *-*     if value = ''
+  1167 *-*      then
+       *-*      do
+  1168 *-*       parse upper arg passedArgs
+  1169 *-*       say 'SQL: invalid function call to SQL from' sigl
+  1170 *-*       say '   args ='passedArgs
+  1171 *-*       say '   but missing # for STMT/CURSOR option'
+  1173 *-*       pendingRc = 8
+  1174 *-*       signal CleanUp  /* cleanup and exit with rc=12*/
+  1175 *-*      end
+  1176 *-*     if datatype(value,'W') = 0 ,                                                     | value < 1 | value > 100
+  1178 *-*      then
+       *-*      do
+  1179 *-*       parse upper arg passedArgs
+  1180 *-*       say 'SQL: invalid function call to SQL from' sigl
+  1181 *-*       say '   args ='passedArgs
+  1182 *-*       say '   but STMT/CURSOR value "'value'" is invalid'
+  1184 *-*       pendingRc = 8
+  1185 *-*       signal CleanUp  /* cleanup and exit with rc=12*/
+  1186 *-*      end
+  1187 *-*     sqlStmtValue = value
+  1188 *-*    end
+  1189 *-*   else
+       *-*    if option <> ''
+  1190 *-*     then
+       *-*     do
+  1191 *-*      parse upper arg passedArgs
+  1192 *-*      say 'SQL: invalid function call to SQL from' sigl
+  1193 *-*      say '   args ='passedArgs
+  1194 *-*      say '   but option "'option'" after ";" is invalid'
+  1195 *-*      say '   expected option "; STMT/CURSOR=#"'
+  1197 *-*      pendingRc = 8
+  1198 *-*      signal CleanUp  /* cleanup and exit with rc=12*/
+  1199 *-*     end
+  1200 *-*    else
+       *-*     do
+  1201 *-*      sqlStmtValue = 1 /* default stmt/cursor to use */
+  1202 *-*     end
+  1204 *-*   SQLSTMT.sqlStmtValue.0 = 0
+  1205 *-*   SQLSTMT.sqlStmtValue.StartSQLcaller = sigl /* New Statement line*/
+  1206 *-*   x = value('sqlStmt'SqlStmtValue'SiglIndx.',0)
+  1207 *-*   return 0
+  1208 *-*  end
+  1209 *-* sqlstmt = sqlstmt.SqlStmtValue.0 + 1
+  1210 *-* parse arg sqlStmtLine
+  1211 *-* sqlstmt.SqlStmtValue.0 = sqlstmt
+  1212 *-* sqlstmt.SqlStmtValue.sqlstmt = sqlStmtLine /* save sql code*/
+  1214 *-* /*Note:                                   */
+  1215 *-* /* sigl = callers line # (in rexx code)   */
+  1216 *-* /* sqlstmt = line # of sql code (1 to n)  */
+  1217 *-* /*                                        */
+  1218 *-* /*Set :                                   */
+  1219 *-* /* sqlStmt||sqlStmtValue||SiglIndx.sigl   = sqlstmt     */
+  1220 *-* /*                                                      */
+  1221 *-* /*Usage:                                                */
+  1222 *-* /* which lines of rexx code actually used in sql stmt.  */
+  1223 *-* /*                                                      */
+  1225 *-* /* set it here */
+  1226 *-* x = value('sqlstmt'sqlStmtValue'SiglIndx.'sigl,sqlStmt)
+  1227 *-* sqlstmt.SqlStmtValue.LastSQLCaller = sigl    /* last call to sql: */
+  1228 *-* return 0
+  1231 *-* ShowRowCount:
+  1232 *-* /* production subroutine; included with skeleton */
+  1233 *-* /* --------------------------------------------- */
+  1235 *-* if sqlOption <> 'SQL'
+  1236 *-*  then
+       *-*  return
+  1238 *-* x = Write2DDvb('SQLSTATS' ' ')
+  1240 *-* cmd = '    /* rowsReturned =' rowsReturned '*/'
+  1241 *-* x = Write2DDvb('SQLSTATS' cmd)
+  1243 *-* cmd = '    /* --------------' RowsReturned '*/'
+  1244 *-* x = Write2DDvb('SQLSTATS' cmd)
+  1246 *-* x = Write2DDvb('SQLSTATS' ' ')
+  1247 *-* return
+  1249 *-* ShowRowCount2:
+  1250 *-* /* production subroutine; included with skeleton */
+  1251 *-* /* --------------------------------------------- */
+  1253 *-* if sqlOption <> 'SQL'
+  1254 *-*  then
+       *-*  return
+  1256 *-* x = Write2DDvb('SQLSTATS' ' ')
+  1258 *-* cmd = '    /* rowsReturnedC2 =' rowsReturnedC2 '*/'
+  1259 *-* x = Write2DDvb('SQLSTATS' cmd)
+  1261 *-* cmd = '    /* ----------------' rowsReturnedC2 '*/'
+  1262 *-* x = Write2DDvb('SQLSTATS' cmd)
+  1264 *-* x = Write2DDvb('SQLSTATS' ' ')
+  1265 *-* return
+  1267 *-* /* add any of your subroutines and/or functions here */
+  1268 *-* /* ------------------------------------------------- */
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Address Envir.Constant: ADDRESS 'DSNREXX' <cmd>        Reference: 355 486 537 677 683
+
+Address Envir.Constant: ADDRESS 'TSO'                  Reference: 328
+
+Address Envir.Constant: ADDRESS 'TSO' <cmd>            Reference: 311 337 844 919 1028 1123
+
+Built-In+/External use  ARG                            Reference: F(703)
+
+Label (internal label)  BEGIN_PROCESSING               Defined  : 387
+Label (int. label ref)  BEGIN_PROCESSING               Reference: S(374)
+
+Variable (set w/rexx)   bufferrecs                     Assigned : 1018 1115
+Variable (used in/rexx) bufferrecs                     Reference: 1022 1117
+Variable (in Stem Set)  bufferrecs                     Assigned : 1020 1116
+
+Label (internal label)  CLEANUP                        Defined  : 445
+Label (int. label ref)  CLEANUP                        Reference: S(343) S(352) S(365) S(434) S(534) S(600) S(801) S(827) S(841) S(851) S(888)
+                        ...                                       S(900) S(926) S(981) S(994) S(1041) S(1103) S(1112) S(1136) S(1174) S(1185)
+                        ...                                       S(1198)
+
+Label (internal label)  CLOSEDD                        Defined  : 866
+Label (int. label ref)  CLOSEDD                        Reference: F(461)
+
+Variable (set w/rexx)   closeddname                    Assigned : 882
+Variable (used in/rexx) closeddname                    Reference: 883 892 896 911 913 919 923
+Variable (in Stem Ref)  closeddname                    Reference: 891 892 919
+
+Variable (set w/rexx)   cmd                            Assigned : 493 618 625 630 633 636 643 659 662 665 1240 1243 1258 1261
+Variable (used in/rexx) cmd                            Reference: 494 495 623 626 631 634 641 644 660 663 666 1241 1244 1259 1262
+
+Variable (NEVER SET)    CONNECT                        Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) CONNECT                        Reference: 528
+
+Variable (set w/rexx)   connected                      Assigned : 236 291 357
+Variable (used in/rexx) connected                      Reference: 289 451
+
+Variable (set w/rexx)   count                          Assigned : 491
+Variable (used in/rexx) count                          Reference: 491 493
+
+Variable (set w/rexx)   databasename                   Assigned : 489
+Variable (used in/rexx) databasename                   Reference: 489 493
+
+Built-In+/External use  DATATYPE                       Reference: F(616) F(714) F(1176)
+
+Variable (set w/rexx)   ddname                         Assigned : 298 457
+Variable (used in/rexx) ddname                         Reference: 299 304 306 311 314 458 461
+Variable (in Stem Ref)  ddname                         Reference: 311
+
+Variable (set w/rexx)   debugio                        Assigned : 254
+Variable (used in/rexx) debugio                        Reference: 859 892 963 1085
+
+Built-In+/External use  ERRORTEXT                      Reference: F(274)
+
+Variable (NEVER SET)    EXECNAME                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EXECNAME                       Reference: 274
+
+Variable (set w/rexx)   gensql                         Assigned : 672 674
+Variable (used in/rexx) gensql                         Reference: 674 676
+
+Variable (set w/rexx)   i                              Assigned : 297 456 829 891
+Variable (used in/rexx) i                              Reference: 830 894
+Variable (in Stem Set)  i                              Assigned : 462 907
+Variable (in Stem Ref)  i                              Reference: 298 300 303 306 307 308 457 459 833 903 910 913 914 915
+
+Variable (set w/rexx)   iii                            Assigned : 629 647 673 724 738
+Variable (used in/rexx) iii                            Reference: 630 652 654 659 662 725 739 741 746 748
+Variable (in Stem Ref)  iii                            Reference: 674
+
+Variable (set w/rexx)   iiiend                         Assigned : 628 646 723 737
+Variable (used in/rexx) iiiend                         Reference: 629 647 724 738
+
+Variable (set w/rexx)   iiistart                       Assigned : 627 645 722 736
+Variable (used in/rexx) iiistart                       Reference: 629 647 724 738
+
+Variable (NEVER SET)    LASTSQLCALLER                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  LASTSQLCALLER                  Assigned : 1227
+Variable (in Stem Ref)  LASTSQLCALLER                  Reference: 618 628 636 646 716 723 729 737
+
+Built-In+/External use  LEFT                           Reference: F(493) F(657) F(662) F(744) F(748) F(1006) F(1012) F(1016)
+
+Built-In+/External use  LENGTH                         Reference: F(280) F(282) F(592) F(594) F(656) F(743) F(791) F(793) F(997) F(1007) F(1015)
+
+Built-In+/External use  MAX                            Reference: F(276) F(588) F(787)
+
+Built-In+/External use  MIN                            Reference: F(277) F(589) F(788)
+
+Variable (set w/rexx)   mmm                            Assigned : 654 741
+Variable (in Stem Ref)  mmm                            Reference: 655 742
+
+Label (internal label)  ONELINESQL                     Defined  : 505
+Label (int. label ref)  ONELINESQL                     Reference: C(292) C(452) C(501) C(610)
+
+Variable (set w/rexx)   onelinesqlcode                 Assigned : 523
+Variable (used in/rexx) onelinesqlcode                 Reference: 525 531 537 541 556
+
+Variable (NEVER SET)    OPENDDDINDEX                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Ref)  OPENDDDINDEX                   Reference: 989
+
+Variable (set w/rexx)   openddindex                    Assigned : 962 1084
+Variable (used in/rexx) openddindex                    Reference: 965 1087
+Variable (in Stem Set)  openddindex                    Assigned : 971 985 999 1093
+Variable (in Stem Ref)  openddindex                    Reference: 965 968 984 986 999 1000 1087 1090 1106 1108
+
+Variable (set w/rexx)   openddname                     Assigned : 821
+Variable (used in/rexx) openddname                     Reference: 822 836 844 847 856 859
+Variable (in Stem Set)  openddname                     Assigned : 858 862
+Variable (in Stem Ref)  openddname                     Reference: 829
+
+Variable (set w/rexx)   opendds                        Assigned : 238 855
+Variable (used in/rexx) opendds                        Reference: 297 456 855 858 859
+Variable (in Stem Set)  opendds                        Assigned : 856 857
+
+Label (internal label)  OPENOUTPUTDD                   Defined  : 804
+Label (int. label ref)  OPENOUTPUTDD                   Reference: F(372) F(406) F(407)
+
+Variable (set w/rexx)   option                         Assigned : 1161
+Variable (used in/rexx) option                         Reference: 1164 1189 1194
+
+Variable (set w/rexx)   outputtext                     Assigned : 960 1012 1016 1082
+Variable (used in/rexx) outputtext                     Reference: 972 997 1006 1007 1012 1015 1016 1020 1094 1116
+
+Variable (set w/rexx)   passedargs                     Assigned : 1168 1179 1191
+Variable (used in/rexx) passedargs                     Reference: 1170 1181 1193
+
+Variable (set w/rexx)   pendingrc                      Assigned : 332 342 351 364 533 599 800 826 840 850 887 899 925 980 993 1010 1040 1102 1111
+                        ...                                       1135 1173 1184 1197
+Variable (used in/rexx) pendingrc                      Reference: 465 1009
+
+Variable (set w/rexx)   prbl                           Assigned : 586 777 779
+Variable (used in/rexx) prbl                           Reference: 588 589 591 784 787 788 790
+
+Label (internal label)  PRTSQLCA                       Defined  : 691
+Label (int. label ref)  PRTSQLCA                       Reference: C(500) C(679) C(684)
+
+SpecialVar(set no-XREF) rc                              *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(set w/ code) rc                             Assigned : 372 406 407 461
+SpecialVar(used w/rexx) rc                             Reference: 274 313 314 338 356 360 845 847 921 923 1035 1037 1130 1132
+
+Built-In+/External use  RIGHT                          Reference: F(274) F(280) F(282) F(493) F(592) F(594) F(791) F(793)
+
+Variable (set w/rexx)   rowsreturned                   Assigned : 484 488
+Variable (used in/rexx) rowsreturned                   Reference: 488 1240 1243
+
+Variable (NEVER SET)    ROWSRETURNEDC2                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ROWSRETURNEDC2                 Reference: 1258 1261
+
+Variable (set w/rexx)   rsql                           Assigned : 655 658 742 745
+Variable (used in/rexx) rsql                           Reference: 656 657 658 662 743 744 745 748
+
+Variable (set w/rexx)   rsql1                          Assigned : 657 744
+Variable (used in/rexx) rsql1                          Reference: 659 746
+
+Built-In+/External use  RXSUBCOM                       Reference: F(338)
+
+Label (internal label)  SAMPLE                         Defined  : 468
+Label (int. label ref)  SAMPLE                         Reference: C(410)
+
+Variable (set w/rexx)   samplecode                     Assigned : 398
+Variable (used in/rexx) samplecode                     Reference: 400
+
+Label (internal label)  SHOWROWCOUNT                   Defined  : 1231
+Label (int. label ref)  SHOWROWCOUNT                   Reference: C(498)
+
+Label (internal label)  SHOWROWCOUNT2                  Defined  : 1249
+Label (int. label ref)  SHOWROWCOUNT2                  Reference:
+
+SpecialVar(set no-XREF) SIGL                            *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SIGL                           Reference: 274 276 277 279 532 582 586 606 777 825 838 849 886 898 979 992 1005 1039 1101
+                        ...                                       1110 1134 1169 1180 1192 1205 1226 1227
+
+Built-In+/External use  SOURCELINE                     Reference: F(277) F(280) F(282) F(589) F(592) F(594) F(630) F(725) F(788) F(791) F(793)
+
+Label (internal label)  SQL                            Defined  : 1147
+Label (int. label ref)  SQL                            Reference: F(474) F(476) F(477) F(478) F(479)
+
+Variable (set w/rexx)   sql1                           Assigned : 1161
+Variable (used in/rexx) sql1                           Reference: 1162
+
+Variable (set w/rexx)   sql2                           Assigned : 1161
+Variable (used in/rexx) sql2                           Reference: 1162
+
+SpecialVar(set no-XREF) SQLCODE                         *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLCODE                        Reference: 485 487 499 538 541 559 679 684 753
+
+SpecialVar(set no-XREF) SQLERRMC                        *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLERRMC                       Reference: 560 754
+
+SpecialVar(set no-XREF) SQLERRP                         *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLERRP                        Reference: 561 755
+
+Variable (set w/rexx)   sqloption                      Assigned : 256
+Variable (used in/rexx) sqloption                      Reference: 540 614 680 685 1235 1253
+
+SpecialVar(set no-XREF) SQLSTATE                        *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLSTATE                       Reference: 580 774
+
+Variable (set w/rexx)   sqlstmt                        Assigned : 1209
+Variable (used in/rexx) sqlstmt                        Reference: 1211 1226
+Variable (in Stem Set)  sqlstmt                        Assigned : 1212
+
+Variable (set w/rexx)   sqlstmtline                    Assigned : 1210
+Variable (used in/rexx) sqlstmtline                    Reference: 1212
+
+Variable (set w/rexx)   sqlstmtvalue                   Assigned : 1187 1201
+Variable (used in/rexx) sqlstmtvalue                   Reference: 610 652 654 676 677 679 681 683 684 686 1206 1226
+Variable (in Stem Set)  sqlstmtvalue                   Assigned : 1204 1205 1211 1212 1227
+Variable (in Stem Ref)  sqlstmtvalue                   Reference: 618 627 628 636 645 646 655 673 674 1209
+
+Variable (set w/rexx)   ssid                           Assigned : 334
+Variable (used in/rexx) ssid                           Reference: 346 355 360 361
+
+Variable (NEVER SET)    STARTSQLCALLER                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  STARTSQLCALLER                 Assigned : 1205
+Variable (in Stem Ref)  STARTSQLCALLER                 Reference: 618 627 636 645 716 722 729 736
+
+Label (internal label)  STARTUP                        Defined  : 324
+Label (int. label ref)  STARTUP                        Reference: S(259)
+
+Variable (set w/rexx)   stmtcursornum                  Assigned : 707 708
+Variable (used in/rexx) stmtcursornum                  Reference: 711 739 741
+Variable (in Stem Ref)  stmtcursornum                  Reference: 716 722 723 729 736 737 742
+
+Built-In+/External use  STRIP                          Reference: F(331)
+
+Built-In+/External use  SUBSTR                         Reference: F(658) F(745) F(1007)
+
+Label (internal label)  SYNTAX                         Defined  : 269
+Label (int. label ref)  SYNTAX                         Reference:
+
+Built-In+/External use  SYNTAX (SIGNAL ON SYNTAX)      Reference: S(258)
+
+Variable (set w/rexx)   syntaxhigh                     Assigned : 277 589 788
+Variable (used in/rexx) syntaxhigh                     Reference: 278 280 282 590 592 594 789 791 793
+
+Variable (set w/rexx)   syntaxii                       Assigned : 278 590 789
+Variable (used in/rexx) syntaxii                       Reference: 279 280 282 591 592 594 790 791 793
+
+Variable (set w/rexx)   syntaxlow                      Assigned : 276 588 787
+Variable (used in/rexx) syntaxlow                      Reference: 278 590 789
+
+Variable (set w/rexx)   s_rc                           Assigned : 338
+Variable (NEVER USED)   s_rc                           No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   tablecreator                   Assigned : 490
+Variable (used in/rexx) tablecreator                   Reference: 490 493
+
+Variable (set w/rexx)   theargs                        Assigned : 330
+Variable (used in/rexx) theargs                        Reference: 331 334
+
+Variable (set w/rexx)   value                          Assigned : 1161
+Variable (used in/rexx) value                          Reference: 1166 1176 1182 1187
+Built-In+/External use  VALUE                          Reference: F(652) F(654) F(676) F(711) F(739) F(741) F(1206) F(1226)
+
+Built-In+/External use  WORD                           Reference: F(525)
+
+Variable (set w/rexx)   word1                          Assigned : 705
+Variable (used in/rexx) word1                          Reference: 706
+
+Variable (set w/rexx)   word2                          Assigned : 705
+Variable (NEVER USED)   word2                          No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   word3                          Assigned : 705
+Variable (NEVER USED)   word3                          No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  WRITE2DDFB80                   Defined  : 930
+Label (int. label ref)  WRITE2DDFB80                   Reference: F(495)
+
+Variable (set w/rexx)   write2ddname                   Assigned : 959 1081
+Variable (used in/rexx) write2ddname                   Reference: 963 966 977 989 1028 1037 1085 1088 1099 1123 1132
+Variable (in Stem Set)  write2ddname                   Assigned : 1020 1022 1033 1116 1117 1128
+Variable (in Stem Ref)  write2ddname                   Reference: 962 963 1018 1028 1084 1085 1115 1123
+
+Label (internal label)  WRITE2DDVB                     Defined  : 1051
+Label (int. label ref)  WRITE2DDVB                     Reference: F(494) F(541) F(623) F(624) F(626) F(631) F(634) F(635) F(641) F(642) F(644)
+                        ...                                       F(660) F(663) F(666) F(667) F(681) F(686) F(1238) F(1241) F(1244) F(1246)
+                        ...                                       F(1256) F(1259) F(1262) F(1264)
+
+Variable (NEVER SET)    WRITEDDNAME                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) WRITEDDNAME                    Reference: 1002
+Variable (in Stem Ref)  WRITEDDNAME                    Reference: 1024 1119
+
+Variable (set w/rexx)   x                              Assigned : 474 476 477 478 479 494 495 541 623 624 626 631 634 635 641 642 644 660 663 666
+                        ...                                       667 676 681 686 1206 1226 1238 1241 1244 1246 1256 1259 1262 1264
+Variable (NEVER USED)   x                              No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  ZSQL                           Defined  : 602
+Label (int. label ref)  ZSQL                           Reference: C(481)
+
+Variable (set w/rexx)   zsqlsigl                       Assigned : 606 688
+Variable (used in/rexx) zsqlsigl                       Reference: 616 714 776 779
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-2 BUFFERRECS.closeddname.0                  Reference: 919
+Stem-2 BUFFERRECS.ddname.0                       Reference: 311
+Stem-2 BUFFERRECS.openddname.0                   Assigned : 862
+Stem-2 BUFFERRECS.write2ddname.0                 Assigned : 1022 1033 1117 1128
+Stem-2 BUFFERRECS.write2ddname.0                 Reference: 1018 1028 1115 1123
+Stem-2 BUFFERRECS.write2ddname.bufferrecs        Assigned : 1020 1116
+Stem-2 BUFFERRECS.WRITEDDNAME.0                  Reference: 1024 1119
+
+Stem-1 OPENDDINDEX.                              Assigned : 250
+Stem-1 OPENDDINDEX.closeddname                   Reference: 891 892
+Stem-1 OPENDDINDEX.openddname                    Assigned : 858
+Stem-1 OPENDDINDEX.openddname                    Reference: 829
+Stem-1 OPENDDINDEX.write2ddname                  Reference: 962 963 1084 1085
+
+Stem-1 OPENDDLRECL.                              Assigned : 251
+Stem-1 OPENDDLRECL.i                             Reference: 303 306 910 913
+Stem-1 OPENDDLRECL.OPENDDDINDEX                  Reference: 989
+Stem-1 OPENDDLRECL.openddindex                   Assigned : 985
+Stem-1 OPENDDLRECL.openddindex                   Reference: 984 986 1106 1108
+
+Stem-1 OPENDDOVERFLOW.                           Assigned : 252
+Stem-1 OPENDDOVERFLOW.i                          Reference: 307 308 914 915
+Stem-1 OPENDDOVERFLOW.openddindex                Assigned : 999
+Stem-1 OPENDDOVERFLOW.openddindex                Reference: 999
+
+Stem-1 OPENDDOVERLOW.openddindex                 Reference: 1000
+
+Stem-1 OPENDDS.                                  Assigned : 248
+Stem-1 OPENDDS.i                                 Assigned : 462
+Stem-1 OPENDDS.i                                 Reference: 298 457
+Stem-1 OPENDDS.opendds                           Assigned : 856
+
+Stem-1 OPENDDSSTATUS.                            Assigned : 249
+Stem-1 OPENDDSSTATUS.i                           Assigned : 907
+Stem-1 OPENDDSSTATUS.i                           Reference: 300 459 833 903
+Stem-1 OPENDDSSTATUS.openddindex                 Assigned : 971 1093
+Stem-1 OPENDDSSTATUS.openddindex                 Reference: 965 968 1087 1090
+Stem-1 OPENDDSSTATUS.opendds                     Assigned : 857
+
+Stem-1 SQLERRD.#                                  *Special: Assigned via an ADDR env cmd and/or REXX itself
+Stem-1 SQLERRD.#                                 Reference: 562 756
+
+Stem-2 SQLSTMT.sqlstmtvalue.0                    Assigned : 1204 1211
+Stem-2 SQLSTMT.sqlstmtvalue.0                    Reference: 673 1209
+Stem-2 SQLSTMT.sqlstmtvalue.iii                  Reference: 674
+Stem-2 SQLSTMT.sqlstmtvalue.LASTSQLCALLER        Assigned : 1227
+Stem-2 SQLSTMT.sqlstmtvalue.LASTSQLCALLER        Reference: 618 628 636 646
+Stem-2 SQLSTMT.sqlstmtvalue.mmm                  Reference: 655
+Stem-2 SQLSTMT.sqlstmtvalue.sqlstmt              Assigned : 1212
+Stem-2 SQLSTMT.sqlstmtvalue.STARTSQLCALLER       Assigned : 1205
+Stem-2 SQLSTMT.sqlstmtvalue.STARTSQLCALLER       Reference: 618 627 636 645
+Stem-2 SQLSTMT.stmtcursornum.LASTSQLCALLER       Reference: 716 723 729 737
+Stem-2 SQLSTMT.stmtcursornum.mmm                 Reference: 742
+Stem-2 SQLSTMT.stmtcursornum.STARTSQLCALLER      Reference: 716 722 729 736
+
+Stem-1 SQLWARN.#                                  *Special: Assigned via an ADDR env cmd and/or REXX itself
+Stem-1 SQLWARN.#                                 Reference: 569 763
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

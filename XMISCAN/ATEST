@@ -1,0 +1,77 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.REXX(ATEST)"      */
+/*      ------------------       */
+/*  date/time of XREF was:       */
+/*     20231221 10:59:20         */
+/*      ------------------       */
+
+/* rexx */
+trace r
+x.3 = 'Whats up'
+address ('TSO') x
+say     ('TSO') x
+say address()
+address /* with no operands, reverts to prior address envir */
+say address()
+address '     TSO'
+say address()
+address ' ' 'EXECIO * DISKR WHAT(STEM X.FINIS'
+say address()
+address ' '
+say address()
+'EXECIO * DISKR WHAT(STEM X.FINIS'
+address'40e3e2d6'x
+say address()
+address'40e3e2d640d6'x
+say address()
+address'e3e2d6'x
+say address()
+address 'TSO  TSO'
+say address()
+address TSO12345
+say address()
+address 'TSO TSO1'
+say address()
+address TSO 'EXECIO * DISKR WHAT (STEM X. FINIS'
+address TSO'EXECIO * DISKR WHAT (STEM X. FINIS'
+address '    TSO' 'EXECIO * DISKR WHAT (STEM X. FINIS'
+address rc
+say address()
+address x.3
+say address()
+address'e3e2d6'x 'EXECIO  * DISKR WHAT (STEM X. FINIS'
+address'TSOXABCD'EXECIO '* DISKR WHAT (STEM X. FINIS'
+address'TSO'EXECIO '* DISKR WHAT (STEM X. FINIS'
+address'VALUE T'
+say address()
+'EXECIO * DISKR WHAT (STEM X. FINIS'
+address /* with no operands, reverts to prior address envir */
+'EXECIO * DISKR WHAT (STEM X. FINIS'
+if 1 = 1
+then'EXECIO * DISKR WHAT (STEM X. FINIS'
+address'TSOX'
+'EXECIO * DISKR WHAT (STEM X. FINIS'
+address'TSOX'EXECIO '* DISKR WHAT (STEM X. FINIS'
+address +-32
+address'TSOX' 1/1
+address'TSOX'11/1
+address'TSO'
+'EXECIO * DISKR WHAT (STEM X. FINIS'
+say address()
+
+if a = b
+then do
+   end = 'what nonsense'
+end more nonsense that should be ignored /* if true, this is a run time error, if false... it's ok */
+if a = a
+then do
+   end = 'what nonsense'
+end more nonsense that should be ignored /* if true, this is a run time error, if false... it's ok */
+
+/* following will error out at runtime (only) when length(expression) > 8 characters */
+a: b: c: address/* 'some comment' /* 'why*/ */ VALUE /*whyme*/ TSO3 'EXECIO * DISKR WHAT (STEM X. FINIS'
+
+address VALUE TSO3 'EXECIO * DISKR WHAT (STEM X. FINIS' /* this only errors out at runtime */

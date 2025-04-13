@@ -1,0 +1,19 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.REXX(STRANGE)"      */
+/*      --------------------       */
+/*  date/time of XREF was:         */
+/*     20231217 23:03:54           */
+/*      --------------------       */
+
+/* rexx */
+do i = 1 to 10
+   say i
+end
+address 'TSOLONGGGGG' do something strange
+address value (+STRANGE do something strange
+address '(+STRANGE' do something strange
+address  TSO        do something strange
+address 'TSO'       do something strange

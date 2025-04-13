@@ -1,0 +1,374 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(IDMDPRT2)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(IDMDPRT2)
+   -----------------------------------------
+
+READY
+    IDMDPRT2
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRCICDS.AFO340.RKANCMD(IDMDPRT2)"      */
+    Generated scan code/comment:   /*      ---------------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                      */
+    Generated scan code/comment:   /*     20231217 23:07:51                        */
+    Generated scan code/comment:   /*      ---------------------------------       */
+     1 *-* /*   REXX   --------------- IDMTSTPR -------------- */
+     2 *-* /* DOC GROUP(AO)       FUNC(IDMSOPER ) CODE(XX)     */
+     3 *-* /* DOC AUTHOR(SFR609)                               */
+     4 *-* /* DOC DESC(RESPONSE TO IDMDOC15 FOR PRINTER)       */
+     5 *-* /* ------------------------------------------------ */
+     6 *-* /*   SIGNON AND DO                                  */
+     7 *-* /*        DCMT D REP                                */
+     8 *-* /* ------------------------------------------------ */
+     9 *-* /*  M O D I F I C A T I O N   L O G                 */
+    10 *-* /* DATE    WHO               WHAT                   */
+    11 *-* /* 5/12/03  EARL             MADE CHANGES TO RUN IN AF/OPERATOR */
+    12 *-* /*                            SIGNON ONE TIME AND DO THE STARTS */
+    13 *-* /*                                                        */
+    14 *-* /*  03/15/10 EARL             UPGRADING TO V16            */
+    15 *-* /*                            CV NAME IDMDOC16            */
+    16 *-* /*                                                        */
+    17 *-* /*                    TEXT CHANGED                        */
+    18 *-* /*        "NEXT TASK CODE:        CA-IDMS RELEASE 16.0 NODE SYST0150"*/
+    19 *-* /*                                                        */
+    20 *-* /* 04/05/11   EARL  UPGRADED IDMDOC V17                   */
+    21 *-* /*                                                        */
+    22 *-* /* 03/17/14   EARL  UPGRADED IDMDOC V18.5                 */
+    23 *-* /*                                                        */
+    24 *-* /*                                                        */
+    25 *-* /* 10/22/15   EARL           STORING USE IDMS PASS IN HEX        */
+    26 *-* /*                           ADDING CODE TO EXTRACT CORRRECTLY   */
+    27 *-* /*                                                               */
+    28 *-* /* 02/10/22   R.Humphris  1. add code to look at transactions    */
+    29 *-* /*                  that are running.  We might actually monitor */
+    30 *-* /*                        2. just general cleanup of Chris's code*/
+    31 *-* /*                  so that it reads a bit better.               */
+    32 *-* /*                                                               */
+    33 *-* /* ------------------------------------------------ */
+    35 *-* /* TRACE I  */
+    37 *-* ADDRESS AFHOST
+    40 *-* ISUP = ACTIVE(IDMDOC18)
+    42 *-* IF  ISUP = 0
+    43 *-*  then
+       *-*  do
+    44 *-*   call ERROR_RTN '!!!@@@ IDMS CV NOT ACTIVE ' || 'IDMDOC18'
+    45 *-*   exit 33
+    46 *-*  END /* END OF ISUP  */
+    49 *-*  /* get logon password */
+    50 *-* "ALLOC DD(PASWORD) DSN('SFRDBMDT.IDMS.SECURITY(IDMSPASX)') SHR "
+    51 *-* ADDRESS MVS "EXECIO * DISKR PASWORD (FINIS STEM TOKENX.)"
+    52 *-* "FREE F(PASWORD)"
+    53 *-* if tokenx.0 = 0
+    54 *-*  then
+       *-*  do
+    55 *-*   call error_rtn 'No password available, erroring out'
+    56 *-*   exit 33
+    57 *-*  end
+    59 *-* parse var tokenx.1 toknx . /* get first word partial password */
+    60 *-* pass = X2C(toknx) /* convert hex to readable password */
+    61 *-* UidPass = "IDMS " || pass /* add password prefix      */
+    64 *-* /* ---------- */
+    65 *-* /* signon now */
+    66 *-* /* ---------- */
+    67 *-* "EXEC IDMSOPER 'IDMDOC18 99SIGNON "UidPass"'"
+    68 *-* IF RC ¬= 0
+    69 *-*  then
+       *-*  do
+    70 *-*   call ERROR_RTN 'BAD RETURN ON SIGNON IDMDOC18 MAY NOT BE ACTIVE.'
+    71 *-*   exit 33
+    72 *-*  END   /*  END OF RC CHECK  */
+    74 *-*  /* ----------------------------------------- */
+    75 *-*  /* enter command to look at reports/printers */
+    76 *-*  /* ----------------------------------------- */
+    77 *-* "EXEC IDMSOPER 'IDMDOC18 99DCMT D REPORTS'"
+    78 *-* IF RC ¬= 0
+    79 *-*  then
+       *-*  do
+    80 *-*   call ERROR_RTN 'BAD RETURN ON DCMT D REPORTS'
+    81 *-*   exit 33
+    82 *-*  END   /*  END OF RC CHECK  */
+    84 *-*  /* ------------------------------------------------- */
+    85 *-*  /* look at response to see if we need to take action */
+    86 *-*  /* ------------------------------------------------- */
+    88 *-* x = 'GLBVGET'('LINE#')
+    89 *-* do responseLine = 1 by 1 while responseLine <= line#
+    90 *-*  /* ------------------------------------- */
+    91 *-*  /* find header line (1st word = CL/DEST) */
+    92 *-*  /* ------------------------------------- */
+    94 *-*  /* have a line we need to look at */
+    95 *-*  x = GLBVGET("LINE"responseLine)     /* get variable LINEn */
+    96 *-*  lineInfo = value("Line"responseLine) /* set lineInfo to LINEn */
+    97 *-*  parse var lineInfo dest .
+    98 *-*  if dest = 'CL/DEST'
+    99 *-*   then
+       *-*   leave
+   100 *-* end
+   102 *-* /* ------------------------------------- */
+   103 *-* /* process detail lines with print info  */
+   104 *-* /* ------------------------------------- */
+   105 *-* pendingError = 0 /* did any printer fail to start ? */
+   106 *-* printer      = 0 /* did we have to start a printer? */
+   107 *-* DO responseLine = responseLine + 1 by 1 while responseLine <= line#
+   109 *-*  /* have a line we need to look at */
+   110 *-*  x = GLBVGET("LINE"responseLine)     /* get variable LINEn */
+   111 *-*  lineInfo = value("Line"responseLine) /* set lineInfo to LINEn */
+   112 *-*  parse var lineInfo dest .
+   113 *-*  /*  IF WORDS =  " ENTER NEXT TASK CODE:" THEN */
+   114 *-*  if dest =  "ENTER"
+   115 *-*   then
+       *-*   leave
+   117 *-*  printer = printer + 1
+   118 *-*  dest.printer = dest /* remember which dest(s) need to be started */
+   119 *-* end
+   121 *-* /* ----------------------------------- */
+   122 *-* /* start all printers that have output */
+   123 *-* /* ----------------------------------- */
+   124 *-* printer.0 = printer
+   125 *-* do printer = 1 by 1 for printer.0
+   126 *-*  "WAIT SECONDS(8)"
+   127 *-*  "EXEC      IDMSOPER 'IDMDOC18 99DCMT V PRINTER" dest.printer "START'"
+   128 *-*  IF RC ¬= 0
+       *-*   THEN
+       *-*   DO
+   129 *-*    call error_rtn 'BAD RETURN ON DCMT V PRINTER' dest.printer "START"
+   130 *-*    pendingError = pendingError + 1
+   131 *-*   END /* END OF RC CHECK */
+   132 *-* end
+   134 *-* /* ----------------- */
+   135 *-* /* now we can logoff */
+   136 *-* /* ----------------- */
+   137 *-* "WAIT SECONDS(10)"
+   138 *-* "EXEC IDMSOPER 'IDMDOC18 99SIGNOFF'"
+   140 *-* /* -------------- */
+   141 *-* /* give us status */
+   142 *-* /* -------------- */
+   143 *-* if printer.0 = 0
+   144 *-*  then
+       *-*  do
+   145 *-*   SAY 'NO REPORTS QUEUED'
+   146 *-*  END  /* END OF JUST SAY NO */
+   147 *-* else
+       *-*  if printer.0 > 0 & pendingError = 0
+   148 *-*   then
+       *-*   say 'Successfully started' printer.0 'printers'
+   149 *-*  else
+       *-*   if printer.0 > 0 & printer.0 = pendingError
+   150 *-*    then
+       *-*    say 'Tried to start' printer.0 'printers, but start cmds failed'
+   151 *-*   else
+       *-*    do
+   152 *-*     startedPrinters = printer.0 - pendingError
+   153 *-*     say 'Successfully started' startedPrinters 'printers out of' printer.0 ,            'start printer commands'
+   155 *-*    end
+   157 *-* EXIT 0
+   159 *-* ERROR_RTN:
+   160 *-* parse arg msg /* get message to send */
+   161 *-* SAY MSG
+   162 *-* return
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Built-In+/External use  'GLBVGET'                Reference: F(88)
+
+Built-In+/External use  ACTIVE                   Reference: F(40)
+
+Address Envir.Constant: ADDRESS 'AFHOST'         Reference: 37
+
+Address Envir.Constant: ADDRESS 'MVS' <cmd>      Reference: 51
+
+Variable (set w/rexx)   dest                     Assigned : 97 112
+Variable (used in/rexx) dest                     Reference: 98 114 118
+
+Label (internal label)  ERROR_RTN                Defined  : 159
+Label (int. label ref)  ERROR_RTN                Reference: C(44) C(55) C(70) C(80) C(129)
+
+Built-In+/External use  GLBVGET                  Reference: F(95) F(110)
+
+Variable (NEVER SET)    IDMDOC18                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) IDMDOC18                 Reference: 40
+
+Variable (set w/rexx)   isup                     Assigned : 40
+Variable (used in/rexx) isup                     Reference: 42
+
+Variable (NEVER SET)    LINE#                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) LINE#                    Reference: 89 107
+
+Variable (set w/rexx)   lineinfo                 Assigned : 96 111
+Variable (used in/rexx) lineinfo                 Reference: 97 112
+
+Variable (set w/rexx)   msg                      Assigned : 160
+Variable (used in/rexx) msg                      Reference: 161
+
+Variable (set w/rexx)   pass                     Assigned : 60
+Variable (used in/rexx) pass                     Reference: 61
+
+Variable (set w/rexx)   pendingerror             Assigned : 105 130
+Variable (used in/rexx) pendingerror             Reference: 130 147 149 152
+
+Variable (set w/rexx)   printer                  Assigned : 106 117 125
+Variable (used in/rexx) printer                  Reference: 117 124
+Variable (in Stem Set)  printer                  Assigned : 118
+Variable (in Stem Ref)  printer                  Reference: 127 129
+
+SpecialVar(set no-XREF) RC                        *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RC                       Reference: 68 78 128
+
+Variable (set w/rexx)   responseline             Assigned : 89 107
+Variable (used in/rexx) responseline             Reference: 89 95 96 107 110 111
+
+Variable (set w/rexx)   startedprinters          Assigned : 152
+Variable (used in/rexx) startedprinters          Reference: 153
+
+Variable (set w/rexx)   toknx                    Assigned : 59
+Variable (used in/rexx) toknx                    Reference: 60
+
+Variable (set w/rexx)   uidpass                  Assigned : 61
+Variable (used in/rexx) uidpass                  Reference: 67
+
+Built-In+/External use  VALUE                    Reference: F(96) F(111)
+
+Variable (set w/rexx)   x                        Assigned : 88 95 110
+Variable (NEVER USED)   x                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Built-In+/External use  X2C                      Reference: F(60)
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 DEST.printer      Assigned : 118
+Stem-1 DEST.printer      Reference: 127 129
+
+Stem-1 PRINTER.0         Assigned : 124
+Stem-1 PRINTER.0         Reference: 125 143 147 148 149 150 152 153
+
+Stem-1 TOKENX.#          Reference: 59
+Stem-1 TOKENX.0          Reference: 53
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

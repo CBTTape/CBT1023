@@ -1,0 +1,2519 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(GENREVKE)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(GENREVKE)
+   -----------------------------------------
+
+READY
+    GENREVKE
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.CNTL.RACFDB2(GENREVKE)"      */
+    Generated scan code/comment:   /*      -----------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                  */
+    Generated scan code/comment:   /*     20231217 23:05:59                    */
+    Generated scan code/comment:   /*      -----------------------------       */
+     1 *-* /*Rexx*/
+     2 *-* /*  look at racf information to find dead users */
+     3 *-* /*     build revoke commands (to rid us of dead users */
+     4 *-* /*  */
+     5 *-* /*                                                    */
+     6 *-* /* -------------------------------------------------- */
+     7 *-* /*   change1-(part a)                                 */
+     8 *-* /*-Will try to reorder privs to be revoked... so that */
+     9 *-* /* revoke ADMIN = ADMIN and NONADMIN.                 */
+    10 *-* /* ... see GENREVK@ for prior code.                   */
+    11 *-* /*-This means ADMIN or NONADMIN have the same function*/
+    12 *-* /*                                                    */
+    13 *-* /*   change1-(part b)                                 */
+    14 *-* /*-For revoking package priv... if "*" is specified   */
+    15 *-* /* in the "name"... then comment out explicit names   */
+    16 *-* /* if specified for same grantee.                     */
+    17 *-* /*                                                    */
+    18 *-* /* -------------------------------------------------- */
+    19 *-* /*                                                    */
+    20 *-* /* invoke with:                                       */
+    21 *-* /*    GENREVKE ssid ADMIN                             */
+    22 *-* /* or GENREVKE ssid NONADMIN                          */
+    23 *-* /*                                                    */
+    24 *-* /*    (see change1-(part a)... admin/nonadmin are     */
+    25 *-* /* now the same.                                      */
+    26 *-* /*    Too  difficult to predict what other privs      */
+    27 *-* /* when we revoke SYSADM or DBADM ... so after the    */
+    28 *-* /* ADMIN invokation is make (and all those privs have */
+    29 *-* /* been revoked.... then you can call this again      */
+    30 *-* /* with the NONADMIN option to generate more revokes. */
+    31 *-* /*                                                    */
+    32 *-* /*  */
+    33 *-* /*  */
+    34 *-* Arg ssid adminOption .
+    35 *-* if wordpos(ssid,'DSN0 DSN1 DSN2 DSN5 DSN6 DSNQ) = 0                     then do
+                           say 'illegal ssid specified was "'ssid'" aborting now'                  exit 8
+                                     end                                                                     if wordpos(adminOption
+,'ADMIN NONADMIN) = 0
+    41 *-*  then
+       *-*  do
+    42 *-*   say 'ADMIN or NONADMIN was not specified'
+    43 *-*   say 'found "'adminOption'" instead, aborting now'
+    44 *-*   exit 8
+    45 *-*  end
+    47 *-*  /* Set addressability to DB2 Rexx function */
+    48 *-* ADDRESS TSO "SUBCOM DSNREXX"
+    49 *-* If RC = 1
+       *-*  Then
+       *-*  S_RC = RXSUBCOM('ADD','DSNREXX','DSNREXX')
+    50 *-* Else
+       *-*  Do
+    51 *-*   Say 'Can not access DB2 Rexx Function.  Ending...'
+    52 *-*   Exit
+    53 *-*  End
+    55 *-* /* read in our RACF summary */
+    56 *-* address TSO 'EXECIO 100 DISKR RACFSMRY (STEM RACFSMRY.'
+    57 *-* if rc <> 0
+    58 *-*  then
+       *-*  do
+    59 *-*   say 'RACFSMRY dd not available; rc='rc
+    60 *-*   say 'we will just exit now with rc=8'
+    61 *-*   address tso 'EXECIO 0 DISKR RACFSMRY (FINIS'
+    62 *-*   exit 8
+    63 *-*  end
+    64 *-* cntPermit = 0
+    65 *-* cntPermitClass. = ''
+    66 *-* cntPermitObs. = 0
+    67 *-* cntPermitIndex. = 0
+    69 *-* racfsmryRc = 0
+    70 *-* racfsmry = 0 /* logical ptr into the RACFSMRY. buffer */
+    71 *-* group = 0
+    72 *-* groupIndx. = 0
+    73 *-* groupName. = ''
+    74 *-* groupDesc. = ''
+    75 *-* groupRef.  = 0
+    76 *-* userid = 0
+    77 *-* useridIndx. = 0
+    78 *-* userId.   = ''
+    79 *-* userRef.  = 0
+    80 *-* dateS = date('s')
+    81 *-* parse var dateS 1 yyyy 5 mm 7 dd
+    82 *-* currentDate = yyyy'-'mm'-'dd
+    83 *-* /* table info */
+    84 *-* rphTable = 0
+    85 *-* rphtable. = ''            /* .# = creator.tablename */
+    86 *-* rphTableIndx. = 0         /* .creator.tablename = # */
+    87 *-* rphTableCreator = 0
+    88 *-* rphTableCreator. = ''     /* .#       = creator */
+    89 *-* rphTableCreatorIndx. = 0  /* .creator = list of table numbers*/
+    90 *-* rphTablePriv. = ''   /* .tableindx = list of userids */
+    91 *-* rphTableWGrant. = '' /* .tableindx = list of userids */
+    92 *-* /* end table info */
+    93 *-* do forever /* process all logical recs in RACFSMRY. buffers */
+    94 *-*  racfsmry = racfsmry + 1 /* get next logical record */
+    95 *-*  if racfsmry > racfsmry.0 /* need another buffer? */
+    96 *-*   then
+       *-*   do /* yes, get another buffer */
+    97 *-*    if racfsmryRc <> 0
+    98 *-*     then
+       *-*     leave /* either we working on last buffer, or bad rc */
+    99 *-*    address tso 'EXECIO 100 DISKR RACFSMRY (STEM RACFSMRY.'
+   100 *-*    racfsmryRc = rc
+   101 *-*    racfsmry = 0 /* reset logical buffer pointer */
+   102 *-*    iterate
+   103 *-*   end
+   104 *-*   /* we have a good racfsmry pointer into the buffer */
+   105 *-*  parse var racfsmry.racfsmry ,                                              1 racftype ,
+                            5 .
+   108 *-*  if racftype = '0100' /* we need to look at a racf group */
+   109 *-*   then
+       *-*   do
+   110 *-*    parse var racfsmry.racfsmry ,                                              . /* ignore first word, it's 0100 */ ,
+                              groupName superGrpName createDate groupOwner groupUacc . ,              58 groupDesc 313 . 314 groupM
+odel groupUniversal .
+   114 *-*    if groupIndx.groupname = 0 /* they are all unique, but check */
+   115 *-*     then
+       *-*     do /* unknown, add to rexx stems */
+   117 *-*      /* now remember some information about the group */
+   118 *-*      group = group + 1 /* it's a new group */
+   119 *-*      groupIndx.groupName = group /* update index, to find us */
+   120 *-*      groupName.group = groupName /* name saved in index, and in ta*/
+   121 *-*      /* save details, in case we want to know later */
+   122 *-*      superGrpName.group = SuperGrpname
+   123 *-*      groupCreateDate.group = createDate
+   124 *-*      groupOwner.group      = groupOwner
+   125 *-*      groupUacc.group       = groupUacc
+   126 *-*      groupDesc.group       = strip(groupDesc)
+   127 *-*      groupModel.group      = strip(groupModel)
+   128 *-*      groupUniversal.group  = groupUniversal
+   129 *-*      groupMembers.group    = ''
+   130 *-*      groupMembersStatus.group = ''
+   131 *-*     end
+   132 *-*    else
+       *-*     nop /* this will never happen, just documenting */
+   133 *-*   end
+   135 *-*  else
+       *-*   if racftype = '0200' /* we are looking at a user record */
+   136 *-*    then
+       *-*    do /* handle type 0200 "user basic data record (0200)   */
+   137 *-*     /* these are really big... here we will just ignore a lot */
+   138 *-*     /* of the 0200 record                                     */
+   139 *-*     parse var racfsmry.racfsmry ,                                              . /* ignore first word, it's 0200 */ ,
+                               racfUserid ,                                                            userCreateDate ,
+                                            UseridOwner    ,                                                        . /* let's igno
+re stuff for a while */ ,                                50 revoke ,                                                             54
+ . /* ignore some more */ ,                                           75 usersName ,
+           96 UsersDefaultGroup ,                                                 105 UsersLastTime ,
+                           UsersLastDate ,                                                     124 . /* ignore some more */ ,
+                                    458 usersRevokeDate ,                                                   469 usersResumedate ,
+                                                 480 .
+   155 *-*     if racfUserid = 'DBAJOB'
+   156 *-*      then
+       *-*      trace 'i'
+   157 *-*     else
+       *-*      trace 'n'
+   159 *-*     /* according to RACF, revoke setting is meaningless */
+   160 *-*     /* ... and dates are what is important.             */
+   161 *-*     if      usersRevokeDate = ''
+   162 *-*      then
+       *-*      revoke = 'No' /* no revoke date = no revoke */
+   165 *-*     else
+       *-*      if usersResumeDate = '' /* no intention to resume */
+   166 *-*       then
+       *-*       do /* either Revoke "pending" or Revoked "now"   */
+   167 *-*        if currentDate < usersRevokeDate
+   168 *-*         then
+       *-*         revoke = 'Pending'
+   169 *-*        else
+       *-*         revoke = 'Yes'
+   170 *-*       end
+   172 *-*      else
+       *-*       do
+   173 *-*        /* dates are NOT null, figure it out */
+   175 *-*        /* we have two dates (revoke and resume) */
+   176 *-*        if currentDate >= usersResumedate
+   177 *-*         then
+       *-*         ResumeNow = 1 /* resume time has come */
+   178 *-*        else
+       *-*         ResumeNow = 0 /* ... not yet          */
+   180 *-*        if currentDate >= usersRevokeDate
+   181 *-*         then
+       *-*         RevokeNow = 1 /* revoke time has come */
+   182 *-*        else
+       *-*         revokeNow = 0 /* ...not yet           */
+   184 *-*        /* check resumedNow and RevokeNow and dates */
+   185 *-*        /* ---------------------------------------- */
+   186 *-*        if revokeNow = 0        /* revoke in future? */
+   187 *-*         then
+       *-*         revoke = 'Pending' /* yes, revoke is pending */
+   189 *-*        else
+       *-*         if revokeNow = 1 ,  /* revoke now            */                          & resumeNow = 0    /* but resume in fut
+ure? */
+   191 *-*          then
+       *-*          revoke = 'Yes'      /* ...yeah, we're revoked*/
+   193 *-*         else
+       *-*          do /* revokeNow = 1 and resumeNow = 1*/
+   194 *-*           /* time to revoke or resume user, check dates */
+   195 *-*           if usersResumeDate > usersRevokeDate
+   196 *-*            then
+       *-*            revoke = 'No' /* resumed... (revoke meaningless)*/
+   197 *-*           else
+       *-*            revoke = 'Yes'/* revoked... (resume meaningless)*/
+   198 *-*          end
+   200 *-*       end
+   201 *-*     /* revoke has been set to "Yes", "No" or "Pending" */
+   203 *-*     /* now remember some information about the user */
+   204 *-*     userid = userid + 1
+   205 *-*     useridIndx.racfUserid = userid
+   206 *-*     userid.userid = racfUserid
+   207 *-*     revoked.userid= revoke
+   208 *-*     usersName.userid = usersName
+   209 *-*     usersDGroup.userid = usersDefaultGroup
+   210 *-*     usersGroups.userid = 0  /* collect user groups with 0205's*/
+   211 *-*    end
+   213 *-*   else
+       *-*    if racftype = '0205' /* looking at user (group) connect */
+   214 *-*     then
+       *-*     do
+   215 *-*      /* these are really big... here we will just ignore a lot */
+   216 *-*      /* of the 0200 record                                     */
+   217 *-*      parse var racfsmry.racfsmry ,                                              . /* ignore first word, it's 0200 */ ,
+                                racfUserid ,                                                            racfGroup ,
+                                             racfConnectedDate ,                                                     racfGroupOwner
+ ,                                                        . ,                                                                     r
+acfLastConnectDate ,                                                   . ,
+            109 . ,                                                                 racfGroupRevokeDate ,
+                         racfGroupResumeDate ,                                                   .
+   231 *-*      uidx = useridIndx.racfUserid
+   232 *-*      /* according to RACF, revoke setting is meaningless */
+   233 *-*      /* ... and dates are what is important.             */
+   234 *-*      if      racfGroupRevokeDate = ''
+   235 *-*       then
+       *-*       revoke = 'No' /* no revoke date = no revoke */
+   238 *-*      else
+       *-*       if racfGroupResumeDate = '' /* no intention to resume */
+   239 *-*        then
+       *-*        do /* either Revoke "pending" or Revoked "now"   */
+   240 *-*         if currentDate < racfGroupRevokeDate
+   241 *-*          then
+       *-*          revoke = 'Pending'
+   242 *-*         else
+       *-*          revoke = 'Yes'
+   243 *-*        end
+   245 *-*       else
+       *-*        do
+   246 *-*         /* dates are NOT null, figure it out */
+   248 *-*         /* we have two dates (revoke and resume) */
+   249 *-*         if currentDate >= racfGroupResumeDate
+   250 *-*          then
+       *-*          ResumeNow = 1 /* resume time has come */
+   251 *-*         else
+       *-*          ResumeNow = 0 /* ... not yet          */
+   253 *-*         if currentDate >= racfGroupRevokeDate
+   254 *-*          then
+       *-*          RevokeNow = 1 /* revoke time has come */
+   255 *-*         else
+       *-*          revokeNow = 0 /* ...not yet           */
+   257 *-*         /* check resumedNow and RevokeNow and dates */
+   258 *-*         /* ---------------------------------------- */
+   259 *-*         if revokeNow = 0        /* revoke in future? */
+   260 *-*          then
+       *-*          revoke = 'Pending' /* yes, revoke is pending */
+   262 *-*         else
+       *-*          if revokeNow = 1 ,  /* revoke now            */                          & resumeNow = 0    /* but resume in fu
+ture? */
+   264 *-*           then
+       *-*           revoke = 'Yes'      /* ...yeah, we're revoked*/
+   266 *-*          else
+       *-*           do /* revokeNow = 1 and resumeNow = 1*/
+   267 *-*            /* time to revoke or resume user, check dates */
+   268 *-*            if racfGroupResumeDate > racfGroupRevokeDate
+   269 *-*             then
+       *-*             revoke = 'No' /* resumed... (revoke meaningless)*/
+   270 *-*            else
+       *-*             revoke = 'Yes'/* revoked... (resume meaningless)*/
+   271 *-*           end
+   273 *-*        end
+   274 *-*      /* revoke has been set to "Yes", "No" or "Pending" */
+   276 *-*      /* now add user to this group */
+   277 *-*      groupIndx = groupIndx.racfGroup /* find index to group */
+   278 *-*      if groupIndx <> 0
+   279 *-*       then
+       *-*       do /* if group exists, add member info */
+   280 *-*        groupMembers.groupIndx = groupMembers.GroupIndx racfUserid
+   281 *-*        groupMembersStatus.groupIndx = ,                                                               groupMembersStatus
+.groupIndx revoke
+   283 *-*       end
+   284 *-*     end
+   285 *-* end
+   287 *-* if racfsmryRc <> 2
+   288 *-*  then
+       *-*  do
+   289 *-*   say 'EXECIO to read from RACFSMRY failed with rc='rc
+   290 *-*   say 'will exit rc=8'
+   291 *-*   address 'TSO' 'EXECIO 0 DISKR RACFSMRY (FINIS'
+   292 *-*   exit 8
+   293 *-*  end
+   294 *-* address 'TSO' 'EXECIO 0 DISKR RACFSMRY (FINIS'
+   295 *-* userid.0 = userid
+   296 *-* say 'userid = 'userid
+   297 *-* say 'group  = 'group
+   299 *-* ADDRESS DSNREXX
+   300 *-* "CONNECT "ssid
+   302 *-* /* create exclude list */
+   303 *-* exclude. = 0 /* default, don't exclude anyone */
+   304 *-* exclude  = 0 /* list of userid's to exclude */
+   305 *-* excludeIndx. = 0 /* default, don't exclude anyone */
+   306 *-* replace.     = ''/* default, replace group */
+   307 *-* deleteId.    = 0 /* default, don't delete anyone */
+   308 *-* /* DB2ENGNR is a sysadm with these userids ??? */
+   309 *-* address 'TSO' 'EXECIO * DISKR EXCLIST (OPEN FINIS STEM EXCLIST.'
+   310 *-* if rc <> 0
+   311 *-*  then
+       *-*  exclist.0 = 0
+   312 *-* do exclist = 1 by 1 for exclist.0
+   313 *-*  parse var exclist.exclist word1 .
+   314 *-*  if word1 = ''
+       *-*   then
+       *-*   iterate
+   315 *-*  if left(word1,1) = '*' | left(word1,2) = '/*'
+       *-*   then
+       *-*   iterate
+   316 *-*  x = addExclude(strip(exclist.exclist))
+   317 *-*  /* examples:                                                              x = addExclude('SFR609  *DELETE') /* exclude
+list: delete SFR609 */     x = addExclude('KEA406  DWS000MT') /*exclude list: replace KEA406*/   */
+   321 *-* end
+   323 *-* databaseOwner. = 'DBAGROUP'      /* make almost all databases DBAGROUP*/
+   324 *-* databaseOwner.DSNDB01 = 'DB2ENGNR'  /* ...except for these */
+   325 *-* databaseOwner.DSNDB04 = 'DB2ENGNR'  /* ...except for these */
+   326 *-* databaseOwner.DSNDB06 = 'DB2ENGNR'  /* ...except for these */
+   327 *-* databaseOwner.DSNDB07 = 'DB2ENGNR'  /* ...except for these */
+   328 *-* databaseOwner.DSNADMDB= 'DB2ENGNR'  /* ...except for these */
+   329 *-* databaseOwner.DSNATPDB= 'DB2ENGNR'  /* ...except for these */
+   330 *-* databaseOwner.DSNMDCDB= 'DB2ENGNR'  /* ...except for these */
+   331 *-* databaseOwner.DSNMQDB = 'DB2ENGNR'  /* ...except for these */
+   332 *-* /* DSN8* is db2engnr */
+   333 *-* databaseOwner.SYSDEFLT= 'DB2ENGNR'  /* ...except for these */
+   334 *-* databaseOwner.AOCEPDB = 'DB2ENGNR'  /* ...except for these */
+   335 *-* databaseOwner.AOCQTDB = 'DB2ENGNR'  /* ...except for these */
+   336 *-* databaseOwner.DSNMDCDB= 'DB2ENGNR'  /* ...except for these */
+   337 *-* databaseOwner.DSNMQDB = 'DB2ENGNR'  /* ...except for these */
+   338 *-* databaseOwner.DSNOPTDB= 'DB2ENGNR'  /* ...except for these */
+   339 *-* databaseOwner.DSNRGFDB= 'DB2ENGNR'  /* ...except for these */
+   340 *-* databaseOwner.DSNRLST = 'DB2ENGNR'  /* ...except for these */
+   341 *-* databaseOwner.DSNXSR  = 'DB2ENGNR'  /* ...except for these */
+   342 *-* databaseOwner.DSQ1STBB= 'DB2ENGNR'  /* ...except for these */
+   343 *-* databaseOwner.DSQDBCTL= 'DB2ENGNR'  /* ...except for these */
+   344 *-* databaseOwner.DSQDBDEF= 'DB2ENGNR'  /* ...except for these */
+   345 *-* databaseOwner.JWB@DB01= 'DB2ENGNR'  /* ...except for these */
+   346 *-* databaseOwner.SYSIBMTA= 'DB2ENGNR'  /* ...except for these */
+   347 *-* databaseOwner.SYSIBMTS= 'DB2ENGNR'  /* ...except for these */
+   348 *-* databaseOwner.SYSIBMTS= 'DB2ENGNR'  /* ...except for these */
+   349 *-* databaseOwner.SYSIBMTS= 'DB2ENGNR'  /* ...except for these */
+   350 *-* databaseOwner.SYSIBMTS= 'DB2ENGNR'  /* ...except for these */
+   351 *-* creatorOwner. = 'DBAGROUP'       /* make almost all creators DBAGROUP */
+   352 *-* creatorOwner.ASN      = 'DB2ENGNR'  /* ...except for these */
+   353 *-* creatorOwner.BP2      = 'DB2ENGNR'  /* ...except for these */
+   354 *-* creatorOwner.DB2ENGNR = 'DB2ENGNR'  /* ...except for these */
+   355 *-* creatorOwner.DB2OE    = 'DB2ENGNR'  /* ...except for these */
+   356 *-* creatorOwner.DB2OSC   = 'DB2ENGNR'  /* ...except for these */
+   357 *-* creatorOwner.DB2OSCA  = 'DB2ENGNR'  /* ...except for these */
+   358 *-* creatorOwner.DBAA07   = 'DBAGROUP'  /* ...except for these */
+   359 *-* creatorOwner.DBAJOB   = 'DBAGROUP'  /* ...except for these */
+   360 *-* creatorOwner.DRL      = 'DB2ENGNR'  /* ...except for these */
+   361 *-* creatorOwner.DRLSYS   = 'DB2ENGNR'  /* ...except for these */
+   362 *-* creatorOwner.DSN1OSCA = 'DB2ENGNR'  /* ...except for these */
+   363 *-* creatorOwner.DSN2OSCA = 'DB2ENGNR'  /* ...except for these */
+   364 *-* creatorOwner.DSN5OSCA = 'DB2ENGNR'  /* ...except for these */
+   365 *-* creatorOwner.DSN6OSCA = 'DB2ENGNR'  /* ...except for these */
+   366 *-* creatorOwner.DSN0OSCA = 'DB2ENGNR'  /* ...except for these */
+   367 *-* creatorOwner.DSNQOSCA = 'DB2ENGNR'  /* ...except for these */
+   368 *-* creatorOwner.DSN8     = 'DB2ENGNR'  /* ...except for these */
+   369 *-* creatorOwner.DSN81010 = 'DB2ENGNR'  /* ...except for these */
+   370 *-* creatorOwner.DSN81110 = 'DB2ENGNR'  /* ...except for these */
+   371 *-* creatorOwner.DSN8510  = 'DB2ENGNR'  /* ...except for these */
+   372 *-* creatorOwner.DSN8610  = 'DB2ENGNR'  /* ...except for these */
+   373 *-* creatorOwner.DSN8710  = 'DB2ENGNR'  /* ...except for these */
+   374 *-* creatorOwner.DSN871SA = 'DB2ENGNR'  /* ...except for these */
+   375 *-* creatorOwner.DSN8810  = 'DB2ENGNR'  /* ...except for these */
+   376 *-* creatorOwner.DSN8910  = 'DB2ENGNR'  /* ...except for these */
+   377 *-* creatorOwner.DSN891SA = 'DB2ENGNR'  /* ...except for these */
+   378 *-* creatorOwner.DSN8BQRY   'DB2ENGNR'  /* ...except for these */
+   379 *-* creatorOwner.DSNACC     'DB2ENGNR'  /* ...except for these */
+   380 *-* creatorOwner.DSNRGCOL   'DB2ENGNR'  /* ...except for these */
+   381 *-* creatorOwner.FADB2    = 'DB2ENGNR'  /* ...except for these */
+   382 *-* creatorOwner.FMNDB2   = 'DB2ENGNR'  /* ...except for these */
+   383 *-* creatorOwner.LANDMARK = 'DB2ENGNR'  /* ...except for these */
+   384 *-* creatorOwner.PTI      = 'DB2ENGNR'  /* ...except for these */
+   385 *-* creatorOwner.Q        = 'DB2ENGNR'  /* ...except for these */
+   386 *-* creatorOwner.SFR225   = 'DB2ENGNR'  /* ...except for these */
+   387 *-* creatorOwner.SFRH21   = 'DB2ENGNR'  /* ...except for these */
+   388 *-* creatorOwner.SFRH66   = 'DB2ENGNR'  /* ...except for these */
+   389 *-* creatorOwner.SFRSTC   = 'DB2ENGNR'  /* ...except for these */
+   390 *-* creatorOwner.SFR609   = 'DB2ENGNR'  /* ...except for these */
+   391 *-* creatorOwner.SYSIBM   = 'DB2ENGNR'  /* ...except for these */
+   392 *-* creatorOwner.SYSIBMTS = 'DB2ENGNR'  /* ...except for these */
+   393 *-* creatorOwner.SYSTOOLS = 'DB2ENGNR'  /* ...except for these */
+   395 *-* /* Set basic header */
+   396 *-* hdr.0 = 6
+   397 *-* hdr.1 = "/* DB2 to RACF conversion CLIST */"
+   398 *-* hdr.2 = "/* input agruments              */"
+   399 *-* hdr.3 = "/*     owner = " owner ", ssid = " ssid  "*/"
+   400 *-* hdr.4 = "/*     classmnt = " classmnt  ", model= " model  "*/"
+   401 *-* hdr.5 = "/*     charopt = " charopt      "*/"
+   402 *-* hdr.6 = "/* date=" DATE() "time=" TIME() "*/"
+   403 *-* hdr.7 = " "
+   404 *-* do ii =1 by 1 for exclude
+   405 *-*  hdr = ii + 7
+   406 *-*  hdr.hdr = '  /* exclude userid: ' exclude.ii '*/'
+   407 *-* end
+   408 *-* Address TSO "EXECIO * DISKW CLIST (STEM hdr."
+   410 *-* /* Set Optional header (relies on hdr. above) */
+   411 *-* hdr.1 = "/* Optional DB2 to RACF conversion CLIST */"
+   412 *-* Address TSO "EXECIO * DISKW OPTCLST (STEM hdr."
+   414 *-* uid      = 0 /* number of unique userids */
+   415 *-* uidIndx. = 0 /* index to userids         */
+   416 *-* clistx   = 0 /*      buffer CLIST   output */
+   417 *-* optclstx = 0 /* also buffer OPTCLST output */
+   418 *-* If owner=""
+       *-*  Then
+       *-*  Do
+   419 *-*   Say "Owner must be specified"
+   420 *-*   Exit
+   421 *-*  End
+   422 *-* If ssid=""
+       *-*  Then
+       *-*  Do
+   423 *-*   Say "SSID must be specified"
+   424 *-*   Exit
+   425 *-*  End
+   426 *-* If classmnt=""
+       *-*  Then
+       *-*  classmnt="DSN"
+   427 *-* If model=""
+       *-*  Then
+       *-*  model=2
+   429 *-*  /* Set class based on 'Classification Model' */
+   430 *-*  /* If an invalid model, we default to II     */
+   431 *-* If model=1
+       *-*  Then
+       *-*  class=Strip(ssid)"ADM"charopt
+   432 *-* Else
+       *-*  class=classmnt"ADM"charopt
+   434 *-* /*---------------------------------------------------*/
+   435 *-* /* Start processing DB2 authorization tables         */
+   436 *-* /*---------------------------------------------------*/
+   437 *-* lastgrantor = ''
+   439 *-* /* revoke Plan privileges */
+   440 *-* call def_priv "PN","BIND","BINDAUTH","PLAN"
+   441 *-* call def_priv "PN","EXECUTE","EXECUTEAUTH","PLAN"
+   443 *-* /* revoke Package privileges */
+   444 *-* call pack_priv "BIND","BINDAUTH"
+   445 *-* call pack_priv "EXECUTE","EXECUTEAUTH"
+   446 *-* call pack_priv "COPY","COPYAUTH"
+   448 *-* /* Collection privileges */
+   449 *-* /*                                                                      call cltn_priv "CREATEIN"
+                        */
+   453 *-* /* revoke all these admin privs                   */
+   454 *-* /* ---------------------------------------------- */
+   455 *-* call db_attr   /* database privs */
+   456 *-* call sys_attr /* system privs   */
+   458 *-* /* end "ADMIN"  */
+   459 *-* /* -----------  */
+   461 *-* Address TSO "EXECIO"   clistx "DISKW CLIST   (FINIS STEM CLISTX."
+   462 *-* /* userid's found were */
+   463 *-* say 'userid''s we created racf cmds for were:'
+   464 *-* optclstx = optclstx + 1
+   465 *-* optclstx.optclstx = '   '
+   466 *-* optclstx = optclstx + 1
+   467 *-* optclstx.optclstx = ' /* userid''s we created racf cmds for were: */'
+   468 *-* optclstx = optclstx + 1
+   469 *-* optclstx.optclstx = '    /* userid''s in RACF database were:       */'
+   470 *-* do ii = 1 by 1 for uid
+   471 *-*  xxx = uid.ii
+   472 *-*  if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   473 *-*   then
+       *-*   iterate          /* ...must be a group, iterate */
+   474 *-*  if excludeIndx.xxx > 0 /* if excluded, */
+   475 *-*   then
+       *-*   iterate           /* ...iterate      */
+   477 *-*  uidx  = useridIndx.xxx
+   478 *-*  if revoked.uidx <> 'No' /* if revoked */
+   479 *-*   then
+       *-*   iterate            /* ...iterate    */
+   480 *-*  if revoked.uidx =  '?'  /* unknown?       */
+   481 *-*   then
+       *-*   iterate           /* ...iterate     */
+   482 *-*  comm = userGroupInfo(xxx) /* Normal userid, give info */
+   483 *-*  optclstx = optclstx + 1
+   484 *-*  optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+   485 *-* end
+   486 *-* do ii = 1 by 1 for uid
+   487 *-*  xxx = uid.ii
+   488 *-*  if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   489 *-*   then
+       *-*   iterate          /* must be a group, iterate */
+   490 *-*  if excludeIndx.xxx > 0 /* if excluded, */
+   491 *-*   then
+       *-*   iterate           /* ...iterate      */
+   493 *-*  uidx  = useridIndx.xxx
+   494 *-*  if revoked.uidx =  'No' /* if not revoked */
+   495 *-*   then
+       *-*   iterate            /* ...iterate     */
+   496 *-*  if revoked.uidx =  '?'  /* unknown?       */
+   497 *-*   then
+       *-*   iterate            /* ...iterate     */
+   498 *-*  comm = userGroupInfo(xxx) /* Revoked userid, give info */
+   499 *-*  optclstx = optclstx + 1
+   500 *-*  optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+   501 *-* end
+   502 *-* optclstx = optclstx + 1
+   503 *-* optclstx.optclstx = '    /* userid''s in RACF database but excluded: */'
+   504 *-* do ii = 1 by 1 for uid
+   505 *-*  xxx = uid.ii
+   506 *-*  if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   507 *-*   then
+       *-*   iterate          /* must be a group, iterate */
+   508 *-*  if excludeIndx.xxx = 0 /* if not excluded, */
+   509 *-*   then
+       *-*   iterate           /* ...iterate       */
+   511 *-*  uidx  = useridIndx.xxx
+   512 *-*  if revoked.uidx <> 'No' /* if revoked */
+   513 *-*   then
+       *-*   iterate            /* ...iterate     */
+   514 *-*  if revoked.uidx =  '?'  /* unknown?       */
+   515 *-*   then
+       *-*   iterate            /* ...iterate     */
+   516 *-*  comm = userGroupInfo(xxx) /* excluded, not revoked, give info */
+   517 *-*  optclstx = optclstx + 1
+   518 *-*  optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+   519 *-* end
+   520 *-* do ii = 1 by 1 for uid
+   521 *-*  xxx = uid.ii
+   522 *-*  if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   523 *-*   then
+       *-*   iterate          /* must be a group, iterate */
+   524 *-*  if excludeIndx.xxx = 0 /* if not excluded, */
+   525 *-*   then
+       *-*   iterate           /* ...iterate       */
+   527 *-*  uidx  = useridIndx.xxx
+   528 *-*  if revoked.uidx=  'No' /* if NOT revoked */
+   529 *-*   then
+       *-*   iterate           /* ...iterate     */
+   530 *-*  if revoked.uidx=  '?'  /* unknown?       */
+   531 *-*   then
+       *-*   iterate           /* ...iterate     */
+   532 *-*  comm = userGroupInfo(xxx) /* excluded, Revoked userid, give info */
+   533 *-*  optclstx = optclstx + 1
+   534 *-*  optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+   535 *-* end
+   536 *-* do ii = 1 by 1 for uid
+   537 *-*  xxx = uid.ii
+   538 *-*  if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   539 *-*   then
+       *-*   iterate          /* must be a group, iterate */
+   540 *-*  if excludeIndx.xxx = 0 /* if not excluded, */
+   541 *-*   then
+       *-*   iterate           /* ...iterate       */
+   543 *-*  uidx  = useridIndx.xxx
+   544 *-*  if revoked.uidx<> '?'  /* unknown?       */
+   545 *-*   then
+       *-*   iterate           /* ...iterate     */
+   546 *-*  comm = userGroupInfo(xxx) /* excluded, Revoked userid, give info */
+   547 *-*  optclstx = optclstx + 1
+   548 *-*  optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+   549 *-* end
+   550 *-* optclstx = optclstx + 1
+   551 *-* optclstx.optclstx = '    /* unknown userids */'
+   552 *-* do ii = 1 by 1 for uid
+   553 *-*  xxx = uid.ii
+   554 *-*  if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   555 *-*   then
+       *-*   iterate          /* must be a group, iterate */
+   556 *-*  if excludeIndx.xxx = 1 /* if excluded, */
+   557 *-*   then
+       *-*   iterate           /* ...iterate   */
+   559 *-*  uidx  = useridIndx.xxx
+   560 *-*  if revoked.uidx<> '?'
+   561 *-*   then
+       *-*   iterate
+   562 *-*  comm = userGroupInfo(xxx)
+   563 *-*  optclstx = optclstx + 1
+   564 *-*  optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+   565 *-* end
+   566 *-* optclstx = optclstx + 1
+   567 *-* optclstx.optclstx = '    /* groups used */'
+   568 *-* do ii = 1 by 1 for uid
+   569 *-*  xxx = uid.ii
+   570 *-*  if useridIndx.xxx <> 0 /* if useridIndx is nonzero... */
+   571 *-*   then
+       *-*   iterate           /* must be a userid, iterate */
+   573 *-*  comm = userGroupInfo(xxx) /* get group info, and output*/
+   574 *-*  optclstx = optclstx + 1
+   575 *-*  optclstx.optclstx = '   /* 'left(xxx,8) left(comm,70) '*/'
+   577 *-*  /* set up to look at group membership */
+   578 *-*  gix = groupIndx.xxx  /* get the index to group info */
+   579 *-*  members = groupMembers.gix
+   580 *-*  gstatus = groupMembersStatus.gix
+   581 *-*  if members <> ''
+   582 *-*   then
+       *-*   do
+   583 *-*    optclstx = optclstx + 1
+   584 *-*    optclstx.optclstx = '     /* ---members of group are--- */'
+   585 *-*   end
+   586 *-*  do while members <> ''
+   587 *-*   /* output membership details */
+   588 *-*   parse var members member members /* strip off a member*/
+   589 *-*   parse var gstatus stat   gstatus /* and a status */
+   590 *-*   comm = userGroupInfo(member)
+   591 *-*   optclstx = optclstx + 1
+   592 *-*   if stat = 'No' | stat = '?'
+   593 *-*    then
+       *-*    optclstx.optclstx = '     /* 'left(member,8)'; 'comm '*/'
+   594 *-*   else
+       *-*    optclstx.optclstx = '     /* 'left(member,8) ,                                          'GroupRevokeStatus=' || stat'
+; 'comm' */'
+   596 *-*  end
+   597 *-* end
+   598 *-* optclstx = optclstx + 1
+   599 *-* optclstx.optclstx = ' '
+   600 *-* optclstx = optclstx + 1
+   601 *-* optclstx.optclstx = 'Unique table creators are:'
+   602 *-* optclstx = optclstx + 1
+   603 *-* optclstx.optclstx = '--------------------------'
+   604 *-* optclstx = optclstx + 1
+   605 *-* optclstx.optclstx = '  creator / racf owner    '
+   606 *-* optclstx = optclstx + 1
+   607 *-* optclstx.optclstx = '--------------------------'
+   608 *-* do x = 1 by 1 for rphTableCreator
+   609 *-*  creator = word(rphtablecreator.x,1)
+   610 *-*  racfowner = creatorOwner.creator
+   611 *-*  optclstx = optclstx + 1
+   612 *-*  optclstx.optclstx = '   ' left(creator,max(length(creator),8)) ,                              '/' racfowner
+   614 *-* end
+   615 *-* optclstx = optclstx + 1
+   616 *-* optclstx.optclstx = ' '
+   617 *-* say ' '
+   618 *-* Address TSO "EXECIO" optClstx "DISKW OPTCLST (FINIS STEM OPTCLSTX."
+   620 *-* "DISCONNECT"
+   621 *-* Exit
+   623 *-* def_priv:
+   624 *-* /*****************************************************************/
+   625 *-* /* Get DB2 Default privileges (plans, db, etc.)                  */
+   626 *-* /*****************************************************************/
+   627 *-* Arg type,auth,col,tab
+   628 *-* /* Get all ids (except PUBLIC) for access list */
+   629 *-* sql="SELECT DISTINCT NAME, GRANTEE, GRANTOR",                               "FROM SYSIBM.SYS"tab"AUTH",
+                          "WHERE "col"<>' '" ,                                                      "AND GRANTEE <> GRANTOR" ,
+                                       "ORDER BY GRANTOR"
+   634 *-* call ZSQL
+   635 *-* Do Until SQLCODE \= 0
+   636 *-*  "EXECSQL FETCH C1 INTO :name, :grantee, :grantor"
+   637 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   638 *-*    if grantor = 'PUBLIC*'
+       *-*     then
+       *-*     grantor = 'PUBLIC'
+   640 *-*    if checkRevoke() = 0
+       *-*     then
+       *-*     iterate
+   641 *-*     /* userid/group not known; or it's revoked */
+   643 *-*    if lastGrantor <> grantor ,
+   644 *-*     then
+       *-*     do
+   645 *-*      lastGrantor = grantor
+   646 *-*      cmd = "SET CURRENT SQLID = '"grantor"';"
+   647 *-*      x = clistcard(cmd)
+   648 *-*     end
+   649 *-*    if type = 'DB'
+   650 *-*     then
+       *-*     on = 'ON DATABASE' name
+   651 *-*    else
+       *-*     if type ='PN'
+   652 *-*      then
+       *-*      on = 'ON PLAN' name
+   653 *-*     else
+       *-*      on = 'ON WHAT?' name
+   654 *-*    cmd="REVOKE" auth on "FROM" grantee';'
+   655 *-*    x = clistCard(cmd)
+   656 *-*   End
+   657 *-* End /* do until */
+   658 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   659 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   660 *-* "EXECSQL CLOSE C1"
+   661 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   662 *-* Return    /* def_priv */
+   665 *-* use_priv:
+   666 *-* /*****************************************************************/
+   667 *-* /* Get DB2 USE privileges (bufferpool, stogroup, tablespace)     */
+   668 *-* /*****************************************************************/
+   669 *-* Arg auth,obtype,type
+   670 *-* If model=1
+       *-*  Then
+       *-*  class="M"Strip(ssid)||type||charopt
+   671 *-* Else
+       *-*  class="M"classmnt||type||charopt
+   673 *-* if      obtype = 'B'
+   674 *-*  then
+       *-*  extra = "DATA('DB2-"ssid "use priv for ssid.bufferpool')" /*rph*/
+   675 *-* else
+       *-*  if obtype = 'S'
+   676 *-*   then
+       *-*   extra = "DATA('DB2-"ssid "use priv for ssid.stogroup')" /* rph */
+   677 *-*  else
+       *-*   if obtype = 'R'
+   678 *-*    then
+       *-*    extra = "DATA('DB2-"ssid "use priv for ssid.tablespace')" /*rph*/
+   679 *-*   else
+       *-*    extra = ''
+   681 *-* /* Find all objects, and make commands to create profiles */
+   682 *-* /* for 'auth'. Then remove executor from access list.     */
+   683 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",                          "WHERE OBTYPE='"obtype"'"
+   685 *-* call ZSQL
+   686 *-* Do Until SQLCODE \= 0
+   687 *-*  "EXECSQL FETCH C1 INTO :name"
+   688 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   689 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   690 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   691 *-*    prof= left(prof,max(20,length(prof)))
+   692 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",                        "OWNER("owner")" ,
+                               extra /* rph */
+   695 *-*    x = clistCard(cmd)
+   697 *-*    cmd="PERMIT "prof" CLASS("class") RESET"
+   698 *-*    x = clistCard(cmd)
+   699 *-*   End
+   700 *-* End /* do until */
+   701 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   702 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   703 *-* "EXECSQL CLOSE C1"
+   704 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   706 *-*  /* If any of those were PUBLIC, change UACC to READ */
+   707 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",                          "WHERE OBTYPE='"obtype"' AND USEAUTH¬=' '",
+                            "AND GRANTEE IN ('PUBLIC','PUBLIC*')"
+   710 *-* call ZSQL
+   711 *-* Do Until SQLCODE \= 0
+   712 *-*  "EXECSQL FETCH C1 INTO :name"
+   713 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   714 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   715 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   716 *-*    prof= left(prof,max(35,length(prof)))
+   717 *-*    cmd="RALT "class prof" UACC(READ)"
+   718 *-*    x = clistCard(cmd)
+   719 *-*   End
+   720 *-* End /* do until */
+   721 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   722 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   723 *-* "EXECSQL CLOSE C1"
+   724 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   726 *-*  /* Get all ids (except PUBLIC) for access list */
+   727 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",                 "WHERE OBTYPE='"obtype"' AND USEAUTH='Y'",
+                            "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*')"
+   730 *-* call ZSQL
+   731 *-* Do Until SQLCODE \= 0
+   732 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+   733 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   734 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   735 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   736 *-*    prof= left(prof,max(35,length(prof)))
+   737 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                             "ID("Translate(Strip(grantee))")"
+   739 *-*    x = clistCard(cmd)
+   740 *-*   End
+   741 *-* End /* do until */
+   742 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   743 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   744 *-* "EXECSQL CLOSE C1"
+   745 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   747 *-*  /* With Grants */
+   748 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",                 "WHERE OBTYPE='"obtype"' AND USEAUTH='G'",
+                            "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*')"
+   751 *-* call ZSQL
+   752 *-* Do Until SQLCODE \= 0
+   753 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+   754 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   755 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   756 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   757 *-*    prof= left(prof,max(35,length(prof)))
+   758 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                             "ID("Translate(Strip(grantee))")"
+   760 *-*    x = clistCard(cmd)
+   761 *-*   End
+   762 *-* End /* do until */
+   763 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   764 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   765 *-* "EXECSQL CLOSE C1"
+   766 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   767 *-* Return    /* use_priv */
+   769 *-* pack_priv:
+   770 *-* /*****************************************************************/
+   771 *-* /* Get DB2 Package privileges                                    */
+   772 *-* /*    This gets tricky, because SYSPACKAUTH has COLLID and       */
+   773 *-* /* can have * for NAME (Package ID).  We must define all the     */
+   774 *-* /* permits with * first, then PERMIT FROM(xx.*) as well as the   */
+   775 *-* /* normal permits.                                               */
+   776 *-* /*    We also ignore any row where GRANTEETYPE='P' (for access)  */
+   777 *-* /*****************************************************************/
+   778 *-* Arg auth,col
+   780 *-* /* Get all ids (except PUBLIC) for access list to '*' packs */
+   781 *-* sql="SELECT DISTINCT COLLID, GRANTEE, NAME, GRANTOR" ,                    "FROM SYSIBM.SYSPACKAUTH",
+                          "WHERE "col"<>' '",                                                       "AND GRANTEETYPE=' '" ,
+                                         "AND GRANTEE <> GRANTOR" ,                                            "ORDER BY GRANTOR, G
+RANTEE, COLLID, NAME"
+   787 *-* call ZSQL
+   788 *-* nameAsterisk = ''
+   789 *-* lastGrantee  = ''
+   790 *-* lastCollid   = ''
+   791 *-* Do Until SQLCODE \= 0
+   792 *-*  "EXECSQL FETCH C1 INTO :collid, :grantee, :name, :grantor"
+   793 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   794 *-*    if grantor = 'PUBLIC*'
+       *-*     then
+       *-*     grantor = 'PUBLIC'
+   796 *-*    if checkRevoke() = 0
+       *-*     then
+       *-*     iterate
+   797 *-*     /* userid/group not known; or it's revoked */
+   799 *-*    if lastgrantor <> grantor
+   800 *-*     then
+       *-*     do
+   801 *-*      lastgrantor = grantor
+   802 *-*      lastgrantee = grantee
+   803 *-*      nameAsterisk = ''
+   804 *-*      cmd = "SET CURRENT SQLID = '"grantor"';"
+   805 *-*      x = clistcard(cmd)
+   806 *-*     end
+   807 *-*    else
+       *-*     if lastgrantee <> grantee ,                                              | lastcollid  <> collid
+   809 *-*      then
+       *-*      do
+   810 *-*       lastGrantee = grantee
+   811 *-*       lastCollid  = collid
+   812 *-*       nameAsterisk= ''
+   813 *-*      end
+   814 *-*    if nameAsterisk = '*'
+   815 *-*     then ,
+   816 *-*     cmd = '--REVOKE' auth 'ON PACKAGE' collid'.'name ,                                'FROM' grantee';'
+   818 *-*    else ,
+   819 *-*     cmd = 'REVOKE' auth 'ON PACKAGE' collid'.'name ,                                  'FROM' grantee';'
+   821 *-*    if name = '*'
+   822 *-*     then
+       *-*     nameAsterisk = '*'
+   823 *-*    x = clistcard(cmd)
+   824 *-*   End
+   825 *-* End /* do until */
+   826 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   827 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   828 *-* "EXECSQL CLOSE C1"
+   829 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   831 *-* Return     /* pack_priv */
+   834 *-* sys_attr:
+   835 *-* /*****************************************************************/
+   836 *-* /* Get DB2 system administrative authorities                     */
+   837 *-* /*****************************************************************/
+   838 *-* Arg auth,col
+   839 *-* sysauth = 0
+   840 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'AccessCtrlauth AccessCtrl'
+   841 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'ArchiveAuth   Archive'
+   842 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'BindAddAuth   BindAdd'
+   843 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'BindAgentAuth BindAgent'
+   844 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'BSDSauth      BSDS'
+   845 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'CreateAliasAuth CreateAlias'
+   846 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'createDBAauth CreateDBA'
+   847 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'createDBCauth CreateDBC'
+   848 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'createSGauth  CreateSG'
+   849 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'createTMTABauth CreateTMTAB'
+   850 *-* sysauth=sysauth+1
+       *-* sysauth.sysauth='createSecureAuth Create_Secure',                                                || '_Object'
+   852 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'DataAccessAuth DataAccess'
+   853 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'sDBAdmAuth    DBADM'
+   854 *-* sysauth=sysauth+1
+       *-* sysauth.sysauth = 'DebugSessionAuth DebugSession'
+   855 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'DISPLAYauth   Display'
+   856 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'ExplainAuth   Explain'
+   857 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'mon1Auth      Monitor1'
+   858 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'mon2Auth      Monitor2'
+   859 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'recoverAuth   Recover'
+   860 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'sqladmAuth    SQLadm'
+   861 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'stopAllAuth   StopAll'
+   862 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'StoSpaceAuth  StoSpace'
+   863 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'sysAdmAuth    SYSADM'
+   864 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'sysCtrlAuth   SYSCTRL'
+   865 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'sysOprAuth    SYSOPR'
+   866 *-* sysauth = sysauth +1
+       *-* sysauth.sysauth = 'traceAuth     Trace'
+   867 *-* sysauth.0 = sysauth
+   869 *-* /* now create case statements (for part of select) */
+   870 *-* /* and create fetch statements(for part of fetch)  */
+   871 *-* CaseStmts4select   = ''
+   872 *-* Variables4fetch    = ''
+   873 *-* do i = 1 by 1 for sysauth.0
+   874 *-*  parse var sysauth.i column .
+   875 *-*  booleanColumn = column||'Boolean'
+   877 *-*  /* have select create a boolean column for auth */
+   878 *-*  caseStmts4select = caseStmts4select ,                                       ',case when' column "= 'Y' then '1'" ,
+                                   'when' column "= 'G' then '1'" ,                                                            "els
+e '0'" ,                                      'end as' booleanColumn
+   884 *-*  /* have fetch, fetch the boolean variable */
+   885 *-*  variables4Fetch = variables4fetch || ', :' || booleanColumn
+   886 *-* end
+   887 *-* say ' '
+   888 *-* say '    looking at sysibm.sysuserauth '
+   889 *-* say 'case='casestmts4select
+   890 *-* say ' '
+   891 *-* say 'fetch='variables4fetch
+   893 *-* sql="SELECT DISTINCT" ,                                                        " grantee" ,
+                               ",grantor" ,                                                            caseStmts4select , /* transf
+orm columns to boolean variables*/     "FROM SYSIBM.SYSUSERAUTH",                                              "WHERE GRANTEE¬='PUB
+LIC'" ,                                               "AND GRANTEE <> GRANTOR" ,                                            "ORDER
+BY sysAdmAuthBoolean" ,                                                 ", sDBAdmAuthBoolean" ,
+             ", SysoprAuthBoolean" ,                                                 ", GRANTOR, GRANTEE"
+   905 *-* call ZSQL
+   906 *-* Do Until SQLCODE \= 0
+   907 *-*  "EXECSQL FETCH C1 INTO :grantee, :grantor" ,                                                   variables4Fetch
+   909 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   910 *-*    /* if row has all authorization = 0, we have a prob*/
+   911 *-*    do i = 1 by 1 for sysauth.0
+   912 *-*     parse var sysauth.i authColumn .
+   913 *-*     if value(authColumn'Boolean') = 0
+       *-*      then
+       *-*      iterate
+   914 *-*     leave
+   915 *-*    end
+   916 *-*    if i > sysauth.0
+   917 *-*     then
+       *-*     do
+   918 *-*      say 'grantee='grantee
+   919 *-*      say 'grantor='grantor
+   920 *-*      say 'logic error3... some new authorization must be',                      'unaccounted for in SYSIBM.SYSUSERAUTH'
+   922 *-*      say 'can''t be all be blank (or via boolean vars, all 0)'
+   923 *-*      say 'exit 8 now'
+   924 *-*      exit 8
+   925 *-*     end
+   926 *-*    if grantor = 'PUBLIC*'
+       *-*     then
+       *-*     grantor = 'PUBLIC'
+   928 *-*    if checkRevoke() = 0
+       *-*     then
+       *-*     iterate
+   929 *-*     /* userid/group not known; or it's revoked */
+   931 *-*    if lastGrantor <> grantor
+   932 *-*     then
+       *-*     do
+   933 *-*      lastGrantor = grantor
+   934 *-*      cmd = "SET CURRENT SQLID = '"grantor"';"
+   935 *-*      x = clistcard(cmd)
+   936 *-*     end
+   937 *-*    auth = ''
+   938 *-*    if sysoprAuthBoolean = 1
+   939 *-*     then
+       *-*     do  /* multiple authorities are automatic */
+   940 *-*      auth = ', SYSOPR'
+   941 *-*      /* if sysopr priv on, all these will have been on */
+   942 *-*      sysoprAuthBoolean = 0
+   943 *-*      displayAuthBoolean = 0
+   944 *-*      recoverAuthBoolean = 0
+   945 *-*      stopAllAuthBoolean = 0
+   946 *-*      TraceAuthBoolean = 0
+   947 *-*     end
+   949 *-*     /* find other privs to revoke */
+   950 *-*    do i = 1 by 1 for sysauth.0
+   951 *-*     parse var sysauth.i authColumn grantName .
+   952 *-*     if value(authColumn'Boolean') = 0
+       *-*      then
+       *-*      iterate
+   953 *-*     auth = auth || ',' grantName
+   954 *-*    end
+   955 *-*    auth = substr(auth,3) /* strip leading ', ' */
+   956 *-*    if auth = ''
+   957 *-*     then
+       *-*     do
+   958 *-*      say 'logic error4... some new authorization must be',                      'unaccounted for in SYSIBM.SYSUSERAUTH'
+   960 *-*      say 'can''t be all be blank (or case zero)'
+   961 *-*      say 'exit 8 now'
+   962 *-*      exit 8
+   963 *-*     end
+   964 *-*    cmd = 'REVOKE'
+   965 *-*    cmdrest = 'FROM' grantee';'
+   966 *-*    if length(cmd auth cmdrest) <= 72
+   967 *-*     then
+       *-*     do
+   968 *-*      cmd = cmd auth cmdrest
+   969 *-*      x = clistCard(cmd)
+   970 *-*     end
+   971 *-*    else
+       *-*     do
+   972 *-*      do i = 1 by 1 while i <= words(auth) ,                                                    & length(cmd subword(auth
+,1,i) < 72)
+   974 *-*      end
+   975 *-*      cmd = cmd subword(auth,1,i)
+   976 *-*      x = clistCard(cmd)
+   977 *-*      if i < words(auth)
+   978 *-*       then
+       *-*       do
+   979 *-*        cmd = '   'subword(auth,i+1)
+   980 *-*        x = clistCard(cmd)
+   981 *-*       end
+   982 *-*      cmd = '   'cmdrest
+   983 *-*      x = clistCard(cmd)
+   984 *-*     end
+   985 *-*   End
+   986 *-* End /* do until */
+   987 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   988 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+   989 *-* "EXECSQL CLOSE C1"
+   990 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1 '
+   992 *-* Return     /* sys_attr */
+   995 *-* db_attr:
+   996 *-* /*****************************************************************/
+   997 *-* /* Get DB2 database administrative authorities                   */
+   998 *-* /*****************************************************************/
+   999 *-* Arg auth,col
+  1001 *-* /* Get all ids (except PUBLIC) for access list */
+  1002 *-* dbauth = 0
+  1003 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'CREATETABauth CREATETAB'
+  1004 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'CREATETSauth  CREATETS'
+  1005 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'DBADMauth     DBADM'
+  1006 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'DBCTRLauth    DBCTRL'
+  1007 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'DBMAINTauth   DBMAINT'
+  1008 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'DROPauth      DROP'
+  1009 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'IMAGCOPYauth  IMAGCOPY'
+  1010 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'LOADauth      LOAD'
+  1011 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'RECOVERDBauth RECOVERDB'
+  1012 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'REORGauth     REORG'
+  1013 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'REPAIRauth    REPAIR'
+  1014 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'STARTDBauth   STARTDB'
+  1015 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'STATSauth     STATS'
+  1016 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'STOPauth      STOPDB'
+  1017 *-* dbauth = dbauth +1
+       *-* dbauth.dbauth = 'DISPLAYDBauth DISPLAYDB'
+  1018 *-* dbauth.0 = dbauth
+  1020 *-* /* now create case statements (for part of select) */
+  1021 *-* /* and create fetch statements(for part of fetch)  */
+  1022 *-* CaseStmts4select   = ''
+  1023 *-* Variables4fetch    = ''
+  1024 *-* do i = 1 by 1 for dbauth.0
+  1025 *-*  parse var dbauth.i column .
+  1026 *-*  booleanColumn = column||'Boolean'
+  1028 *-*  /* have select create a boolean column for auth */
+  1029 *-*  caseStmts4select = caseStmts4select ,                                       ',case when' column "= 'Y' then '1'" ,
+                                   'when' column "= 'G' then '1'" ,                                                            "els
+e '0'" ,                                      'end as' booleanColumn
+  1035 *-*  /* have fetch, fetch the boolean variable */
+  1036 *-*  variables4Fetch = variables4fetch || ', :' || booleanColumn
+  1037 *-* end
+  1038 *-* say ' '
+  1039 *-* say '    looking at sysibm.sysdbauth '
+  1040 *-* say 'case='casestmts4select
+  1041 *-* say ' '
+  1042 *-* say 'fetch='variables4fetch
+  1044 *-* sql="SELECT DISTINCT" ,                                                        " name" ,
+                               ",grantee" ,                                                            ",grantor" ,
+                                            caseStmts4select , /* transform columns to boolean variables*/     "FROM SYSIBM.SYSDBAU
+TH",                                                "WHERE GRANTEE¬='PUBLIC'" ,                                               "AND
+GRANTEE <> GRANTOR" ,                                            "ORDER BY GRANTOR, GRANTEE"
+  1053 *-* call ZSQL
+  1054 *-* Do Until SQLCODE \= 0
+  1055 *-*  "EXECSQL FETCH C1 INTO :name, :grantee, :grantor" ,                                            variables4Fetch /* get b
+oolean variables*/
+  1057 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1058 *-*    /* if row has all authorization = 0, we have a prob*/
+  1059 *-*    do i = 1 by 1 for dbauth.0
+  1060 *-*     parse var dbauth.i authColumn .
+  1061 *-*     if value(authColumn'Boolean') = 0
+       *-*      then
+       *-*      iterate
+  1062 *-*     leave
+  1063 *-*    end
+  1064 *-*    if i > dbauth.0
+  1065 *-*     then
+       *-*     do
+  1066 *-*      say 'name='name
+  1067 *-*      say 'grantee='grantee
+  1068 *-*      say 'grantor='grantor
+  1069 *-*      say 'dbadmauthBoolean='dbadmauthBoolean
+  1070 *-*      say 'logic error1... some new authorization must be',                      'unaccounted for in SYSIBM.SYSDBAUTH'
+  1072 *-*      say 'can''t be all be blank (or via boolean vars, all 0)'
+  1073 *-*      say 'exit 8 now'
+  1074 *-*      exit 8
+  1075 *-*     end
+  1076 *-*    if grantor = 'PUBLIC*'
+       *-*     then
+       *-*     grantor = 'PUBLIC'
+  1078 *-*    if checkRevoke() = 0
+       *-*     then
+       *-*     iterate
+  1079 *-*     /* userid/group not known; or it's revoked */
+  1081 *-*    if lastGrantor <> grantor
+  1082 *-*     then
+       *-*     do
+  1083 *-*      lastGrantor = grantor
+  1084 *-*      cmd = "SET CURRENT SQLID = '"grantor"';"
+  1085 *-*      x = clistcard(cmd)
+  1086 *-*     end
+  1087 *-*    if dbadmAuthBoolean
+  1088 *-*     then
+       *-*     auth = 'DBADM'
+  1089 *-*    else
+       *-*     if dbctrlAuthBoolean
+  1090 *-*      then
+       *-*      auth = 'DBCTRL'
+  1091 *-*     else
+       *-*      do
+  1092 *-*       auth = ''
+  1093 *-*       if dbMaintAuthBoolean
+  1094 *-*        then
+       *-*        do
+  1095 *-*         auth = ', DBMAINT'
+  1096 *-*         /* because not DBADM or DBCTRL ... we don't have */
+  1097 *-*         /* ...worry about those bits.                    */
+  1098 *-*         /* ...BUT dbmaint automatically turned on these  */
+  1099 *-*         /*    bits... so we will turn them off to see if */
+  1100 *-*         /*            any other authorities were also    */
+  1101 *-*         /*            turned on with DBMAINT             */
+  1102 *-*         CREATETABauthBoolean = 0
+  1103 *-*         CREATETSauthBoolean = 0
+  1104 *-*         DBADMauthBoolean = 0
+  1105 *-*         DBCTRLauthBoolean = 0
+  1106 *-*         DBMAINTauthBoolean = 0
+  1107 *-*         IMAGCOPYauthBoolean = 0
+  1108 *-*         STARTDBauthBoolean = 0
+  1109 *-*         STATSauthBoolean = 0
+  1110 *-*         STOPauthBoolean = 0
+  1111 *-*         DISPLAYDBauthBoolean = 0
+  1112 *-*        end
+  1113 *-*        /* now for dbmaint (or anything else) see what else */
+  1114 *-*        /* ...was granted at the same time.                 */
+  1115 *-*       do i = 1 by 1 for dbauth.0
+  1116 *-*        parse var dbauth.i authColumn grantName .
+  1117 *-*        if value(authColumn'Boolean') = 0
+       *-*         then
+       *-*         iterate
+  1118 *-*        auth = auth || ',' grantName
+  1119 *-*       end
+  1120 *-*       auth = substr(auth,3) /* strip leading ', ' */
+  1121 *-*       if auth = ''
+  1122 *-*        then
+       *-*        do
+  1123 *-*         say 'logic error2... some new authorization must be',                      'unaccounted for in SYSIBM.SYSDBAUTH'
+  1125 *-*         say 'can''t be all be blank (or case zero)'
+  1126 *-*         say 'exit 8 now'
+  1127 *-*         exit 8
+  1128 *-*        end
+  1129 *-*      end
+  1130 *-*    cmd = 'REVOKE'
+  1131 *-*    cmdrest = 'ON DATABASE' name 'FROM' grantee';'
+  1132 *-*    if length(cmd auth cmdrest) <= 72
+  1133 *-*     then
+       *-*     do
+  1134 *-*      cmd = cmd auth cmdrest
+  1135 *-*      x = clistCard(cmd)
+  1136 *-*     end
+  1137 *-*    else
+       *-*     do
+  1138 *-*      do i = 1 by 1 while i <= words(auth) ,                                                    & length(cmd subword(auth
+,1,i) < 72)
+  1140 *-*      end
+  1141 *-*      cmd = cmd subword(auth,1,i)
+  1142 *-*      x = clistCard(cmd)
+  1143 *-*      if i < words(auth)
+  1144 *-*       then
+       *-*       do
+  1145 *-*        cmd = '   'subword(auth,i+1)
+  1146 *-*        x = clistCard(cmd)
+  1147 *-*       end
+  1148 *-*      cmd = '   'cmdrest
+  1149 *-*      x = clistCard(cmd)
+  1150 *-*     end
+  1151 *-*   End
+  1152 *-* End /* do until */
+  1153 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1154 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1155 *-* "EXECSQL CLOSE C1"
+  1156 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1158 *-* Return
+  1162 *-* ZSQL:
+  1163 *-* err_sw = "0"
+  1164 *-* "EXECSQL DECLARE C1 CURSOR FOR S1"
+  1165 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'DECLARE C1 CURSOR'
+  1166 *-* "EXECSQL PREPARE S1 INTO :outsqlca FROM :sql"
+  1167 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'PREPARE S1'
+  1168 *-* "EXECSQL OPEN C1"
+  1169 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'OPEN C1 '
+  1170 *-* Return  /* zsql */
+  1172 *-* prtsqlca:
+  1173 *-* err_sw = "1"
+  1174 *-* Say '** Error SQL statement - ' arg(1)
+  1175 *-* Say '** failing SQL statement - ' sql
+  1176 *-* Say 'SQLCODE = 'SQLCODE
+  1177 *-* Say 'SQLERRMC = 'SQLERRMC
+  1178 *-* Say 'SQLERRP = 'SQLERRP
+  1179 *-* Say 'SQLERRD = 'SQLERRD.1',',                                                       || SQLERRD.2',',
+                                    || SQLERRD.3',',                                                        || SQLERRD.4',',
+                                                 || SQLERRD.5',',                                                        || SQLERRD
+.6
+  1186 *-* Say 'SQLWARN = 'SQLWARN.1',',                                                       || SQLWARN.2',',
+                                    || SQLWARN.3',',                                                        || SQLWARN.4',',
+                                                 || SQLWARN.5',',                                                        || SQLWARN
+.6',',                                                        || SQLWARN.7',',
+   || SQLWARN.8',',                                                        || SQLWARN.9',',
+                || SQLWARN.10
+  1197 *-* Say 'SQLSTATE= 'SQLSTATE
+  1198 *-* Exit 999
+  1199 *-* Return
+  1201 *-* clistcard:
+  1202 *-* parse arg clistcard
+  1203 *-* data = ''
+  1204 *-* clistx = clistx + 1
+  1205 *-* if word(clistcard,1) = 'SET'
+  1206 *-*  then
+       *-*  clistx.clistx = clistcard
+  1207 *-* else
+       *-*  clistx.clistx = '   'clistcard
+  1209 *-* if clistx > 100
+  1210 *-*  then
+       *-*  do /* need to start writting out some of the buffer */
+  1211 *-*   Address TSO "EXECIO" clistx "DISKW CLIST (STEM CLISTX."
+  1212 *-*   clistx = 0 /* reset number of recs in buffer to zero */
+  1213 *-*  end
+  1214 *-* return 0
+  1216 *-* optClstCard:
+  1217 *-* parse arg clistcard
+  1218 *-* data = ''
+  1219 *-* if pos(' ID(',clistcard) > 0
+  1220 *-*  then
+       *-*  do /* keep track of unique userid's */
+  1221 *-*   parse var clistcard frontHalf 'ID(' uidx ')' backhalf
+  1222 *-*   uidx = strip(uidx)
+  1224 *-*   if deleteId.uidx = 1
+  1225 *-*    then
+       *-*    return 0 /* we want this userid deleted */
+  1227 *-*   if excludeIndx.uidx > 0
+  1228 *-*    then
+       *-*    do
+  1229 *-*     /* userid is excluded; replace w/the replacement id/group */
+  1230 *-*     replace = excludeIndx.uidx
+  1231 *-*     uidx    = replace.replace
+  1232 *-*     clistcard = frontHalf 'ID('uidx')' backhalf
+  1233 *-*    end
+  1235 *-*    /* while we are here, add to # of unique userid's we know about */
+  1236 *-*   if uidIndx.uidx = 0
+  1237 *-*    then
+       *-*    do /* this is an unknown userid, add to our list */
+  1238 *-*     uid = uid + 1  /* we got another one */
+  1239 *-*     uid.uid = uidx /* add to list of sequential userid's */
+  1240 *-*     uidIndx.uidx = uid /* now add quick lookup for this userid */
+  1241 *-*    end
+  1242 *-*   if (  word(clistcard,1) = 'PERMIT' ,                                        | word(clistcard,1) = 'PE'     ,
+                             )                               ,                                       & pos(' DATA(',clistcard) = 0
+  1246 *-*    then
+       *-*    do
+  1247 *-*     data = userGroupInfo(uidx)
+  1248 *-*     data = "DATA('"data"')"
+  1249 *-*    end
+  1250 *-*  end
+  1251 *-* else
+       *-*  uidx = ''
+  1252 *-* optClstx = optClstx + 1
+  1253 *-* if left(word(clistcard,1),2) = '/*' | clistcard = ''
+  1254 *-*  then
+       *-*  optClstx.optClstx = clistcard
+  1255 *-* else
+       *-*  if word(clistcard,1) = 'RDEF'
+  1256 *-*   then
+       *-*   do
+  1257 *-*    optClstx.optClstx = ' ' /* insert blank line */
+  1258 *-*    optClstx = optClstx + 1 /* now add RDEF card */
+  1259 *-*    optClstx.optClstx = left(word(clistcard,1),10) subword(clistcard,2)
+  1260 *-*   end
+  1261 *-*  else
+       *-*   do                    /* add permit card, etc*/
+  1262 *-*    optClstx.optClstx = left('   'word(clistcard,1),length(class)+11) ,                           subword(clistcard,2) da
+ta
+  1264 *-*   end
+  1265 *-* return 0
+  1267 *-* addExclude:
+  1268 *-* parse upper arg excludeId groupid .
+  1269 *-* exclude = exclude + 1
+  1270 *-* exclude.exclude = excludeId
+  1271 *-* excludeIndx.excludeId = exclude
+  1272 *-* return 0
+  1275 *-* userGroupInfo:
+  1276 *-* parse upper arg userORgroup .
+  1277 *-* if useridIndx.userORgroup > 0
+  1278 *-*  then
+       *-*  do
+  1279 *-*   /* we have user info */
+  1280 *-*   uix = useridIndx.userORgroup
+  1281 *-*   userRef.uix = 1
+  1282 *-*   userORgroup = left(userORgroup,max(8,length(userorGroup)))
+  1283 *-*   if revoked.uix = 'No'
+  1284 *-*    then
+       *-*    return 'User='userOrGroup'; d-grp='left(usersDgroup.uix,8) ,                  ||'; name='strip(usersName.uix)
+  1286 *-*   return 'User='userOrGroup'; d-grp='left(usersDgroup.uix,8) ,                       ||'; revoke='revoked.uix'; name='st
+rip(usersName.uix)
+  1288 *-*  end
+  1289 *-* else
+       *-*  if groupIndx.userORgroup > 0
+  1290 *-*   then
+       *-*   do
+  1291 *-*    /* we have group info */
+  1292 *-*    gix = groupIndx.userORgroup
+  1293 *-*    groupRef.gix = 1
+  1294 *-*    userORgroup = left(userORgroup,max(8,length(userorGroup)))
+  1295 *-*    return 'Group='userORgroup'; desc='groupdesc.gix
+  1296 *-*   end
+  1297 *-*  else
+       *-*   do
+  1298 *-*    /* we have no info */
+  1299 *-*    /* now remember some information about the user */
+  1300 *-*    userid = userid.0
+  1301 *-*    userid = userid + 1
+  1302 *-*    userid.0 = userid
+  1303 *-*    useridIndx.UserORgroup = userid
+  1304 *-*    userid.userid = UserORgroup
+  1305 *-*    revoked.userid= '?'
+  1306 *-*    usersName.userid = 'Not in Racf'
+  1307 *-*    usersDGroup.userid = '?'
+  1308 *-*    usersGroups.userid = 0  /* collect user groups with 0205's*/
+  1310 *-*    uix = userid
+  1311 *-*    userRef.uix = 1
+  1312 *-*    userORgroup = left(userORgroup,max(8,length(userorGroup)))
+  1313 *-*    return 'User='userOrGroup'; d-grp='left(usersDgroup.uix,8)';',                         'revoke='revoked.uix'; name='s
+trip(usersName.uix)
+  1315 *-*   end
+  1317 *-* checkRevoke:
+  1318 *-* parse upper var grantor grantor . /* strip and upper case */
+  1319 *-* parse upper var grantee grantee . /* strip and upper case */
+  1320 *-* if grantee = 'SYSIBM'
+       *-*  then
+       *-*  return 0
+  1321 *-* if grantee = 'SYSOPR'
+       *-*  then
+       *-*  return 0
+  1322 *-* if excludeIndx.grantee > 0
+       *-*  then
+       *-*  return 0
+  1323 *-* uidx = useridIndx.grantee
+  1324 *-* gidx =  groupIndx.grantee
+  1326 *-* /* if unknown userid/group,,, it's revoked */
+  1327 *-* if uidx = 0 & gidx = 0
+       *-*  then
+       *-*  return 1
+  1329 *-* if uidx > 0
+  1330 *-*  then
+       *-*  do
+  1331 *-*   /* if known userid, see if it's revoked */
+  1332 *-*   if revoked.uidx = 'Yes'
+       *-*    then
+       *-*    return 1
+  1333 *-*   return 0
+  1334 *-*  end
+  1335 *-* return 0 /* known group, is not revoked */
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Variable (NEVER SET)    ABORTING                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ABORTING                  Reference: 35
+
+Label (internal label)  ADDEXCLUDE                Defined  : 1267
+Label (int. label ref)  ADDEXCLUDE                Reference: F(316)
+
+Address Envir.Constant: ADDRESS 'DSNREXX'         Reference: 299
+
+Address Envir.Constant: ADDRESS 'TSO' <cmd>       Reference: 48 56 61 99 291 294 309 408 412 461 618 1211
+
+Variable (NEVER SET)    ADMIN                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ADMIN                     Reference: 35
+
+Variable (set w/rexx)   adminoption               Assigned : 34
+Variable (used in/rexx) adminoption               Reference: 43
+
+Variable (NEVER SET)    AOCEPDB                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  AOCEPDB                   Assigned : 334
+
+Variable (NEVER SET)    AOCQTDB                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  AOCQTDB                   Assigned : 335
+
+Built-In+/External use  ARG                       Reference: F(1174)
+
+Variable (NEVER SET)    ASN                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  ASN                       Assigned : 352
+
+Variable (set w/rexx)   auth                      Assigned : 627 669 778 838 937 940 953 955 999 1088 1090 1092 1095 1118 1120
+Variable (used in/rexx) auth                      Reference: 654 689 690 714 715 734 735 755 756 816 819 953 955 956 966 968 972 975 977 979 1118
+                        ...                                  1120 1121 1132 1134 1138 1141 1143 1145
+
+Variable (set w/rexx)   authcolumn                Assigned : 912 951 1060 1116
+Variable (used in/rexx) authcolumn                Reference: 913 952 1061 1117
+
+Variable (set w/rexx)   backhalf                  Assigned : 1221
+Variable (used in/rexx) backhalf                  Reference: 1232
+
+Variable (set w/rexx)   booleancolumn             Assigned : 875 1026
+Variable (used in/rexx) booleancolumn             Reference: 878 885 1029 1036
+
+Variable (NEVER SET)    BP2                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  BP2                       Assigned : 353
+
+Variable (set w/rexx)   casestmts4select          Assigned : 871 878 1022 1029
+Variable (used in/rexx) casestmts4select          Reference: 878 889 893 1029 1040 1044
+
+Variable (NEVER SET)    CHAROPT                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) CHAROPT                   Reference: 401 431 432 670 671
+
+Label (internal label)  CHECKREVOKE               Defined  : 1317
+Label (int. label ref)  CHECKREVOKE               Reference: F(640) F(796) F(928) F(1078)
+
+Variable (set w/rexx)   class                     Assigned : 431 432 670 671
+Variable (used in/rexx) class                     Reference: 692 697 717 737 758 1262
+
+Variable (set w/rexx)   classmnt                  Assigned : 426
+Variable (used in/rexx) classmnt                  Reference: 400 426 432 671
+
+Variable (set w/rexx)   clistcard                 Assigned : 1202 1217 1232
+Variable (used in/rexx) clistcard                 Reference: 1205 1206 1207 1219 1221 1242 1253 1254 1255 1259 1262
+Label (internal label)  CLISTCARD                 Defined  : 1201
+Label (int. label ref)  CLISTCARD                 Reference: F(647) F(655) F(695) F(698) F(718) F(739) F(760) F(805) F(823) F(935) F(969) F(976)
+                        ...                                  F(980) F(983) F(1085) F(1135) F(1142) F(1146) F(1149)
+
+Variable (set w/rexx)   clistx                    Assigned : 416 1204 1212
+Variable (used in/rexx) clistx                    Reference: 461 1204 1209 1211
+Variable (in Stem Set)  clistx                    Assigned : 1206 1207
+
+Variable (set w/rexx)   cmd                       Assigned : 646 654 692 697 717 737 758 804 816 819 934 964 968 975 979 982 1084 1130 1134 1141
+                        ...                                  1145 1148
+Variable (used in/rexx) cmd                       Reference: 647 655 695 698 718 739 760 805 823 935 966 968 969 972 975 976 980 983 1085 1132
+                        ...                                  1134 1135 1138 1141 1142 1146 1149
+
+Variable (set w/rexx)   cmdrest                   Assigned : 965 1131
+Variable (used in/rexx) cmdrest                   Reference: 966 968 982 1132 1134 1148
+
+Variable (set w/rexx)   cntpermit                 Assigned : 64
+Variable (NEVER USED)   cntpermit                 No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   col                       Assigned : 627 778 838 999
+Variable (used in/rexx) col                       Reference: 629 781
+
+Variable (NEVER SET)    COLLID                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) COLLID                    Reference: 807 811 816 819
+
+Variable (set w/rexx)   column                    Assigned : 874 1025
+Variable (used in/rexx) column                    Reference: 875 878 1026 1029
+
+Variable (set w/rexx)   comm                      Assigned : 482 498 516 532 546 562 573 590
+Variable (used in/rexx) comm                      Reference: 484 500 518 534 548 564 575 593 594
+
+Variable (set w/rexx)   createdate                Assigned : 110
+Variable (used in/rexx) createdate                Reference: 123
+
+Variable (set w/rexx)   createtabauthboolean      Assigned : 1102
+Variable (NEVER USED)   createtabauthboolean      No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   createtsauthboolean       Assigned : 1103
+Variable (NEVER USED)   createtsauthboolean       No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   creator                   Assigned : 609
+Variable (used in/rexx) creator                   Reference: 612
+Variable (in Stem Ref)  creator                   Reference: 610
+
+Variable (set w/rexx)   currentdate               Assigned : 82
+Variable (used in/rexx) currentdate               Reference: 167 176 180 240 249 253
+
+Variable (set w/rexx)   data                      Assigned : 1203 1218 1247 1248
+Variable (used in/rexx) data                      Reference: 1248 1262
+
+Built-In+/External use  DATE                      Reference: F(80) F(402)
+
+Variable (set w/rexx)   dates                     Assigned : 80
+Variable (used in/rexx) dates                     Reference: 81
+
+Variable (NEVER SET)    DB2ENGNR                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DB2ENGNR                  Assigned : 354
+
+Variable (NEVER SET)    DB2OE                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DB2OE                     Assigned : 355
+
+Variable (NEVER SET)    DB2OSC                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DB2OSC                    Assigned : 356
+
+Variable (NEVER SET)    DB2OSCA                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DB2OSCA                   Assigned : 357
+
+Variable (NEVER SET)    DBAA07                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DBAA07                    Assigned : 358
+
+Variable (set w/rexx)   dbadmauthboolean          Assigned : 1104
+Variable (used in/rexx) dbadmauthboolean          Reference: 1069 1087
+
+Variable (NEVER SET)    DBAJOB                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DBAJOB                    Assigned : 359
+
+Variable (set w/rexx)   dbauth                    Assigned : 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017
+Variable (used in/rexx) dbauth                    Reference: 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017 1018
+Variable (in Stem Set)  dbauth                    Assigned : 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017
+
+Variable (set w/rexx)   dbctrlauthboolean         Assigned : 1105
+Variable (used in/rexx) dbctrlauthboolean         Reference: 1089
+
+Variable (set w/rexx)   dbmaintauthboolean        Assigned : 1106
+Variable (used in/rexx) dbmaintauthboolean        Reference: 1093
+
+Label (internal label)  DB_ATTR                   Defined  : 995
+Label (int. label ref)  DB_ATTR                   Reference: C(455)
+
+Variable (set w/rexx)   dd                        Assigned : 81
+Variable (used in/rexx) dd                        Reference: 82
+
+Label (internal label)  DEF_PRIV                  Defined  : 623
+Label (int. label ref)  DEF_PRIV                  Reference: C(440) C(441)
+
+Variable (set w/rexx)   displayauthboolean        Assigned : 943
+Variable (NEVER USED)   displayauthboolean        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   displaydbauthboolean      Assigned : 1111
+Variable (NEVER USED)   displaydbauthboolean      No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (NEVER SET)    DRL                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DRL                       Assigned : 360
+
+Variable (NEVER SET)    DRLSYS                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DRLSYS                    Assigned : 361
+
+Variable (NEVER SET)    DSN0OSCA                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN0OSCA                  Assigned : 366
+
+Variable (NEVER SET)    DSN1OSCA                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN1OSCA                  Assigned : 362
+
+Variable (NEVER SET)    DSN2OSCA                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN2OSCA                  Assigned : 363
+
+Variable (NEVER SET)    DSN5OSCA                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN5OSCA                  Assigned : 364
+
+Variable (NEVER SET)    DSN6OSCA                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN6OSCA                  Assigned : 365
+
+Variable (NEVER SET)    DSN8                      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN8                      Assigned : 368
+
+Variable (NEVER SET)    DSN81010                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN81010                  Assigned : 369
+
+Variable (NEVER SET)    DSN81110                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN81110                  Assigned : 370
+
+Variable (NEVER SET)    DSN8510                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN8510                   Assigned : 371
+
+Variable (NEVER SET)    DSN8610                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN8610                   Assigned : 372
+
+Variable (NEVER SET)    DSN8710                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN8710                   Assigned : 373
+
+Variable (NEVER SET)    DSN871SA                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN871SA                  Assigned : 374
+
+Variable (NEVER SET)    DSN8810                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN8810                   Assigned : 375
+
+Variable (NEVER SET)    DSN8910                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN8910                   Assigned : 376
+
+Variable (NEVER SET)    DSN891SA                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSN891SA                  Assigned : 377
+
+Variable (NEVER SET)    DSN8BQRY                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Ref)  DSN8BQRY                  Reference: 378
+
+Variable (NEVER SET)    DSNACC                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Ref)  DSNACC                    Reference: 379
+
+Variable (NEVER SET)    DSNADMDB                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNADMDB                  Assigned : 328
+
+Variable (NEVER SET)    DSNATPDB                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNATPDB                  Assigned : 329
+
+Variable (NEVER SET)    DSNDB01                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNDB01                   Assigned : 324
+
+Variable (NEVER SET)    DSNDB04                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNDB04                   Assigned : 325
+
+Variable (NEVER SET)    DSNDB06                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNDB06                   Assigned : 326
+
+Variable (NEVER SET)    DSNDB07                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNDB07                   Assigned : 327
+
+Variable (NEVER SET)    DSNMDCDB                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNMDCDB                  Assigned : 330 336
+
+Variable (NEVER SET)    DSNMQDB                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNMQDB                   Assigned : 331 337
+
+Variable (NEVER SET)    DSNOPTDB                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNOPTDB                  Assigned : 338
+
+Variable (NEVER SET)    DSNQOSCA                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNQOSCA                  Assigned : 367
+
+Variable (NEVER SET)    DSNRGCOL                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Ref)  DSNRGCOL                  Reference: 380
+
+Variable (NEVER SET)    DSNRGFDB                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNRGFDB                  Assigned : 339
+
+Variable (NEVER SET)    DSNRLST                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNRLST                   Assigned : 340
+
+Variable (NEVER SET)    DSNXSR                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSNXSR                    Assigned : 341
+
+Variable (NEVER SET)    DSQ1STBB                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSQ1STBB                  Assigned : 342
+
+Variable (NEVER SET)    DSQDBCTL                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSQDBCTL                  Assigned : 343
+
+Variable (NEVER SET)    DSQDBDEF                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  DSQDBDEF                  Assigned : 344
+
+Variable (set w/rexx)   err_sw                    Assigned : 1163 1173
+Variable (NEVER USED)   err_sw                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   exclist                   Assigned : 312
+Variable (in Stem Ref)  exclist                   Reference: 313 316
+
+Variable (set w/rexx)   exclude                   Assigned : 304 1269
+Variable (used in/rexx) exclude                   Reference: 404 1269 1271
+Variable (in Stem Set)  exclude                   Assigned : 1270
+
+Variable (set w/rexx)   excludeid                 Assigned : 1268
+Variable (used in/rexx) excludeid                 Reference: 1270
+Variable (in Stem Set)  excludeid                 Assigned : 1271
+
+Variable (set w/rexx)   extra                     Assigned : 674 676 678 679
+Variable (used in/rexx) extra                     Reference: 692
+
+Variable (NEVER SET)    FADB2                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  FADB2                     Assigned : 381
+
+Variable (NEVER SET)    FMNDB2                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  FMNDB2                    Assigned : 382
+
+Variable (set w/rexx)   fronthalf                 Assigned : 1221
+Variable (used in/rexx) fronthalf                 Reference: 1232
+
+Variable (set w/rexx)   gidx                      Assigned : 1324
+Variable (used in/rexx) gidx                      Reference: 1327
+
+Variable (set w/rexx)   gix                       Assigned : 578 1292
+Variable (in Stem Set)  gix                       Assigned : 1293
+Variable (in Stem Ref)  gix                       Reference: 579 580 1295
+
+Variable (set w/rexx)   grantee                   Assigned : 1319
+Variable (used in/rexx) grantee                   Reference: 654 737 758 802 807 810 816 819 918 965 1067 1131 1319 1320 1321
+Variable (in Stem Ref)  grantee                   Reference: 1322 1323 1324
+
+Variable (set w/rexx)   grantname                 Assigned : 951 1116
+Variable (used in/rexx) grantname                 Reference: 953 1118
+
+Variable (set w/rexx)   grantor                   Assigned : 638 794 926 1076 1318
+Variable (used in/rexx) grantor                   Reference: 638 643 645 646 794 799 801 804 919 926 931 933 934 1068 1076 1081 1083 1084 1318
+
+Variable (set w/rexx)   group                     Assigned : 71 118
+Variable (used in/rexx) group                     Reference: 118 119 297
+Variable (in Stem Set)  group                     Assigned : 120 122 123 124 125 126 127 128 129 130
+
+Variable (set w/rexx)   groupdesc                 Assigned : 110
+Variable (used in/rexx) groupdesc                 Reference: 126
+
+Variable (set w/rexx)   groupid                   Assigned : 1268
+Variable (NEVER USED)   groupid                   No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   groupindx                 Assigned : 277
+Variable (used in/rexx) groupindx                 Reference: 278
+Variable (in Stem Set)  groupindx                 Assigned : 280 281
+Variable (in Stem Ref)  groupindx                 Reference: 280 281
+
+Variable (set w/rexx)   groupmodel                Assigned : 110
+Variable (used in/rexx) groupmodel                Reference: 127
+
+Variable (set w/rexx)   groupname                 Assigned : 110
+Variable (used in/rexx) groupname                 Reference: 120
+Variable (in Stem Set)  groupname                 Assigned : 119
+Variable (in Stem Ref)  groupname                 Reference: 114
+
+Variable (set w/rexx)   groupowner                Assigned : 110
+Variable (used in/rexx) groupowner                Reference: 124
+
+Variable (set w/rexx)   groupuacc                 Assigned : 110
+Variable (used in/rexx) groupuacc                 Reference: 125
+
+Variable (set w/rexx)   groupuniversal            Assigned : 110
+Variable (used in/rexx) groupuniversal            Reference: 128
+
+Variable (set w/rexx)   gstatus                   Assigned : 580 589
+Variable (used in/rexx) gstatus                   Reference: 589
+
+Variable (set w/rexx)   hdr                       Assigned : 405
+Variable (in Stem Set)  hdr                       Assigned : 406
+
+Variable (set w/rexx)   i                         Assigned : 873 911 950 972 1024 1059 1115 1138
+Variable (used in/rexx) i                         Reference: 916 972 975 977 979 1064 1138 1141 1143 1145
+Variable (in Stem Ref)  i                         Reference: 874 912 951 1025 1060 1116
+
+Variable (set w/rexx)   ii                        Assigned : 404 470 486 504 520 536 552 568
+Variable (used in/rexx) ii                        Reference: 405
+Variable (in Stem Ref)  ii                        Reference: 406 471 484 487 500 505 518 521 534 537 548 553 564 569
+
+Variable (NEVER SET)    ILLEGAL                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ILLEGAL                   Reference: 35
+
+Variable (set w/rexx)   imagcopyauthboolean       Assigned : 1107
+Variable (NEVER USED)   imagcopyauthboolean       No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (NEVER SET)    JWB@DB01                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  JWB@DB01                  Assigned : 345
+
+Variable (NEVER SET)    LANDMARK                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  LANDMARK                  Assigned : 383
+
+Variable (set w/rexx)   lastcollid                Assigned : 790 811
+Variable (used in/rexx) lastcollid                Reference: 807
+
+Variable (set w/rexx)   lastgrantee               Assigned : 789 802 810
+Variable (used in/rexx) lastgrantee               Reference: 807
+
+Variable (set w/rexx)   lastgrantor               Assigned : 437 645 801 933 1083
+Variable (used in/rexx) lastgrantor               Reference: 643 799 931 1081
+
+Built-In+/External use  LEFT                      Reference: F(315) F(484) F(500) F(518) F(534) F(548) F(564) F(575) F(593) F(594) F(612) F(691)
+                        ...                                  F(716) F(736) F(757) F(1253) F(1259) F(1262) F(1282) F(1284) F(1286) F(1294) F(1312)
+                        ...                                  F(1313)
+
+Built-In+/External use  LENGTH                    Reference: F(612) F(691) F(716) F(736) F(757) F(966) F(972) F(1132) F(1138) F(1262) F(1282)
+                        ...                                  F(1294) F(1312)
+
+Built-In+/External use  MAX                       Reference: F(612) F(691) F(716) F(736) F(757) F(1282) F(1294) F(1312)
+
+Variable (set w/rexx)   member                    Assigned : 588
+Variable (used in/rexx) member                    Reference: 590 593 594
+
+Variable (set w/rexx)   members                   Assigned : 579 588
+Variable (used in/rexx) members                   Reference: 581 586 588
+
+Variable (set w/rexx)   mm                        Assigned : 81
+Variable (used in/rexx) mm                        Reference: 82
+
+Variable (set w/rexx)   model                     Assigned : 427
+Variable (used in/rexx) model                     Reference: 400 427 431 670 689 714 734 755
+
+Variable (NEVER SET)    NAME                      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) NAME                      Reference: 650 652 653 689 690 714 715 734 735 755 756 816 819 821 1066 1131
+
+Variable (set w/rexx)   nameasterisk              Assigned : 788 803 812 822
+Variable (used in/rexx) nameasterisk              Reference: 814
+
+Variable (NEVER SET)    NONADMIN                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) NONADMIN                  Reference: 35
+
+Variable (NEVER SET)    NOW                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) NOW                       Reference: 35
+
+Variable (set w/rexx)   obtype                    Assigned : 669
+Variable (used in/rexx) obtype                    Reference: 673 675 677 683 707 727 748
+
+Variable (set w/rexx)   on                        Assigned : 650 652 653
+Variable (used in/rexx) on                        Reference: 654
+
+Label (internal label)  OPTCLSTCARD               Defined  : 1216
+Label (int. label ref)  OPTCLSTCARD               Reference:
+
+Variable (set w/rexx)   optclstx                  Assigned : 417 464 466 468 483 499 502 517 533 547 550 563 566 574 583 591 598 600 602 604 606
+                        ...                                  611 615 1252 1258
+Variable (used in/rexx) optclstx                  Reference: 464 466 468 483 499 502 517 533 547 550 563 566 574 583 591 598 600 602 604 606 611
+                        ...                                  615 618 1252 1258
+Variable (in Stem Set)  optclstx                  Assigned : 465 467 469 484 500 503 518 534 548 551 564 567 575 584 593 594 599 601 603 605 607
+                        ...                                  612 616 1254 1257 1259 1262
+
+Variable (NEVER SET)    OWNER                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) OWNER                     Reference: 399 418 692
+
+Label (internal label)  PACK_PRIV                 Defined  : 769
+Label (int. label ref)  PACK_PRIV                 Reference: C(444) C(445) C(446)
+
+Built-In+/External use  POS                       Reference: F(1219) F(1242)
+
+Variable (set w/rexx)   prof                      Assigned : 689 690 691 714 715 716 734 735 736 755 756 757
+Variable (used in/rexx) prof                      Reference: 691 692 697 716 717 736 737 757 758
+
+Label (internal label)  PRTSQLCA                  Defined  : 1172
+Label (int. label ref)  PRTSQLCA                  Reference: C(659) C(661) C(702) C(704) C(722) C(724) C(743) C(745) C(764) C(766) C(827) C(829)
+                        ...                                  C(988) C(990) C(1154) C(1156) C(1165) C(1167) C(1169)
+
+Variable (NEVER SET)    PTI                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  PTI                       Assigned : 384
+
+Variable (NEVER SET)    Q                         Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  Q                         Assigned : 385
+
+Variable (set w/rexx)   racfconnecteddate         Assigned : 217
+Variable (NEVER USED)   racfconnecteddate         No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   racfgroup                 Assigned : 217
+Variable (in Stem Ref)  racfgroup                 Reference: 277
+
+Variable (set w/rexx)   racfgroupowner            Assigned : 217
+Variable (NEVER USED)   racfgroupowner            No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   racfgroupresumedate       Assigned : 217
+Variable (used in/rexx) racfgroupresumedate       Reference: 238 249 268
+
+Variable (set w/rexx)   racfgrouprevokedate       Assigned : 217
+Variable (used in/rexx) racfgrouprevokedate       Reference: 234 240 253 268
+
+Variable (set w/rexx)   racflastconnectdate       Assigned : 217
+Variable (NEVER USED)   racflastconnectdate       No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   racfowner                 Assigned : 610
+Variable (used in/rexx) racfowner                 Reference: 612
+
+Variable (set w/rexx)   racfsmry                  Assigned : 70 94 101
+Variable (used in/rexx) racfsmry                  Reference: 94 95
+Variable (in Stem Ref)  racfsmry                  Reference: 105 110 139 217
+
+Variable (set w/rexx)   racfsmryrc                Assigned : 69 100
+Variable (used in/rexx) racfsmryrc                Reference: 97 287
+
+Variable (set w/rexx)   racftype                  Assigned : 105
+Variable (used in/rexx) racftype                  Reference: 108 135 213
+
+Variable (set w/rexx)   racfuserid                Assigned : 139 217
+Variable (used in/rexx) racfuserid                Reference: 155 206 280
+Variable (in Stem Set)  racfuserid                Assigned : 205
+Variable (in Stem Ref)  racfuserid                Reference: 231
+
+SpecialVar(set no-XREF) RC                         *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RC                        Reference: 49 57 59 100 289 310
+
+Variable (set w/rexx)   recoverauthboolean        Assigned : 944
+Variable (NEVER USED)   recoverauthboolean        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   replace                   Assigned : 1230
+Variable (in Stem Ref)  replace                   Reference: 1231
+
+Variable (set w/rexx)   resumenow                 Assigned : 177 178 250 251
+Variable (used in/rexx) resumenow                 Reference: 189 262
+
+Variable (set w/rexx)   revoke                    Assigned : 139 162 168 169 187 191 196 197 235 241 242 260 264 269 270
+Variable (used in/rexx) revoke                    Reference: 207 281
+
+Variable (set w/rexx)   revokenow                 Assigned : 181 182 254 255
+Variable (used in/rexx) revokenow                 Reference: 186 189 259 262
+
+Variable (set w/rexx)   rphtable                  Assigned : 84
+Variable (NEVER USED)   rphtable                  No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   rphtablecreator           Assigned : 87
+Variable (used in/rexx) rphtablecreator           Reference: 608
+
+Built-In+/External use  RXSUBCOM                  Reference: F(49)
+
+Variable (NEVER SET)    SFR225                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SFR225                    Assigned : 386
+
+Variable (NEVER SET)    SFR609                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SFR609                    Assigned : 390
+
+Variable (NEVER SET)    SFRH21                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SFRH21                    Assigned : 387
+
+Variable (NEVER SET)    SFRH66                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SFRH66                    Assigned : 388
+
+Variable (NEVER SET)    SFRSTC                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SFRSTC                    Assigned : 389
+
+Variable (NEVER SET)    SPECIFIED                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SPECIFIED                 Reference: 35
+
+Variable (set w/rexx)   sql                       Assigned : 629 683 707 727 748 781 893 1044
+Variable (used in/rexx) sql                       Reference: 1175
+
+SpecialVar(set no-XREF) SQLCODE                    *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLCODE                   Reference: 635 637 658 661 686 688 701 704 711 713 721 724 731 733 742 745 752 754 763 766 791
+                        ...                                  793 826 829 906 909 987 990 1054 1057 1153 1156 1165 1167 1169 1176
+
+SpecialVar(set no-XREF) SQLERRMC                   *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLERRMC                  Reference: 1177
+
+SpecialVar(set no-XREF) SQLERRP                    *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLERRP                   Reference: 1178
+
+SpecialVar(set no-XREF) SQLSTATE                   *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLSTATE                  Reference: 1197
+
+Variable (set w/rexx)   ssid                      Assigned : 34
+Variable (used in/rexx) ssid                      Reference: 35 300 399 422 431 670 674 676 678 690 715 735 756
+
+Variable (set w/rexx)   startdbauthboolean        Assigned : 1108
+Variable (NEVER USED)   startdbauthboolean        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   stat                      Assigned : 589
+Variable (used in/rexx) stat                      Reference: 592 594
+
+Variable (set w/rexx)   statsauthboolean          Assigned : 1109
+Variable (NEVER USED)   statsauthboolean          No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   stopallauthboolean        Assigned : 945
+Variable (NEVER USED)   stopallauthboolean        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   stopauthboolean           Assigned : 1110
+Variable (NEVER USED)   stopauthboolean           No Ref.  : If actually referenced, it must be via a cmd.
+
+Built-In+/External use  STRIP                     Reference: F(126) F(127) F(316) F(431) F(670) F(689) F(690) F(714) F(715) F(734) F(735) F(737)
+                        ...                                  F(755) F(756) F(758) F(1222) F(1284) F(1286) F(1313)
+
+Built-In+/External use  SUBSTR                    Reference: F(955) F(1120)
+
+Built-In+/External use  SUBWORD                   Reference: F(972) F(975) F(979) F(1138) F(1141) F(1145) F(1259) F(1262)
+
+Variable (set w/rexx)   supergrpname              Assigned : 110
+Variable (used in/rexx) supergrpname              Reference: 122
+
+Variable (set w/rexx)   sysauth                   Assigned : 839 840 841 842 843 844 845 846 847 848 849 850 852 853 854 855 856 857 858 859 860
+                        ...                                  861 862 863 864 865 866
+Variable (used in/rexx) sysauth                   Reference: 840 841 842 843 844 845 846 847 848 849 850 852 853 854 855 856 857 858 859 860 861
+                        ...                                  862 863 864 865 866 867
+Variable (in Stem Set)  sysauth                   Assigned : 840 841 842 843 844 845 846 847 848 849 850 852 853 854 855 856 857 858 859 860 861
+                        ...                                  862 863 864 865 866
+
+Variable (NEVER SET)    SYSDEFLT                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SYSDEFLT                  Assigned : 333
+
+Variable (NEVER SET)    SYSIBM                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SYSIBM                    Assigned : 391
+
+Variable (NEVER SET)    SYSIBMTA                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SYSIBMTA                  Assigned : 346
+
+Variable (NEVER SET)    SYSIBMTS                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SYSIBMTS                  Assigned : 347 348 349 350 392
+
+Variable (set w/rexx)   sysoprauthboolean         Assigned : 942
+Variable (used in/rexx) sysoprauthboolean         Reference: 938
+
+Variable (NEVER SET)    SYSTOOLS                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SYSTOOLS                  Assigned : 393
+
+Label (internal label)  SYS_ATTR                  Defined  : 834
+Label (int. label ref)  SYS_ATTR                  Reference: C(456)
+
+Variable (set w/rexx)   s_rc                      Assigned : 49
+Variable (NEVER USED)   s_rc                      No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   tab                       Assigned : 627
+Variable (used in/rexx) tab                       Reference: 629
+
+Built-In+/External use  TIME                      Reference: F(402)
+
+Variable (set w/rexx)   traceauthboolean          Assigned : 946
+Variable (NEVER USED)   traceauthboolean          No Ref.  : If actually referenced, it must be via a cmd.
+
+Built-In+/External use  TRANSLATE                 Reference: F(737) F(758)
+
+Variable (set w/rexx)   type                      Assigned : 627 669
+Variable (used in/rexx) type                      Reference: 649 651 670 671
+
+Variable (set w/rexx)   uid                       Assigned : 414 1238
+Variable (used in/rexx) uid                       Reference: 470 486 504 520 536 552 568 1238 1240
+Variable (in Stem Set)  uid                       Assigned : 1239
+
+Variable (set w/rexx)   uidx                      Assigned : 231 477 493 511 527 543 559 1221 1222 1231 1251 1323
+Variable (used in/rexx) uidx                      Reference: 1222 1232 1239 1247 1327 1329
+Variable (in Stem Set)  uidx                      Assigned : 1240
+Variable (in Stem Ref)  uidx                      Reference: 478 480 494 496 512 514 528 530 544 560 1224 1227 1230 1236 1332
+
+Variable (set w/rexx)   uix                       Assigned : 1280 1310
+Variable (in Stem Set)  uix                       Assigned : 1281 1311
+Variable (in Stem Ref)  uix                       Reference: 1283 1284 1286 1313
+
+Variable (set w/rexx)   usercreatedate            Assigned : 139
+Variable (NEVER USED)   usercreatedate            No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  USERGROUPINFO             Defined  : 1275
+Label (int. label ref)  USERGROUPINFO             Reference: F(482) F(498) F(516) F(532) F(546) F(562) F(573) F(590) F(1247)
+
+Variable (set w/rexx)   userid                    Assigned : 76 204 1300 1301
+Variable (used in/rexx) userid                    Reference: 204 205 295 296 1301 1302 1303 1310
+Variable (in Stem Set)  userid                    Assigned : 206 207 208 209 210 1304 1305 1306 1307 1308
+
+Variable (set w/rexx)   useridowner               Assigned : 139
+Variable (NEVER USED)   useridowner               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   userorgroup               Assigned : 1276 1282 1294 1312
+Variable (used in/rexx) userorgroup               Reference: 1282 1284 1286 1294 1295 1304 1312 1313
+Variable (in Stem Set)  userorgroup               Assigned : 1303
+Variable (in Stem Ref)  userorgroup               Reference: 1277 1280 1289 1292
+
+Variable (set w/rexx)   usersdefaultgroup         Assigned : 139
+Variable (used in/rexx) usersdefaultgroup         Reference: 209
+
+Variable (set w/rexx)   userslastdate             Assigned : 139
+Variable (NEVER USED)   userslastdate             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   userslasttime             Assigned : 139
+Variable (NEVER USED)   userslasttime             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   usersname                 Assigned : 139
+Variable (used in/rexx) usersname                 Reference: 208
+
+Variable (set w/rexx)   usersresumedate           Assigned : 139
+Variable (used in/rexx) usersresumedate           Reference: 165 176 195
+
+Variable (set w/rexx)   usersrevokedate           Assigned : 139
+Variable (used in/rexx) usersrevokedate           Reference: 161 167 180 195
+
+Label (internal label)  USE_PRIV                  Defined  : 665
+Label (int. label ref)  USE_PRIV                  Reference:
+
+Built-In+/External use  VALUE                     Reference: F(913) F(952) F(1061) F(1117)
+
+Variable (set w/rexx)   variables4fetch           Assigned : 872 885 1023 1036
+Variable (used in/rexx) variables4fetch           Reference: 885 891 907 1036 1042 1055
+
+Variable (NEVER SET)    WAS                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) WAS                       Reference: 35
+
+Built-In+/External use  WORD                      Reference: F(609) F(1205) F(1242) F(1253) F(1255) F(1259) F(1262)
+
+Variable (set w/rexx)   word1                     Assigned : 313
+Variable (used in/rexx) word1                     Reference: 314 315
+
+Built-In+/External use  WORDPOS                   Reference: F(35)
+
+Built-In+/External use  WORDS                     Reference: F(972) F(977) F(1138) F(1143)
+
+Variable (set w/rexx)   x                         Assigned : 316 608 647 655 695 698 718 739 760 805 823 935 969 976 980 983 1085 1135 1142 1146
+                        ...                                  1149
+Variable (in Stem Ref)  x                         Reference: 609
+
+Variable (set w/rexx)   xxx                       Assigned : 471 487 505 521 537 553 569
+Variable (used in/rexx) xxx                       Reference: 482 498 516 532 546 562 573 575
+Variable (in Stem Ref)  xxx                       Reference: 472 474 477 488 490 493 506 508 511 522 524 527 538 540 543 554 556 559 570 578
+
+Variable (set w/rexx)   yyyy                      Assigned : 81
+Variable (used in/rexx) yyyy                      Reference: 82
+
+Label (internal label)  ZSQL                      Defined  : 1162
+Label (int. label ref)  ZSQL                      Reference: C(634) C(685) C(710) C(730) C(751) C(787) C(905) C(1053)
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 CLISTX.clistx                     Assigned : 1206 1207
+
+Stem-1 CNTPERMITCLASS.                   Assigned : 65
+
+Stem-1 CNTPERMITINDEX.                   Assigned : 67
+
+Stem-1 CNTPERMITOBS.                     Assigned : 66
+
+Stem-1 CREATOROWNER.                     Assigned : 351
+Stem-1 CREATOROWNER.ASN                  Assigned : 352
+Stem-1 CREATOROWNER.BP2                  Assigned : 353
+Stem-1 CREATOROWNER.creator              Reference: 610
+Stem-1 CREATOROWNER.DB2ENGNR             Assigned : 354
+Stem-1 CREATOROWNER.DB2OE                Assigned : 355
+Stem-1 CREATOROWNER.DB2OSC               Assigned : 356
+Stem-1 CREATOROWNER.DB2OSCA              Assigned : 357
+Stem-1 CREATOROWNER.DBAA07               Assigned : 358
+Stem-1 CREATOROWNER.DBAJOB               Assigned : 359
+Stem-1 CREATOROWNER.DRL                  Assigned : 360
+Stem-1 CREATOROWNER.DRLSYS               Assigned : 361
+Stem-1 CREATOROWNER.DSN0OSCA             Assigned : 366
+Stem-1 CREATOROWNER.DSN1OSCA             Assigned : 362
+Stem-1 CREATOROWNER.DSN2OSCA             Assigned : 363
+Stem-1 CREATOROWNER.DSN5OSCA             Assigned : 364
+Stem-1 CREATOROWNER.DSN6OSCA             Assigned : 365
+Stem-1 CREATOROWNER.DSN8                 Assigned : 368
+Stem-1 CREATOROWNER.DSN81010             Assigned : 369
+Stem-1 CREATOROWNER.DSN81110             Assigned : 370
+Stem-1 CREATOROWNER.DSN8510              Assigned : 371
+Stem-1 CREATOROWNER.DSN8610              Assigned : 372
+Stem-1 CREATOROWNER.DSN8710              Assigned : 373
+Stem-1 CREATOROWNER.DSN871SA             Assigned : 374
+Stem-1 CREATOROWNER.DSN8810              Assigned : 375
+Stem-1 CREATOROWNER.DSN8910              Assigned : 376
+Stem-1 CREATOROWNER.DSN891SA             Assigned : 377
+Stem-1 CREATOROWNER.DSN8BQRY             Reference: 378
+Stem-1 CREATOROWNER.DSNACC               Reference: 379
+Stem-1 CREATOROWNER.DSNQOSCA             Assigned : 367
+Stem-1 CREATOROWNER.DSNRGCOL             Reference: 380
+Stem-1 CREATOROWNER.FADB2                Assigned : 381
+Stem-1 CREATOROWNER.FMNDB2               Assigned : 382
+Stem-1 CREATOROWNER.LANDMARK             Assigned : 383
+Stem-1 CREATOROWNER.PTI                  Assigned : 384
+Stem-1 CREATOROWNER.Q                    Assigned : 385
+Stem-1 CREATOROWNER.SFR225               Assigned : 386
+Stem-1 CREATOROWNER.SFR609               Assigned : 390
+Stem-1 CREATOROWNER.SFRH21               Assigned : 387
+Stem-1 CREATOROWNER.SFRH66               Assigned : 388
+Stem-1 CREATOROWNER.SFRSTC               Assigned : 389
+Stem-1 CREATOROWNER.SYSIBM               Assigned : 391
+Stem-1 CREATOROWNER.SYSIBMTS             Assigned : 392
+Stem-1 CREATOROWNER.SYSTOOLS             Assigned : 393
+
+Stem-1 DATABASEOWNER.                    Assigned : 323
+Stem-1 DATABASEOWNER.AOCEPDB             Assigned : 334
+Stem-1 DATABASEOWNER.AOCQTDB             Assigned : 335
+Stem-1 DATABASEOWNER.DSNADMDB            Assigned : 328
+Stem-1 DATABASEOWNER.DSNATPDB            Assigned : 329
+Stem-1 DATABASEOWNER.DSNDB01             Assigned : 324
+Stem-1 DATABASEOWNER.DSNDB04             Assigned : 325
+Stem-1 DATABASEOWNER.DSNDB06             Assigned : 326
+Stem-1 DATABASEOWNER.DSNDB07             Assigned : 327
+Stem-1 DATABASEOWNER.DSNMDCDB            Assigned : 330 336
+Stem-1 DATABASEOWNER.DSNMQDB             Assigned : 331 337
+Stem-1 DATABASEOWNER.DSNOPTDB            Assigned : 338
+Stem-1 DATABASEOWNER.DSNRGFDB            Assigned : 339
+Stem-1 DATABASEOWNER.DSNRLST             Assigned : 340
+Stem-1 DATABASEOWNER.DSNXSR              Assigned : 341
+Stem-1 DATABASEOWNER.DSQ1STBB            Assigned : 342
+Stem-1 DATABASEOWNER.DSQDBCTL            Assigned : 343
+Stem-1 DATABASEOWNER.DSQDBDEF            Assigned : 344
+Stem-1 DATABASEOWNER.JWB@DB01            Assigned : 345
+Stem-1 DATABASEOWNER.SYSDEFLT            Assigned : 333
+Stem-1 DATABASEOWNER.SYSIBMTA            Assigned : 346
+Stem-1 DATABASEOWNER.SYSIBMTS            Assigned : 347 348 349 350
+
+Stem-1 DBAUTH.0                          Assigned : 1018
+Stem-1 DBAUTH.0                          Reference: 1024 1059 1064 1115
+Stem-1 DBAUTH.dbauth                     Assigned : 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017
+Stem-1 DBAUTH.i                          Reference: 1025 1060 1116
+
+Stem-1 DELETEID.                         Assigned : 307
+Stem-1 DELETEID.uidx                     Reference: 1224
+
+Stem-1 EXCLIST.0                         Assigned : 311
+Stem-1 EXCLIST.0                         Reference: 312
+Stem-1 EXCLIST.exclist                   Reference: 313 316
+
+Stem-1 EXCLUDE.                          Assigned : 303
+Stem-1 EXCLUDE.exclude                   Assigned : 1270
+Stem-1 EXCLUDE.ii                        Reference: 406
+
+Stem-1 EXCLUDEINDX.                      Assigned : 305
+Stem-1 EXCLUDEINDX.excludeid             Assigned : 1271
+Stem-1 EXCLUDEINDX.grantee               Reference: 1322
+Stem-1 EXCLUDEINDX.uidx                  Reference: 1227 1230
+Stem-1 EXCLUDEINDX.xxx                   Reference: 474 490 508 524 540 556
+
+Stem-1 GROUPCREATEDATE.group             Assigned : 123
+
+Stem-1 GROUPDESC.                        Assigned : 74
+Stem-1 GROUPDESC.gix                     Reference: 1295
+Stem-1 GROUPDESC.group                   Assigned : 126
+
+Stem-1 GROUPINDX.                        Assigned : 72
+Stem-1 GROUPINDX.grantee                 Reference: 1324
+Stem-1 GROUPINDX.groupname               Assigned : 119
+Stem-1 GROUPINDX.groupname               Reference: 114
+Stem-1 GROUPINDX.racfgroup               Reference: 277
+Stem-1 GROUPINDX.userorgroup             Reference: 1289 1292
+Stem-1 GROUPINDX.xxx                     Reference: 578
+
+Stem-1 GROUPMEMBERS.gix                  Reference: 579
+Stem-1 GROUPMEMBERS.group                Assigned : 129
+Stem-1 GROUPMEMBERS.groupindx            Assigned : 280
+Stem-1 GROUPMEMBERS.groupindx            Reference: 280
+
+Stem-1 GROUPMEMBERSSTATUS.gix            Reference: 580
+Stem-1 GROUPMEMBERSSTATUS.group          Assigned : 130
+Stem-1 GROUPMEMBERSSTATUS.groupindx      Assigned : 281
+Stem-1 GROUPMEMBERSSTATUS.groupindx      Reference: 281
+
+Stem-1 GROUPMODEL.group                  Assigned : 127
+
+Stem-1 GROUPNAME.                        Assigned : 73
+Stem-1 GROUPNAME.group                   Assigned : 120
+
+Stem-1 GROUPOWNER.group                  Assigned : 124
+
+Stem-1 GROUPREF.                         Assigned : 75
+Stem-1 GROUPREF.gix                      Assigned : 1293
+
+Stem-1 GROUPUACC.group                   Assigned : 125
+
+Stem-1 GROUPUNIVERSAL.group              Assigned : 128
+
+Stem-1 HDR.#                             Assigned : 397 398 399 400 401 402 403 411
+Stem-1 HDR.0                             Assigned : 396
+Stem-1 HDR.hdr                           Assigned : 406
+
+Stem-1 OPTCLSTX.optclstx                 Assigned : 465 467 469 484 500 503 518 534 548 551 564 567 575 584 593 594 599 601 603 605 607 612 616
+       ...                                          1254 1257 1259 1262
+
+Stem-1 RACFSMRY.0                        Reference: 95
+Stem-1 RACFSMRY.racfsmry                 Reference: 105 110 139 217
+
+Stem-1 REPLACE.                          Assigned : 306
+Stem-1 REPLACE.replace                   Reference: 1231
+
+Stem-1 REVOKED.uidx                      Reference: 478 480 494 496 512 514 528 530 544 560 1332
+Stem-1 REVOKED.uix                       Reference: 1283 1286 1313
+Stem-1 REVOKED.userid                    Assigned : 207 1305
+
+Stem-1 RPHTABLE.                         Assigned : 85
+
+Stem-1 RPHTABLECREATOR.                  Assigned : 88
+Stem-1 RPHTABLECREATOR.x                 Reference: 609
+
+Stem-1 RPHTABLECREATORINDX.              Assigned : 89
+
+Stem-1 RPHTABLEINDX.                     Assigned : 86
+
+Stem-1 RPHTABLEPRIV.                     Assigned : 90
+
+Stem-1 RPHTABLEWGRANT.                   Assigned : 91
+
+Stem-1 SQLERRD.#                          *Special: Assigned via an ADDR env cmd and/or REXX itself
+Stem-1 SQLERRD.#                         Reference: 1179
+
+Stem-1 SQLWARN.#                          *Special: Assigned via an ADDR env cmd and/or REXX itself
+Stem-1 SQLWARN.#                         Reference: 1186
+
+Stem-1 SUPERGRPNAME.group                Assigned : 122
+
+Stem-1 SYSAUTH.0                         Assigned : 867
+Stem-1 SYSAUTH.0                         Reference: 873 911 916 950
+Stem-1 SYSAUTH.i                         Reference: 874 912 951
+Stem-1 SYSAUTH.sysauth                   Assigned : 840 841 842 843 844 845 846 847 848 849 850 852 853 854 855 856 857 858 859 860 861 862 863
+       ...                                          864 865 866
+
+Stem-1 UID.ii                            Reference: 471 484 487 500 505 518 521 534 537 548 553 564 569
+Stem-1 UID.uid                           Assigned : 1239
+
+Stem-1 UIDINDX.                          Assigned : 415
+Stem-1 UIDINDX.uidx                      Assigned : 1240
+Stem-1 UIDINDX.uidx                      Reference: 1236
+
+Stem-1 USERID.                           Assigned : 78
+Stem-1 USERID.0                          Assigned : 295 1302
+Stem-1 USERID.0                          Reference: 1300
+Stem-1 USERID.userid                     Assigned : 206 1304
+
+Stem-1 USERIDINDX.                       Assigned : 77
+Stem-1 USERIDINDX.grantee                Reference: 1323
+Stem-1 USERIDINDX.racfuserid             Assigned : 205
+Stem-1 USERIDINDX.racfuserid             Reference: 231
+Stem-1 USERIDINDX.userorgroup            Assigned : 1303
+Stem-1 USERIDINDX.userorgroup            Reference: 1277 1280
+Stem-1 USERIDINDX.xxx                    Reference: 472 477 488 493 506 511 522 527 538 543 554 559 570
+
+Stem-1 USERREF.                          Assigned : 79
+Stem-1 USERREF.uix                       Assigned : 1281 1311
+
+Stem-1 USERSDGROUP.uix                   Reference: 1284 1286 1313
+Stem-1 USERSDGROUP.userid                Assigned : 209 1307
+
+Stem-1 USERSGROUPS.userid                Assigned : 210 1308
+
+Stem-1 USERSNAME.uix                     Reference: 1284 1286 1313
+Stem-1 USERSNAME.userid                  Assigned : 208 1306
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

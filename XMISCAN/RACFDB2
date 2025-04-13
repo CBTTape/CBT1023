@@ -1,0 +1,1404 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.CNTL.RACFDB2.PDS(RACFDB2)"      */
+/*      --------------------------------       */
+/*  date/time of XREF was:                     */
+/*     20231217 23:04:41                       */
+/*      --------------------------------       */
+
+/*Rexx*/
+Arg owner ssid classmnt model charopt .
+  /* Set addressability to DB2 Rexx function */
+ADDRESS TSO "SUBCOM DSNREXX"
+If RC = 1 Then S_RC = RXSUBCOM('ADD','DSNREXX','DSNREXX')
+Else Do
+  Say 'Can not access DB2 Rexx Function.  Ending...'
+  Exit
+End
+ADDRESS DSNREXX
+"CONNECT "ssid
+
+   /* Set basic header */
+hdr.0 = 6
+hdr.1 = "/* DB2 to RACF conversion CLIST */"
+hdr.2 = "/* input agruments              */"
+hdr.3 = "/*     owner = " owner ", ssid = " ssid  "*/"
+hdr.4 = "/*     classmnt = " classmnt  ", model= " model  "*/"
+hdr.5 = "/*     charopt = " charopt      "*/"
+hdr.6 = "/* date=" DATE() "time=" TIME() "*/"
+Address TSO "EXECIO * DISKW CLIST (STEM hdr."
+
+   /* Set Optional header (relies on hdr. above) */
+hdr.1 = "/* Optional DB2 to RACF conversion CLIST */"
+Address TSO "EXECIO * DISKW OPTCLST (STEM hdr."
+
+If owner="" Then Do
+  Say "Owner must be specified"
+  Exit
+End
+If ssid="" Then Do
+  Say "SSID must be specified"
+  Exit
+End
+If classmnt="" Then classmnt="DSN"
+If model="" Then model=2
+
+   /* Set class based on 'Classification Model' */
+   /* If an invalid model, we default to II     */
+If model=1 Then class=Strip(ssid)"ADM"charopt
+Else class=classmnt"ADM"charopt
+
+  /*---------------------------------------------------*/
+  /* Start processing DB2 authorization tables         */
+  /*---------------------------------------------------*/
+call sys_attr "SYSADM","SYSADMAUTH"
+call sys_attr "SYSOPR","SYSOPRAUTH"
+call sys_attr "SYSCTRL","SYSCTRLAUTH"
+
+call db_attr "DBADM","DBADMAUTH"
+call db_option
+call db_attr "DBMAINT","DBMAINTAUTH"
+call db_attr "DBCTRL","DBCTRLAUTH"
+call packadm_attr "PACKADM"
+
+   /* Resource privileges */
+If model=1 Then class="M"Strip(ssid)"SM"charopt
+Else class="M"classmnt"SM"charopt
+call sys_attr "ARCHIVE","ARCHIVEAUTH"
+call sys_attr "BINDADD","BINDADDAUTH"
+call bindagent
+call sys_attr "CREATEALIAS","CREATEALIASAUTH"
+call sys_attr "CREATEDBA","CREATEDBAAUTH"
+call sys_attr "CREATEDBC","CREATEDBCAUTH"
+call sys_attr "CREATESG","CREATESGAUTH"
+call sys_attr "DISPLAY","DISPLAYAUTH"
+call sys_attr "MONITOR1","MON1AUTH"
+call sys_attr "MONITOR2","MON2AUTH"
+call sys_attr "RECOVER","RECOVERAUTH"
+call sys_attr "STOPALL","STOPALLAUTH"
+call sys_attr "STOSPACE","STOSPACEAUTH"
+call sys_attr "TRACE","TRACEAUTH"
+call sys_attr "CREATETMTAB","CREATETMTABAUTH"
+
+   /* Table privileges */
+call tab_priv "ALTER","ALTERAUTH"
+call tab_priv "DELETE","DELETEAUTH"
+call tab_priv "INDEX","INDEXAUTH"
+call tab_priv "INSERT","INSERTAUTH"
+call tab_priv "SELECT","SELECTAUTH"
+call tab_priv "REFERENCES","REFERENCESAUTH"
+call tab_upd
+
+   /* Database privileges */
+call def_priv "DB","CREATETAB","CREATETABAUTH","DB"
+call def_priv "DB","CREATETS","CREATETSAUTH","DB"
+call def_priv "DB","DISPLAYDB","DISPLAYDBAUTH","DB"
+call def_priv "DB","DROP","DROPAUTH","DB"
+call def_priv "DB","IMAGCOPY","IMAGCOPYAUTH","DB"
+call def_priv "DB","LOAD","LOADAUTH","DB"
+call def_priv "DB","REORG","REORGAUTH","DB"
+call def_priv "DB","RECOVERDB","RECOVERDBAUTH","DB"
+call def_priv "DB","REPAIR","REPAIRAUTH","DB"
+call def_priv "DB","STARTDB","STARTDBAUTH","DB"
+call def_priv "DB","STATS","STATSAUTH","DB"
+call def_priv "DB","STOPDB","STOPAUTH","DB"
+
+   /* Plan privileges */
+call def_priv "PN","BIND","BINDAUTH","PLAN"
+call def_priv "PN","EXECUTE","EXECUTEAUTH","PLAN"
+
+   /* Package privileges */
+call pack_priv "BIND","BINDAUTH"
+call pack_priv "EXECUTE","EXECUTEAUTH"
+call pack_priv "COPY","COPYAUTH"
+
+   /* Collection privileges */
+call cltn_priv "CREATEIN"
+
+   /* Use BUFFERPOOL/STOGROUP/TABLESPACE privileges */
+call use_priv "USE","B","BP"
+call use_priv "USE","S","SG"
+call use_priv "USE","R","TS"
+
+Address TSO "EXECIO 0 DISKW CLIST (FINIS"
+"DISCONNECT"
+Exit
+
+def_priv:
+/*****************************************************************/
+/* Get DB2 Default privileges (plans, db, etc.)                  */
+/*****************************************************************/
+  Arg type,auth,col,tab
+  If model=1 Then class="M"Strip(ssid)||type||charopt
+  Else class="M"classmnt||type||charopt
+
+      /* Find all objects, and make commands to create profiles */
+      /* for 'auth'. Then remove executor from access list.     */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYS"tab"AUTH"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",
+          "OWNER("owner")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+
+      cmd="PERMIT "prof" CLASS("class") RESET"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* If any of those were PUBLIC, change UACC to READ */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYS"tab"AUTH",
+    "WHERE GRANTEE IN ('PUBLIC','PUBLIC*') AND "col"¬=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      cmd="RALT "class prof" UACC(READ)"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYS"tab"AUTH",
+    "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND "col"='Y'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYS"tab"AUTH",
+    "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND "col"='G'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+Return    /* def_priv */
+
+tab_priv:
+/*****************************************************************/
+/* Get DB2 Tables privileges                                     */
+/*****************************************************************/
+  Arg auth,col
+  If model=1 Then class="M"Strip(ssid)"TB"charopt
+  Else class="M"classmnt"TB"charopt
+
+      /* Find all objects, and make commands to create profiles */
+      /* for non-column based authority */
+  sql="SELECT DISTINCT TCREATOR, TTNAME FROM SYSIBM.SYSTABAUTH",
+    "WHERE GRANTEETYPE=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.'auth
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",
+          "OWNER("owner")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+
+      cmd="PERMIT "prof" CLASS("class") RESET"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* If any of those were PUBLIC, change UACC to READ */
+  sql="SELECT DISTINCT TCREATOR, TTNAME FROM SYSIBM.SYSTABAUTH",
+    "WHERE GRANTEE IN ('PUBLIC','PUBLIC*') AND "col"¬=' '",
+    "AND GRANTEETYPE=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.'auth
+      cmd="RALT "class prof" UACC(READ)"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT TCREATOR, TTNAME, GRANTEE",
+    "FROM SYSIBM.SYSTABAUTH",
+    "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND "col"='Y'",
+    "AND GRANTEETYPE=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT TCREATOR, TTNAME, GRANTEE",
+    "FROM SYSIBM.SYSTABAUTH",
+    "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND "col"='G'",
+    "AND GRANTEETYPE=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+Return    /* tab_priv */
+
+tab_upd:
+/*****************************************************************/
+/* Get DB2 Table Update privileges                               */
+/*****************************************************************/
+  If model=1 Then class="M"Strip(ssid)"TB"charopt
+  Else class="M"classmnt"TB"charopt
+
+      /* Find all objects, and make commands to create profiles */
+      /* for non-column based authority */
+  sql="SELECT DISTINCT TCREATOR, TTNAME FROM SYSIBM.SYSTABAUTH",
+      "WHERE GRANTEETYPE=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.UPDATE'
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",
+          "OWNER("owner")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+
+      cmd="PERMIT "prof" CLASS("class") RESET"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* If any of those were PUBLIC, change UACC to READ */
+  sql="SELECT DISTINCT TCREATOR, TTNAME FROM SYSIBM.SYSTABAUTH",
+      "WHERE GRANTEE IN ('PUBLIC','PUBLIC*') AND UPDATEAUTH¬=' '",
+      "AND GRANTEETYPE=' ' AND UPDATECOLS=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.UPDATE'
+      cmd="RALT "class prof" UACC(READ)"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT TCREATOR, TTNAME, GRANTEE",
+      "FROM SYSIBM.SYSTABAUTH",
+      "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND",
+      "UPDATEAUTH='Y' AND GRANTEETYPE=' ' AND UPDATECOLS=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.UPDATE'
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT TCREATOR, TTNAME, GRANTEE",
+      "FROM SYSIBM.SYSTABAUTH",
+      "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND",
+      "UPDATEAUTH='G' AND GRANTEETYPE=' ' AND UPDATECOLS=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.UPDATE'
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+      /************************************************/
+      /* Now for Column-only                          */
+      /************************************************/
+
+      /* Find all objects, and make commands to create profiles */
+      /* for column based authority */
+  sql="SELECT DISTINCT T.TCREATOR, T.TTNAME, C.COLNAME",
+    "FROM SYSIBM.SYSTABAUTH T,",
+    "SYSIBM.SYSCOLAUTH C WHERE T.GRANTEETYPE=' ' AND",
+    "T.DATEGRANTED=C.DATEGRANTED AND T.TIMEGRANTED=C.TIMEGRANTED",
+    "AND T.TTNAME=C.TNAME AND T.TCREATOR=C.CREATOR",
+    "AND T.UPDATECOLS='*' AND T.UPDATEAUTH¬=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname, :colname"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.'Strip(colname)'.UPDATE'
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",
+        "OWNER("owner")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+
+      cmd="PERMIT "prof" CLASS("class") RESET"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* If any of those were PUBLIC, change UACC to READ */
+  sql="SELECT DISTINCT T.TCREATOR, T.TTNAME, C.COLNAME",
+    "FROM SYSIBM.SYSTABAUTH T,",
+    "SYSIBM.SYSCOLAUTH C WHERE T.GRANTEETYPE=' ' AND",
+    "T.DATEGRANTED=C.DATEGRANTED AND T.TIMEGRANTED=C.TIMEGRANTED",
+    "AND T.TTNAME=C.TNAME AND T.TCREATOR=C.CREATOR",
+    "AND T.GRANTEE IN ('PUBLIC','PUBLIC*')",
+    "AND T.UPDATECOLS='*' AND T.UPDATEAUTH¬=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname, :colname"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.'Strip(colname)'.UPDATE'
+      cmd="RALT "class prof" UACC(READ)"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT T.TCREATOR, T.TTNAME, C.COLNAME, T.GRANTEE",
+    "FROM SYSIBM.SYSTABAUTH T, SYSIBM.SYSCOLAUTH C",
+    "WHERE T.GRANTEETYPE=' ' AND",
+    "T.DATEGRANTED=C.DATEGRANTED AND T.TIMEGRANTED=C.TIMEGRANTED",
+    "AND T.TTNAME=C.TNAME AND T.TCREATOR=C.CREATOR",
+    "AND T.GRANTEE NOT IN ('PUBLIC','PUBLIC*')",
+    "AND T.UPDATECOLS='*' AND T.UPDATEAUTH¬='Y'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname, :colname, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.'Strip(colname)'.UPDATE'
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT T.TCREATOR, T.TTNAME, C.COLNAME, T.GRANTEE",
+    "FROM SYSIBM.SYSTABAUTH T, SYSIBM.SYSCOLAUTH C",
+    "WHERE T.GRANTEETYPE=' ' AND",
+    "T.DATEGRANTED=C.DATEGRANTED AND T.TIMEGRANTED=C.TIMEGRANTED",
+    "AND T.TTNAME=C.TNAME AND T.TCREATOR=C.CREATOR",
+    "AND T.GRANTEE NOT IN ('PUBLIC','PUBLIC*')",
+    "AND T.UPDATECOLS='*' AND T.UPDATEAUTH¬='G'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :tcreator, :ttname, :colname, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(tcreator)'.'Strip(ttname)
+      Else prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+      prof=prof'.'Strip(colname)'.UPDATE'
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+Return    /* tab_upd */
+
+use_priv:
+/*****************************************************************/
+/* Get DB2 USE privileges (bufferpool, stogroup, tablespace)     */
+/*****************************************************************/
+  Arg auth,obtype,type
+  If model=1 Then class="M"Strip(ssid)||type||charopt
+  Else class="M"classmnt||type||charopt
+
+      /* Find all objects, and make commands to create profiles */
+      /* for 'auth'. Then remove executor from access list.     */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",
+      "WHERE OBTYPE='"obtype"'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",
+          "OWNER("owner")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+
+      cmd="PERMIT "prof" CLASS("class") RESET"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* If any of those were PUBLIC, change UACC to READ */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",
+      "WHERE OBTYPE='"obtype"' AND USEAUTH¬=' '",
+      "AND GRANTEE IN ('PUBLIC','PUBLIC*')"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      cmd="RALT "class prof" UACC(READ)"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",
+      "WHERE OBTYPE='"obtype"' AND USEAUTH='Y'",
+      "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*')"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",
+      "WHERE OBTYPE='"obtype"' AND USEAUTH='G'",
+      "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*')"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+Return    /* use_priv */
+
+pack_priv:
+/*****************************************************************/
+/* Get DB2 Package privileges                                    */
+/*    This gets tricky, because SYSPACKAUTH has COLLID and       */
+/* can have * for NAME (Package ID).  We must define all the     */
+/* permits with * first, then PERMIT FROM(xx.*) as well as the   */
+/* normal permits.                                               */
+/*    We also ignore any row where GRANTEETYPE='P' (for access)  */
+/*****************************************************************/
+  Arg auth,col
+  If model=1 Then class="M"Strip(ssid)"PK"charopt
+  Else class="M"classmnt"PK"charopt
+
+      /* Find ALL packages, and make commands to create profiles */
+      /* for 'auth'. Then remove executor from access list.      */
+  sql="SELECT DISTINCT COLLID, NAME FROM SYSIBM.SYSPACKAUTH"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :collid, :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(collid)'.'Strip(name)'.'auth
+      Else prof=ssid'.'Strip(collid)'.'Strip(name)'.'auth
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",
+          "OWNER("owner")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+
+      cmd="PERMIT "prof" CLASS("class") RESET"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* If any of those were PUBLIC, change UACC to READ */
+  sql="SELECT DISTINCT COLLID, NAME FROM SYSIBM.SYSPACKAUTH",
+    "WHERE GRANTEE IN ('PUBLIC','PUBLIC*') AND "col"¬=' '",
+    "AND GRANTEETYPE=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :collid, :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(collid)'.'Strip(name)'.'auth
+      Else prof=ssid'.'Strip(collid)'.'Strip(name)'.'auth
+      cmd="RALT "class prof" UACC(READ)"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list to '*' packs */
+  sql="SELECT DISTINCT COLLID, GRANTEE FROM SYSIBM.SYSPACKAUTH",
+    "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND "col"='Y'",
+    "AND GRANTEETYPE=' ' AND NAME='*'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :collid, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(collid)'.*.'auth
+      Else prof=ssid'.'Strip(collid)'.*.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("grantee")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT COLLID, GRANTEE FROM SYSIBM.SYSPACKAUTH",
+    "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND "col"='G'",
+    "AND GRANTEETYPE=' ' AND NAME='*'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :collid, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(collid)'.*.'auth
+      Else prof=ssid'.'Strip(collid)'.*.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+        "ID("grantee")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Now copy those access lists to individual package profiles */
+     /* if a * profile existed above                               */
+  sql="SELECT DISTINCT A.COLLID, A.NAME FROM SYSIBM.SYSPACKAUTH A",
+    "WHERE A.NAME¬='*' AND A.GRANTEETYPE=' ' AND",
+    "EXISTS(SELECT B.COLLID FROM SYSIBM.SYSPACKAUTH B WHERE",
+      "B.NAME='*' AND A.COLLID=B.COLLID",
+      "AND B.GRANTEETYPE=' ')"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :collid, :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prefix=Strip(collid)"."
+      Else prefix=ssid"."Strip(collid)"."
+      cmd="PERMIT "prefix||Strip(name)"."auth,
+        "CLASS("class") FROM("prefix"*."auth")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access to individual pack  */
+     /* profiles                                                   */
+  sql="SELECT DISTINCT COLLID, NAME, GRANTEE FROM SYSIBM.SYSPACKAUTH",
+    "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND "col"='Y'",
+    "AND GRANTEETYPE=' ' AND NAME¬='*'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :collid, :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(collid)"."Strip(name)"."auth
+      Else prof=ssid"."Strip(collid)"."Strip(name)"."auth
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT COLLID, NAME, GRANTEE FROM SYSIBM.SYSPACKAUTH",
+    "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND "col"='G'",
+    "AND GRANTEETYPE=' ' AND NAME¬='*'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :collid, :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(collid)"."Strip(name)"."auth
+      Else prof=ssid"."Strip(collid)"."Strip(name)"."auth
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+Return     /* pack_priv */
+
+cltn_priv:
+/*****************************************************************/
+/* Get DB2 Collection privileges                                 */
+/*    This gets tricky, because SYSRESAUTH with OBTYPE='C'       */
+/* can have * for NAME (Collection ID).  We must define all      */
+/* the permits with * first, then PERMIT FROM(xx.*) as well as  */
+/* the normal permits.                                           */
+/*****************************************************************/
+  Arg auth
+     /* Note: auth is always CREATEIN for Collections */
+  If model=1 Then class="M"Strip(ssid)"CL"charopt
+  Else class="M"classmnt"CL"charopt
+
+      /* Find all objects, and make commands to create profiles */
+      /* for 'auth'. Then remove executor from access list.     */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",
+    "WHERE OBTYPE='C' AND QUALIFIER='        '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)"."auth
+      Else prof=ssid"."Strip(name)"."auth
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",
+        "OWNER("owner")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+
+      cmd="PERMIT "prof" CLASS("class") RESET"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* If any of those were PUBLIC, change UACC to READ */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",
+    "WHERE OBTYPE='C' AND QUALIFIER='        '",
+    "AND GRANTEE IN ('PUBLIC','PUBLIC*') AND USEAUTH¬=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)"."auth
+      Else prof=ssid"."Strip(name)"."auth
+      cmd="RALT "class prof" UACC(READ)"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list to '*' coll. */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",
+    "WHERE OBTYPE='C' AND QUALIFIER='        '",
+    "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND USEAUTH='Y'",
+    "AND NAME='*'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)"."auth
+      Else prof=ssid"."Strip(name)"."auth
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",
+    "WHERE OBTYPE='C' AND QUALIFIER='        '",
+    "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND USEAUTH='G'",
+    "AND NAME='*'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)"."auth
+      Else prof=ssid"."Strip(name)"."auth
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Now copy the '*' access list to the individuals ones */
+     /* if the * existed                                     */
+  sql="SELECT DISTINCT A.NAME FROM SYSIBM.SYSRESAUTH A",
+    "WHERE A.OBTYPE='C' AND A.QUALIFIER='        '",
+    "AND A.NAME¬='*'",
+    "AND EXISTS(SELECT * FROM SYSIBM.SYSRESAUTH B WHERE",
+    " B.NAME='*' AND B.OBTYPE='C' AND B.QUALIFIER='        ')"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)"."auth
+      Else prof=ssid"."Strip(name)"."auth
+      If model=1 Then fromprof="*."auth
+      Else fromprof=ssid".*."auth
+      cmd="PERMIT "prof" CLASS("class") FROM("fromprof")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access to individual */
+     /* collection profiles                                  */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",
+    "WHERE OBTYPE='C' AND QUALIFIER='        '",
+    "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND USEAUTH='Y'",
+    "AND NAME¬='*'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)"."auth
+      Else prof=ssid"."Strip(name)"."auth
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",
+    "WHERE OBTYPE='C' AND QUALIFIER='        '",
+    "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND USEAUTH='G'",
+    "AND NAME¬='*'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)"."auth
+      Else prof=ssid"."Strip(name)"."auth
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+        "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+Return    /* cltn_priv */
+
+sys_attr:
+/*****************************************************************/
+/* Get DB2 system administrative authorities                     */
+/*****************************************************************/
+  Arg auth,col
+  If model=1 Then prof=auth
+  Else prof=ssid"."auth
+
+     /* First determine if it is given to PUBLIC */
+  sql="SELECT COUNT(*) FROM SYSIBM.SYSUSERAUTH",
+    "WHERE GRANTEE='PUBLIC' AND "col"¬=' '"
+  call ZSQL
+  "EXECSQL FETCH C1 INTO :rows"
+  If SQLCODE \= 0 Then call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1 '
+
+     /* If there are no rows, it is not public */
+  If rows = 0 Then uac="NONE"
+  Else uac="READ"
+
+     /* Define base profile */
+  cmd="RDEF "class prof" UACC("uac") OWNER("owner") AUDIT(ALL(READ))"
+  Push cmd
+  Address TSO "EXECIO 1 DISKW CLIST"
+
+     /* Remove executor from access list */
+  cmd="PERMIT "prof" CLASS("class") RESET"
+  Push cmd
+  Address TSO "EXECIO 1 DISKW CLIST"
+
+     /* Get all ids (except PUBLIC) for access list */
+           /* Without GRANT */
+  sql="SELECT DISTINCT GRANTEE FROM SYSIBM.SYSUSERAUTH",
+    "WHERE "col"='Y' AND GRANTEE¬='PUBLIC'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :grantee"
+    If SQLCODE = 0 Then Do
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+          "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1 '
+
+           /* With GRANT */
+  sql="SELECT DISTINCT GRANTEE FROM SYSIBM.SYSUSERAUTH",
+    "WHERE "col"='G' AND GRANTEE¬='PUBLIC'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :grantee"
+    If SQLCODE = 0 Then Do
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+          "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1 '
+Return     /* sys_attr */
+
+bindagent:
+/*****************************************************************/
+/* Get DB2 system BINDAGENT authority                            */
+/*****************************************************************/
+     /* Create (ssid.)grantor.BINDAGENT profile for each GRANTOR */
+     /* And remove executor from access list */
+  sql="SELECT DISTINCT GRANTOR FROM SYSIBM.SYSUSERAUTH",
+    "WHERE BINDAGENTAUTH¬=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :grantor"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(grantor)'.BINDAGENT'
+      Else prof=Strip(ssid)'.'Strip(grantor)'.BINDAGENT'
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",
+          "OWNER("owner")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+
+      cmd="PERMIT "prof" CLASS("class") RESET"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1 '
+
+     /* Change UACC if it is given to PUBLIC */
+  sql="SELECT DISTINCT GRANTOR FROM SYSIBM.SYSUSERAUTH",
+    "WHERE BINDAGENTAUTH¬=' ' AND GRANTEE='PUBLIC'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :grantor"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(grantor)'.BINDAGENT'
+      Else prof=Strip(ssid)'.'Strip(grantor)'.BINDAGENT'
+      cmd="RALT " class prof" UACC(READ)"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT GRANTOR, GRANTEE FROM SYSIBM.SYSUSERAUTH",
+    "WHERE BINDAGENTAUTH='Y' AND GRANTEE¬='PUBLIC'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :grantor, :grantee"
+    If SQLCODE=0 Then Do
+      If model=1 Then prof=Strip(grantor)'.BINDAGENT'
+      Else prof=Strip(ssid)'.'Strip(grantor)'.BINDAGENT'
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+          "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT GRANTOR, GRANTEE FROM SYSIBM.SYSUSERAUTH",
+    "WHERE BINDAGENTAUTH='G' AND GRANTEE¬='PUBLIC'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :grantor, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(grantor)'.BINDAGENT'
+      Else prof=Strip(ssid)'.'Strip(grantor)'.BINDAGENT'
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+          "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+Return     /* bindagent */
+
+db_attr:
+/*****************************************************************/
+/* Get DB2 database administrative authorities                   */
+/*****************************************************************/
+  Arg auth,col
+
+      /* Find all databases, and make commands to create profiles */
+      /* for 'auth'. Then remove executor from access list.       */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYSDBAUTH"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=Strip(ssid)'.'Strip(name)'.'auth
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",
+          "OWNER("owner")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+
+      cmd="PE "prof" CLASS("class") RESET"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+
+     /* If any of those were PUBLIC, change UACC to READ */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYSDBAUTH",
+    "WHERE GRANTEE='PUBLIC' AND "col"¬=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=Strip(ssid)'.'Strip(name)'.'auth
+      cmd="RALT "class prof" UACC(READ)"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSDBAUTH",
+    "WHERE GRANTEE¬='PUBLIC' AND "col"='Y'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=Strip(ssid)'.'Strip(name)'.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+          "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSDBAUTH",
+    "WHERE GRANTEE¬='PUBLIC' AND "col"='G'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=Strip(ssid)'.'Strip(name)'.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+          "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+Return
+
+db_option:
+/*****************************************************************/
+/* For DBADM write optional commands for profile with no DBname  */
+/*****************************************************************/
+  If model=1 Then prof="DBADM"
+  Else prof=Strip(ssid)".DBADM"
+  cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ)) OWNER("owner")"
+  Push cmd
+  Address TSO "EXECIO 1 DISKW OPTCLST"
+
+  cmd="PE "prof" CLASS("class") RESET"
+  Push cmd
+  Address TSO "EXECIO 1 DISKW OPTCLST"
+
+     /* Never make it PUBLIC */
+
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT GRANTEE FROM SYSIBM.SYSDBAUTH",
+    "WHERE GRANTEE¬='PUBLIC' AND DBADMAUTH='Y'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof="DBADM"
+      Else prof=Strip(ssid)".DBADM"
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+          "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW OPTCLST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+
+    /* with Grants */
+  sql="SELECT DISTINCT GRANTEE FROM SYSIBM.SYSDBAUTH",
+    "WHERE GRANTEE¬='PUBLIC' AND DBADMAUTH='G'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof="DBADM"
+      Else prof=Strip(ssid)".DBADM"
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+          "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW OPTCLST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+Return
+
+packadm_attr:
+/*****************************************************************/
+/* Get DB2 PACKADM                                               */
+/*****************************************************************/
+  Arg auth
+
+      /* Find all collections, and make commands to create profiles */
+      /* for 'auth'. Then remove executor from access list.         */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=Strip(ssid)'.'Strip(name)'.'auth
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ)) OWNER("owner")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+
+      cmd="PERMIT "prof" CLASS("class") RESET"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+
+     /* If any of those were PUBLIC, change UACC to READ */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",
+    "WHERE GRANTEE='PUBLIC' AND QUALIFIER='PACKADM'",
+    "AND OBTYPE='C' AND USEAUTH¬=' '"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=Strip(ssid)'.'Strip(name)'.'auth
+      cmd="RALT "class prof" UACC(READ)"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",
+    "WHERE GRANTEE¬='PUBLIC' AND QUALIFIER='PACKADM'",
+    "AND OBTYPE='C' AND USEAUTH='Y'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=Strip(ssid)'.'Strip(name)'.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(READ) ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+
+    /* with Grants */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",
+    "WHERE GRANTEE¬='PUBLIC' AND QUALIFIER='PACKADM'",
+    "AND OBTYPE='C' AND USEAUTH='G'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=Strip(ssid)'.'Strip(name)'.'auth
+      cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",
+          "ID("Strip(grantee)")"
+      Push cmd
+      Address TSO "EXECIO 1 DISKW CLIST"
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+Return
+
+ZSQL:
+  err_sw = "0"
+  "EXECSQL DECLARE C1 CURSOR FOR S1"
+  If SQLCODE \= 0 Then call prtsqlca 'DECLARE C1 CURSOR'
+  "EXECSQL PREPARE S1 INTO :outsqlca FROM :sql"
+  If SQLCODE \= 0 Then call prtsqlca 'PREPARE S1'
+  "EXECSQL OPEN C1"
+  If SQLCODE \= 0 Then call prtsqlca 'OPEN C1 '
+Return  /* zsql */
+
+prtsqlca:
+  err_sw = "1"
+  Say '** Error SQL statement - ' arg(1)
+  Say '** failing SQL statement - ' sql
+  Say 'SQLCODE = 'SQLCODE
+  Say 'SQLERRMC = 'SQLERRMC
+  Say 'SQLERRP = 'SQLERRP
+  Say 'SQLERRD = 'SQLERRD.1',',
+              || SQLERRD.2',',
+              || SQLERRD.3',',
+              || SQLERRD.4',',
+              || SQLERRD.5',',
+              || SQLERRD.6
+
+  Say 'SQLWARN = 'SQLWARN.1',',
+              || SQLWARN.2',',
+              || SQLWARN.3',',
+              || SQLWARN.4',',
+              || SQLWARN.5',',
+              || SQLWARN.6',',
+              || SQLWARN.7',',
+              || SQLWARN.8',',
+              || SQLWARN.9',',
+              || SQLWARN.10
+
+  Say 'SQLSTATE= 'SQLSTATE
+  Exit 999
+Return

@@ -1,0 +1,188 @@
+   (see $SAMPIDX for sample documentation index).
+
+$SAMP02 XREF part 1 (detailed explaination)
+$SAMP02 XREF part 1 (detailed explaination)
+-------------------------------------------
+
+  For debugging with XREF part1, find 'debugging' below:
+  For debugging with XREF part1, find 'debugging' below:
+
+
+XREF part 1 --- label references in the xref:
+XREF part 1 --- label references in the xref:
+---------------------------------------------
+
+       variable type            variable name              variable desc / variable list
+       -----------------------  --------------------       ------------------------------------------
+       Built-in+/External use   'TIME'                     Reference: F(1754) F(1757)
+
+       Label (internal label)   ALLOC_CSV_FILE             Defined  : 182
+       Label (int. label ref)   ALLOC_CSV_FILE             Reference: c(306)
+
+       Label (internal label)   SYNTAX                     Defined  : 421
+
+       Built-In+/External use   SYNTAX (SIGNAL OFF SYNTAX) Reference: S(522)
+
+       Built-In+/External use   SYNTAX (SIGNAL ON SYNTAX)  Reference: S(418)
+
+       Label (internal label)   ROUTINEX                   Defined  : 521
+
+       Built-In+/External use   ROUTINEX (SIGNAL ON SYNTAX ROUTINEX)
+                                ...                        Reference: S(518)
+
+       Built-in+/External use   WORDS                      Reference: F(5138)
+
+   General observations:
+   ---------------------
+
+   (upper/lower case):   label variables are always displayed in UpperCase (unless in quotes, in which case literal value is used).
+
+   C(#):  label was "called"        from line #  or "CALL ON <event> trapname"
+   F(#):  label was "function call" from line #
+   S(#):  label was "signal called" from line #  or "SIGNAL ON <event> trapname"
+
+   "Built-in+/External use"     no internal label defined. (assuming built-in and/or external routine).
+                                Exception:  for "signal on"/"signal off"/"call on"/"call off"
+                                   this line will appear, but there must be associated internal labels.
+
+                                Of course, random events for a SIGNAL ON <event> or a CALL ON <event> cannot
+                                be in a cross reference.  However, the SIGNAL ON or CALL ON <event> statement
+                                for a trapname (or default trapname) will show up in the XREF with the
+                                S(#) or C(#) referring to the SIGNAL ON or CALL on statement #.
+
+                                Examples:  see 'TIME' and SYNTAX and ROUTINEX and WORDS (above)
+
+
+   "Label (internal Label)"     internal label is being defined.  Only first definition of label can
+                                ever be used in a call/function call/signal instruction, however.
+
+                                All defined labels will appear here (including those used as a trapname
+                                or a default trapname, in a SIGNAL ON or CALL ON statement).
+
+                                Examples:  see ALLOC_CSV_FILE, SYNTAX, ROUTINEX (above)
+
+
+   "Label (int. label ref)"     references use letters C(#), F(#) or S(#) to show how label was referenced.
+
+                                Examples:  see ALLOC_CSV_FILE (above)
+
+
+
+
+
+XREF part 1 --- variable references in the xref:
+XREF part 1 --- variable references in the xref:
+---------------------------------------------
+
+       variable type            variable name              variable desc / variable list
+       -----------------------  --------------------       ------------------------------------------
+       Variable (set w/rexx)    address_rc                 Assigned : 139 250
+       Variable (used in/rexx)  address_rc                 Reference: 145 360
+
+       Variable (NEVER SET)     SOMETHING                  Not Assgn: EITHER used as upper case value OR set via cmd
+       Variable (used in/rexx)  SOMETHING                  Reference: 145 360
+
+       Variable (set w/rexx)    somethingelse              Assigned : 139 250
+       Variable (NEVER USED)    somethingelse              No Ref.  : If actually referenced, it must be via a cmd.
+
+       Variable (set w/rexx)    ssidtable                  Assigned : 1661 1756 1879 1982 2108
+       Variable (used in/rexx)  ssidtable                  Reference: 2015
+       Variable (in Stem Set)   ssidtable                  Assigned : 2017
+       Variable (in Stem Ref)   ssidtable                  Reference: 2011 2019 2123
+
+       SpecialVar(set no-XREF)  SQLSTATE                    *Special: No xref; set w/ADDR env cmd and/or REXX itself
+       SpecialVar(used w/rexx)  SQLSTATE                   Reference: 4931 5083
+
+       Built-In+/External use   SUBSTR                     Reference: F(4990) F(5054) F(5531) F(5535) F(5656) F(5759)
+
+       Variable (set w/rexx)    xtrc                       Assigned : 56 66 196 251 484 726 759 814 843 860 1031 1058 1078 1104
+                                ...                                   1172 1219 1274 1393 1469 1501 1531 1533 1633 1646 1832 1880
+                                ...                                   2178 2341
+       Variable (used in/rexx)  xtrc                       Reference: 196 251 484 726 759 814 843 860 1031 1058 1078 1104 1172
+                                ...                                   1219 1274 1393 1469 1501 1531 1533 1646 2178 2341
+       Variable (used in/rexx)  xtrc                       Expose Ref: 628 763 1631 2472
+
+
+
+   General observations:
+   ---------------------
+   (upper/lower case):   if a variable was "Assigned"  a value, it will be displayed in LowerCase.
+   (upper/lower case):   if a variable was never given a value, it will be displayed in UpperCase.
+
+   (upper/lower case):   label variables are always displayed in UpperCase (unless in quotes, in which case literal value is used).
+
+   ("Assigned"):         list of lines were variable was set to a value.
+   ("Not Assgn"):        variable never set to a value in rexx code.
+   ("Reference"):        list of lines were variable was used.
+   ("Expose Ref"):       list of lines where "PROCEDURE EXPOSE variable" was used for this variable.
+   ("No Ref"):           variable never referenced in rexx code.
+   (" *Special"):        Special variables can be set automaticly by rexx and/or some commands.
+
+   if "Variable (set w/rexx)  "
+      "Variable (used in/rexx)" (w/"Reference" or "Expose Ref") both appear for a variable:
+
+        Then we will see lines like that for "address_rc" (above) with "Assigned:" and "Reference"" information.
+        With variable in LowerCase.
+
+        example: see "address_rc" (includes w/"Reference")
+        example: see "xtrc"       (includes w/"Reference" and "Expose Ref")
+
+
+   if "Variable (NEVER SET)   "
+      "Variable (used in/rexx)" (w/"Reference" or "Expose Ref") both appear for a variable:
+
+        Then we will see lines like that for "SOMETHING" (see above) with only "Reference" information.
+        With variable in UpperCase.
+
+
+
+
+   if "Variable (set w/rexx)  "
+      "Variable (NEVER USED)  " both appear for a variable:
+
+        Then we will see lines like that for "somethingelse" (see above) with only "Assigned:" information.
+        With variable in LowerCase.
+
+
+   For special variables, a line indicating that it may be set (with out an entry in xref) will be generated.
+                          and this will only be generated if a special variable is actually set/referenced in rexx code.
+        See "SQLSTATE" (above).
+
+   If variable is "set" (but not "referenced") then we will see lines like that for "somethingelse" (above).
+
+        Note also:  Because it was "set", you will see variable name "somethingelse" in LowerCase.
+
+   For variables used in the "tail" of a stem variable, additional xref lines will appear:
+        "Variable (in Stem Set)" if the variable was used in the tail of a stem variable being assigned a value.
+        "Variable (in Stem Ref)" if the variable was used in the tail of a stem variable being referenced.
+
+
+
+
+ Debugging using XREF part 1.
+ Debugging using XREF part 1.
+ ----------------------------
+
+   finding exposed variables that didn't seem to ever be set to a value.
+   ---------------------------------------------------------------------
+     Repeat find command:  find "Expose Ref"
+
+     If variable is in UpperCase "Not Assgn"(ed) a value, this may be a RED flag.  As why expose a (global)
+    variable that you never actually set?
+
+   finding mispelled variables:
+   ----------------------------
+     Repeat find command(s):  find "Never set" or find "Never USED"
+
+     Although variables "NEVER SET" or variables "NEVER USED" may be misleading (they may be set via some command
+    and/or function), this may be a key piece of information that leads you to discover a mispelled variables in
+    the rexx code.
+
+     Note, in XREF part2, variables used in the tail of a stem are also in UpperCase (uninitialized) or LowerCase (
+    when variable in the tail gets set to a value somewhere in the rexx code).
+
+     Seeing a variable in a 'unexpected Upper/Lower case' can be a tip off to a problem.
+
+
+
+

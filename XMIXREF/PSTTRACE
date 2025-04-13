@@ -1,0 +1,424 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(PSTTRACE)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(PSTTRACE)
+   -----------------------------------------
+
+READY
+    PSTTRACE
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.PUBLIC.REXXXREF.REXX(PSTTRACE)"      */
+    Generated scan code/comment:   /*      -------------------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                          */
+    Generated scan code/comment:   /*     20231217 23:08:31                            */
+    Generated scan code/comment:   /*      -------------------------------------       */
+     1 *-* /* rexx = psttrace */
+     2 *-* /*                                                       */
+     3 *-* /* take scan output... that PSTTRACE set up              */
+     4 *-* /* (1) and remove line numbers from PreTrace rexx        */
+     5 *-* /*    line numbers.                                      */
+     6 *-* /* (2) and 'fix' line numbers of rest of scan to match   */
+     7 *-* /*    line numbers from original exec.                   */
+     8 *-* /*                                                       */
+     9 *-* /* Thus, the xref will have approriate line numbers      */
+    10 *-* /* to match the input rexx exec.  And to match the scan  */
+    11 *-* /* that was generated.                                   */
+    12 *-* /*                                                       */
+    13 *-* /* assumption:  invoked from jcl */
+    14 *-* /*                                              */
+    15 *-* /*   ddname:  IN has a rexx member              */
+    16 *-* /*   ddname:  OUT      has a (new) rexx member  */
+    17 *-* /*                                              */
+    18 *-* /*   after opening IN  for input                */
+    19 *-* /*   after opening OUT for output               */
+    20 *-* /*   ... write /* REXX */ to output file        */
+    21 *-* /*   ... write trace 's'  to output file        */
+    22 *-* /*   copy contents of IN to OUT                 */
+    23 *-* /*                                              */
+    24 *-* /* Input Arguments give us details on datasets  */
+    25 *-* /*    involved.                                 */
+    26 *-* /*                                              */
+    27 *-* /*                                                       */
+    29 *-* 'EXECIO 100 DISKR IN (OPEN STEM IN.'
+    30 *-* INRc = rc
+    31 *-* if INRc = 0 | INRc = 2
+    32 *-*  then
+       *-*  nop
+    33 *-* else
+       *-*  do
+    34 *-*   say 'PSTTRACE008E:  severe error'
+    35 *-*   say 'error opening file IN rc='INRc
+    36 *-*   say 'exit with rc=8'
+    37 *-*   'EXECIO 0 DISKR IN (FINIS'
+    38 *-*   exit 8
+    39 *-*  end
+    41 *-* 'EXECIO 0 DISKW OUT (OPEN'
+    42 *-* OUTRc = rc
+    43 *-* if OUTRc = 0
+    44 *-*  then
+       *-*  nop
+    45 *-* else
+       *-*  do
+    46 *-*   say 'PSTTRACE010E:  severe error'
+    47 *-*   say 'error opening file OUT rc='OUTRc
+    48 *-*   say 'exit with rc=8'
+    49 *-*   'EXECIO 0 DISKR IN (FINIS'
+    50 *-*   'EXECIO 0 DISKW OUT(FINIS'
+    51 *-*   exit 8
+    52 *-*  end
+    54 *-* in = 0
+    55 *-* out= 0
+    56 *-* pendingError = 0
+    57 *-* do forever /* skip until we find some scan code output */
+    58 *-*  in = in + 1
+    59 *-*  if in > in.0
+    60 *-*   then
+       *-*   do
+    61 *-*    /* looks like junk, just write what we got and exit */
+    62 *-*    say '...PSTTRACE failure, looks like this is not a rexx scan'
+    63 *-*    say '      writing out first buffer and exitting with rc=12'
+    64 *-*    out = in
+    65 *-*    out.out = '...PSTTRACE failure, looks like this is not a rexx scan'
+    66 *-*    out = out + 1
+    67 *-*    out.out = '      writing out first buffer and exitting with rc=12'
+    68 *-*    'EXECIO' out 'DISKW OUT (FINIS STEM OUT.'
+    69 *-*    if rc <> 0
+    70 *-*     then
+       *-*     say 'error writting/closing output to ddname=OUT; rc='rc
+    71 *-*    'EXECIO 0 DISKR IN (FINIS'
+    72 *-*    exit 12
+    73 *-*   end
+    74 *-*  x = pos('*-*',in.in)
+    75 *-*  if x = 0
+    76 *-*   then
+       *-*   out.in = in.in
+    77 *-*  else
+       *-*   do
+    78 *-*    parse var in.in numx '*-*' word1 word2 word3 .
+    79 *-*    if numx = 2
+    80 *-*     then
+       *-*     do
+    81 *-*      if word1 word2 = "trace 's'"
+    82 *-*       then
+       *-*       nop
+    83 *-*      else
+       *-*       pendingError = 1
+    84 *-*     end
+    85 *-*    if numx = 4
+    86 *-*     then
+       *-*     do
+    87 *-*      if word2 word2 word3 = '/* rexx member'
+    88 *-*       then
+       *-*       nop
+    89 *-*      else
+       *-*       pendingError = 1
+    90 *-*     end
+    91 *-*    if numx = 5
+    92 *-*     then
+       *-*     do
+    93 *-*      if word1 left(word2,1) = '/* "'
+    94 *-*       then
+       *-*       nop
+    95 *-*      else
+       *-*       pendingError = 1
+    96 *-*     end
+    97 *-*    if numx = 6 | numx = 9
+    98 *-*     then
+       *-*     do
+    99 *-*      if word1 left(word2,1) = '/* -'
+   100 *-*       then
+       *-*       nop
+   101 *-*      else
+       *-*       pendingError = 1
+   102 *-*     end
+   103 *-*    if numx = 8
+   104 *-*     then
+       *-*     do
+   105 *-*      if word1 left(word2,1) = '/* 2'
+   106 *-*       then
+       *-*       nop
+   107 *-*      else
+       *-*       pendingError = 1
+   108 *-*     end
+   109 *-*    if numx > 9
+   110 *-*     then
+       *-*     leave
+   112 *-*    parse var in.in numx '*-*' rest
+   113 *-*    out.in = '    Generated scan code/comment: ' rest
+   114 *-*   end
+   115 *-* end
+   117 *-* if pendingError > 0
+   118 *-*  then
+       *-*  do
+   119 *-*   say ' '
+   120 *-*   say 'Note:'
+   121 *-*   say '  rexx scan doesn''t look correct, but we will treat'
+   122 *-*   say '  rexx statement' numx 'as if it were the 1st line'
+   123 *-*   say '  in the rexx exec we are creating a xref for'
+   124 *-*   say ' '
+   125 *-*   offset = numx - 1
+   126 *-*  end
+   127 *-* else
+       *-*  offset = numx - 1
+   129 *-* /* now fix this one card */
+   130 *-* parse var in.in numx '*-*' rest
+   131 *-* out.in = right(numx-offset,6) '*-*' || rest
+   132 *-* out = in
+   134 *-* do forever
+   135 *-*  in = in + 1
+   136 *-*  if in > in.0
+   137 *-*   then
+       *-*   do
+   138 *-*    /* time to get another buffer */
+   139 *-*    if inrc <> 0
+   140 *-*     then
+       *-*     leave /* time to leave */
+   142 *-*    in = 0
+   143 *-*    'EXECIO 100 DISKR IN (STEM IN.'
+   144 *-*    inrc = rc
+   145 *-*    if inrc = 0 | inrc = 2
+   146 *-*     then
+       *-*     iterate /* start with next input buffer record */
+   147 *-*    leave
+   148 *-*   end
+   150 *-*   /* now fix card in in.in */
+   151 *-*  out = out + 1
+   152 *-*  if pos('*-*',in.in) = 0
+   153 *-*   then
+       *-*   out.out = in.in
+   154 *-*  else
+       *-*   do
+   155 *-*    parse var in.in numx '*-*' rest
+   156 *-*    if numx = ''
+   157 *-*     then
+       *-*     out.out = in.in
+   158 *-*    else
+       *-*     out.out = right(numx-offset,6) '*-*' || rest
+   159 *-*   end
+   161 *-*  if out > 100
+   162 *-*   then
+       *-*   do /* time to write an output buffer */
+   163 *-*    'EXECIO' out 'DISKW OUT (STEM OUT.'
+   164 *-*    outRc = rc
+   165 *-*    if outRc <> 0
+   166 *-*     then
+       *-*     do
+   167 *-*      say 'Error writting to ddname=OUT; rc='rc
+   168 *-*      say 'Will exit w/rc=12'
+   169 *-*      'EXECIO 0 DISKW OUT (FINIS'
+   170 *-*      'EXECIO 0 DISKR IN  (FINIS'
+   171 *-*      exit 12
+   172 *-*     end
+   173 *-*    out = 0 /*reset output buffer */
+   174 *-*   end
+   175 *-* end
+   177 *-* if inrc <> 2
+   178 *-*  then
+       *-*  say 'error reading from ddname=IN; rc='inrc
+   180 *-* 'EXECIO' out 'DISKW OUT (STEM OUT. FINIS' /* write out last buffer */
+   181 *-* outRc = rc
+   182 *-* if outRc <> 0
+   183 *-*  then
+       *-*  do
+   184 *-*   say 'Error writing/closing ddname=OUT; rc='rc
+   185 *-*   say 'Will exit w/rc=12'
+   186 *-*   'EXECIO 0 DISKW OUT (FINIS'
+   187 *-*   'EXECIO 0 DISKR IN  (FINIS'
+   188 *-*   exit 12
+   189 *-*  end
+   191 *-* if inrc <> 2
+   192 *-*  then
+       *-*  do
+   193 *-*   say 'exiting w/rc=12'
+   194 *-*   exit 12
+   195 *-*  end
+   197 *-*  /* normal end */
+   198 *-* exit 0
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Variable (set w/rexx)   in                Assigned : 54 58 135 142
+Variable (used in/rexx) in                Reference: 58 59 64 132 135 136
+Variable (in Stem Set)  in                Assigned : 76 113 131
+Variable (in Stem Ref)  in                Reference: 74 76 78 112 130 152 153 155 157
+
+Variable (set w/rexx)   inrc              Assigned : 30 144
+Variable (used in/rexx) inrc              Reference: 31 35 139 145 177 178 191
+
+Built-In+/External use  LEFT              Reference: F(93) F(99) F(105)
+
+Variable (set w/rexx)   numx              Assigned : 78 112 130 155
+Variable (used in/rexx) numx              Reference: 79 85 91 97 103 109 122 125 127 131 156 158
+
+Variable (set w/rexx)   offset            Assigned : 125 127
+Variable (used in/rexx) offset            Reference: 131 158
+
+Variable (set w/rexx)   out               Assigned : 55 64 66 132 151 173
+Variable (used in/rexx) out               Reference: 66 68 151 161 163 180
+Variable (in Stem Set)  out               Assigned : 65 67 153 157 158
+
+Variable (set w/rexx)   outrc             Assigned : 42 164 181
+Variable (used in/rexx) outrc             Reference: 43 47 165 182
+
+Variable (set w/rexx)   pendingerror      Assigned : 56 83 89 95 101 107
+Variable (used in/rexx) pendingerror      Reference: 117
+
+Built-In+/External use  POS               Reference: F(74) F(152)
+
+SpecialVar(set no-XREF) RC                 *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RC                Reference: 30 42 69 70 144 164 167 181 184
+
+Variable (set w/rexx)   rest              Assigned : 112 130 155
+Variable (used in/rexx) rest              Reference: 113 131 158
+
+Built-In+/External use  RIGHT             Reference: F(131) F(158)
+
+Variable (set w/rexx)   word1             Assigned : 78
+Variable (used in/rexx) word1             Reference: 81 93 99 105
+
+Variable (set w/rexx)   word2             Assigned : 78
+Variable (used in/rexx) word2             Reference: 81 87 93 99 105
+
+Variable (set w/rexx)   word3             Assigned : 78
+Variable (used in/rexx) word3             Reference: 87
+
+Variable (set w/rexx)   x                 Assigned : 74
+Variable (used in/rexx) x                 Reference: 75
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 IN.0         Reference: 59 136
+Stem-1 IN.in        Reference: 74 76 78 112 130 152 153 155 157
+
+Stem-1 OUT.in       Assigned : 76 113 131
+Stem-1 OUT.out      Assigned : 65 67 153 157 158
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

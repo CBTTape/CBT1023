@@ -1,0 +1,1055 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.REXX(STAT2)"      */
+/*      ------------------       */
+/*  date/time of XREF was:       */
+/*     20231217 23:04:05         */
+/*      ------------------       */
+
+/* rexx  STAT2                                                      */
+/*   SMFIN  ddname for smf record type 100 recs; ifcid 2            */
+/*   SMFRPT ddname for report output                                */
+/*                                                                  */
+/* looks at raw rmf data.                                           */
+/*                                                                  */
+/* process smf statistics record 2 data */
+/*    - when exec is invoked, provide SSID and buffer pools to create stats for (or * for all bp's)              */
+/*                                                                                                               */
+/*    - ifcid=2 contains many thing including buffer pool stats; simulated buffer pool stats; edm pool stats     */
+/*         - process buffer pool stats from DSNDQBST sections.                                                   */
+/*         - process buffer pool stats from DSNDQBSP (simulated buffer pool stats, if any)                       */
+/*         - output bpool/simulated stats per each buffer pool # (one or more csv records per sample, per bp)    */
+/*                                                                                                               */
+/*                                                                                                               */
+numeric digits 18 /* handle large numbers */
+maxLrecl = 0
+parse upper arg ArgSSID argBpool
+if ArgSSID = ''
+then do
+   say 'missing ArgSSID'
+   exit 8
+end
+if wordpos(argssid,'DSN0 DSN1 DSN2 DSNQ') = 0
+then do
+   say 'ArgSSID specified as "'argSSID'" but it must be DSN0, DSN1, DSN2 or DSNQ'
+   say 'Invalid parm supplied to this rexx exec, aborting now'
+   exit 8
+end
+say 'interested in db2 ifcid=2 statistical records for subsystem' argSSID
+
+lastValue. = '' /* by default, not known; but we will save prior value later */
+                /* updated by our function F0100adjValue('variableName')     */
+
+lastRefValue.=''/* by default, not known; but we will save prior ref value later */
+                /* updated by our function F0100adjValue('variableName')     */
+                /* referredby our function F0110refValue('variableName')     */
+
+/* note:  if interested, bpool.# = -1                                                    */
+/*        later, as interested bpools are found, it will become a positive "line" number */
+/*        if not interested, bpool.# will be equal to 0                                  */
+if argbpool = '*' | argbpool = ''
+then do
+   say 'argbpool specified as "'argbpool'" therefore, we will get stats for all bufferpools'
+   bpool. = -1 /* interested in all buffer pools */
+   argbpool = ''
+end
+else do
+   say 'argbpool specified as "'argbpool'"'
+   say 'now verifying specified buffer pools'
+   bpool. = 0 /* interested in only some buffer pools */
+
+   do while argbpool <> ''
+      parse upper var argbpool nextB argbpool
+      if datatype(nextb,'W') = 1
+      then nop
+      else do
+         maybe32 = wordpos(nextb,'BP32K  BP32K1 BP32K2 BP32K3 BP32K4 BP32K5 BP32K6 BP32K7 BP32K8 BP32K9')
+         maybe8  = wordpos(nextb,'BP8K0  BP8K1  BP8K2  BP8K3  BP8K4  BP8K5  BP8K6  BP8K7  BP8K8  BP8K9')
+         maybe16 = wordpos(nextb,'BP16K0 BP16K1 BP16K2 BP16K3 BP16K4 BP16K5 BP16K6 BP16K7 BP16K8 BP16K9')
+         if maybe32 > 0 then nextb = 50+maybe32
+         if maybe8  > 0 then nextb = 60+maybe8
+         if maybe16 > 0 then nextb = 70+maybe16
+      end
+      if datatype(nextb,'W') = 0
+      then do
+         say 'invalid bpool number "'nextB'" ignored'
+         iterate
+      end
+      if nextb < 0 | nextb > 79
+      then do
+         say 'invalid bpool number "'nextB'" ignored'
+         iterate
+      end
+      if bpool.nextb = -1 /* duplicate? */
+      then iterate       /* ...yes, already tracking */
+      say 'now interested in buffer pool' nextb
+      bpool.nextb = -1 /* interested in this bpool and simulated bpool */
+   end
+end
+
+say 'assuming the VPSEQT is set to 80 (80% of buffer pool for sequential pages)'
+vpseqt = 80 * 0.01  /* convert to percentage; used in calculations later */
+
+address 'TSO'
+'EXECIO 20  DISKR SMFIN (OPEN STEM SMFIN.'
+if rc = 0 | rc = 2
+then smfinRc = rc
+else do
+   say 'error reading SMFIN; rc='rc
+   say 'aborting rc=8'
+   'EXECIO 0 DISKR SMFIN (FINIS'
+   exit 8
+end
+
+address 'TSO'
+'EXECIO 0  DISKW SMFRPT(OPEN'
+if rc = 0
+then smfrptRc = rc
+else do
+   say 'error opening SMFRPT; rc='rc
+   say 'aborting rc=8'
+   'EXECIO 0 DISKR SMFIN (FINIS'
+   'EXECIO 0 DISKW SMFRPT(FINIS'
+   exit 8
+end
+
+
+/* general server info */
+
+/*                                                                                                               */
+/*                                                                                                               */
+/* self defining section                                                                                         */
+/* ---------------------                                                                                         */
+/* * DB2 SELF DEFINING SECTION MACRO FOR DATA BASE STATISTICS IFCID=0002                                         */
+/* *                                                                                                             */
+/* * PRODUCT SECTION FOR DATA BASE STATISTICS CONTAINS THE                                                       */
+/* * STANDARD HEADER MAPPED BY DSNDQWHS                                                                          */
+/* QWS10PSO DS    AL4                   OFFSET TO THE PRODUCT SECTION                                            */
+/* QWS10PSL DS    XL2                   LENGTH OF THE PRODUCT SECTION                                            */
+/* QWS10PSN DS    XL2                   NUMBER OF PRODUCT SECTIONS                                               */
+/* * FOR RMID 22    MAPPED BY DSNDQXST       SQL                                                                 */
+/* QWS10R1O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10R1L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10R1N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 20    MAPPED BY DSNDQTST  SERVICE CONTROLLER                                                       */
+/* QWS10R2O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10R2L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10R2N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 10    MAPPED BY DSNDQBST     BUFFER MANAGER (buffer pool statistics)                               */
+/* QWS10R3O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10R3L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10R3N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 14    MAPPED BY DSNDQIST    DATA MANAGER                                                           */
+/* QWS10R4O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10R4L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10R4N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 20    MAPPED BY DSNDQTXA   **  LOCK MANAGER                                                        */
+/* QWS10R5O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10R5L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10R5N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 14    MAPPED BY DSNDQISE   EDM POOL STATISTICS                                                     */
+/* QWS10R6O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10R6L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10R6N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 10    MAPPED BY DSNDQBGL   GROUP BUFFER POOL STATISTICS                                            */
+/* QWS10R7O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10R7L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10R7N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 20    MAPPED BY DSNDQTGS   GLOBAL LOCKING STATISTICS                                               */
+/* QWS10R8O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10R8L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10R8N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 22    MAPPED BY DSNDQLES LE ACCESS FROM ADMF STATISTICS                                            */
+/* QWS10R9O DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10R9L DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10R9N DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 22    MAPPED BY DSNDQISJ STARJOIN POOL STATISTICS                                                  */
+/* QWS10RAO DS    AL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10RAL DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10RAN DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 033 MAPPED BY DSNDQ8ST    ACCEL SVCS SYSTEM STATISTICS                                             */
+/* QWS10RBO DS    XL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10RBL DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10RBN DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* * FOR RMID 10  MAPPED BY DSNDQBSP    SIMULATED BUFFER POOL STATISTICS                                         */
+/* QWS10RCO DS    XL4                   OFFSET TO THE DATA SECTION                                               */
+/* QWS10RCL DS    XL2                   LENGTH OF THE DATA SECTION                                               */
+/* QWS10RCN DS    XL2                   NUMBER OF DATA SECTIONS                                                  */
+/* QWS10END DS    0C                    END OF THE SELF DEFINING SECTION                                         */
+/*          MEND                                                                                                 */
+/*                                                                                                               */
+
+smfin = 0
+line  = 1 /* start with header line */
+line.line = "SSID,bpool,'Date Time'" ,
+   || ",'Actual BP Page Residency in secs (max 600)'"             ,
+   || ",'Sim.   BP Page Residency in secs (max 600)'"             ,
+   || ",'Actual BP Hit Ratio'"                                    ,
+   || ",'Sim.   BP Hit Ratio'"                                    ,
+   || ",'Actual BP Page Residency in mins (max  10) (excel filter use)'" ,
+   || ",'Sim.   BP Page Residency in mins (max  10) (excel filter use)'" ,
+   || ",'Actual BP Hit Ratio index (excel filter use)'"           ,
+   || ",'Sim.   BP Hit Ratio index (excel filter use)'"           ,
+   || ",'qbstGet (# of get page requests (cond + non-c))'"        ,
+   || ",'qbstRio (# of sync read i/o requests)'"                  ,
+   || ",'qbstDwv (# of vdwq threshold reached)'"                  ,
+   || ",'qbstSws (# of setw issued for system pages)'"            ,
+   || ",'qbstPws (# of page writes for system pages)'"            ,
+   || ",'qbstWio (# of asynch write i/o(s))'"                     ,
+   || ",'qbstCba (# of current active buffers)'"                  ,
+   || ",'qbstRpi (# of page-ins required for read i/o)'"          ,
+   || ",'qbstWpi (# of page-ins required for write i/o)'"         ,
+   || ",'qbstImw (# of immed sync write i/o)'"                    ,
+   || ",'qbstSeq (# of seq prefetch requested)'"                  ,
+   || ",'qbstSpp (# of page read due to seq prefetch)'"           ,
+   || ",'qbstSpd (# of seq prefetch disabled - buf shrtge)'"      ,
+   || ",'qbstRee (# of seq prefetch disabled - unavail read eng)'",
+   || ",'qbstDwt (# of DW threshold reached)'"                    ,
+   || ",'qbstDmc (# of Data Mngr threshold reached)'"             ,
+   || ",'qbstPio (# of seq prefetch read i/o)'"                   ,
+   || ",'qbstWkpd (# of work prefetch aborted w/zero prefetch#)'" ,
+   || ",'qbstMax (# of wk file not created; buff.resources)'"     ,
+   || ",'qbstWfm (# of max wk files allocated)'"                  ,
+   || ",'qbstWdrp (# of destructive read page requests)'"         ,
+   || ",'qbstWbvq (# of destr. read page req. dq'd from dwqt)'"   ,
+   || ",'qbstWfr (# of q.req. for wk files in sort/merge)'"       ,
+   || ",'qbstWft (# of wk req. during sort/merge)'"               ,
+   || ",'qbstWfd (# of wk req. denied during sort/merge)'"        ,
+   || ",'qbstWff (# of sort/merge performance buf shortage)'"     ,
+   || ",'qbstLpf (# of concurrent list pref same pageset)'"       ,
+   || ",'qbstDpf (# of dynamic prefetch requests)'"               ,
+   || ",'qbstVpl (# of buffers allocated)'"                       ,
+   || ",'qbstDpp (# of pages read dynamic prefetch)'"             ,
+   || ",'qbstLpp (# of pages read list prefetch)'"                ,
+   || ",'qbstDio (# of dynamic prefetch read i/o(s))'"            ,
+   || ",'qbstLio (# of list prefetch read i/o(s))'"               ,
+   || ",'qbstSgt (# of get pages sequential req)'"                ,
+   || ",'qbstSio (# of sync read i/o(s))'"                        ,
+   || ",'qbstNgt (# of unsuccessful cond getpage req)'"           ,
+   || ",'qbstXis (# of highest prefetch i/o streams alloc)'"      ,
+   || ",'qbstJis (# of denied prefetch i/o streams)'"             ,
+   || ",'qbstPqo (# of parallism bm/rds negotiations)'"           ,
+   || ",'qbstPgf (# of parallism downgraded  bp shortage)'"       ,
+   || ",'qbstPl1 (# of prefetch 1/2 normal)'"                     ,
+   || ",'qbstPl2 (# of prefetch 1/4 normal)'"                     ,
+   || ",'qbstNsg (# of cond.seq getpage fail  not in buf)'"       ,
+   || ",'qbstSioc (# of i/o hitting disk cache)'"                 ,
+   || ",'qbstSmin (# of min buffers on slru (in interval))'"      ,
+   || ",'qbstSmax (# of max buffers on slru (in interval))'"      ,
+   || ",'qbstHst (# of times slru chain length=vpseqt)'"          ,
+   || ",'qbstRhs (# of random getpage found on slru)'"            ,
+   || ",'qbspIus sim.(Current # pages in sim. bp)'"               ,
+   || ",'qbspHus sim.(Highest # pages in sim. bp)'"               ,
+   || ",'qbspSus sim.(Current # seq. pages in sim. bp)'"          ,
+   || ",'qbspHsu sim.(Highest # seq. pages in sim. bp)'"          ,
+   || ",'qbspDrr sim.(# read sync i/o Random) (avoided)'"         ,
+   || ",'qbspDrs sim.(# read sync i/o Seq.)   (avoided)'"         ,
+   || ",'qbspDra sim.(# read async i/o Seq.)  (avoided)'"         ,
+   || ",'qbspMvi sim.(# pages logically moved into sim bp)'"      ,
+   || ",'qbspDtm sim.(time waiting for sync read i/o) (avoided)'" ,
+   /* the end of continuation(s)                                  */
+maxlrecl = length(line.1)
+do forever
+   smfin = smfin + 1
+   if smfin > smfin.0
+   then do
+      if smfinRc = 2 then leave
+      'EXECIO 20 DISKR SMFIN (STEM SMFIN.'
+      smfinRc = rc
+      smfin = 0
+      if smfinRc = 0 then iterate
+      if smfinRc = 2 then iterate
+      leave
+   end
+   if line > 100
+   then do
+      'EXECIO' line 'DISKW SMFRPT (STEM LINE.'
+      if rc = 0
+      then line = 0
+      else do
+         if rc = 1 then say 'maxlrecl was' maxLrecl
+         say 'Error writing to SMFRPT, rc='rc
+         'EXECIO 0 DISKR SMFIN (FINIS'
+         'EXECIO 0 DISKW SMFRPT(FINIS'
+         exit 8
+      end
+   end
+
+   parse var smfin.smfin ,
+       1 .        ,
+       2 sm101rty , /* record type; should be '64'x */
+       3 sm101tme , /* time smf record moved        */
+       7 sm101dte , /* date smf record moved        */
+      11 sm101sid , /* lpar                         */
+      15 sm101ssi , /* subsystem                    */
+      19 sm101stf , /* subtype                      */
+      29 . /* note 24 is start of self defining terms */
+
+   if sm101ssi <> ArgSSID /* subsystem we're looking for? */
+   then iterate           /* ...no skip record            */
+
+   if sm101rty <> '64'x
+   then iterate /* needs to be a db2 statistics */
+
+   /* -------------------------------------------------------- */
+   /* we need prod section if see if this is an ifcid 2 record */
+   /* -------------------------------------------------------- */
+   /* smfoffset starts at 1 (without lrecl) so, subtract 4... and make it -3 */
+   parse var smfin.smfin , /* always look at prod section 1st*/
+       1 .         ,
+      25 QWS10PSO  ,        /* prod section offset */
+      29  QWS10PSL ,        /* length of prod section*/
+      31  QWS10PSN ,        /* # of prod sections    */
+      33 .
+   smfRecOffset =  -3      /* start of record appears to be +1.... but subtract 4 (mythyical lrecl) = =3 */
+   prodSectionOffset = c2d(qws10pso) + smfRecOffset
+   prodSectionLength = c2d(qws10psl)
+   prodSectionNumber = c2d(qws10psn)
+      /* get QWHSIID (ifcid) from prod section */
+    fieldStart = ProdSectionOffset + 4; /* qwhsiid offset, length 2, binary */
+   ifcid = c2d(substr(smfin.smfin,fieldStart,2))
+
+   if ifcid <> 2
+   then iterate /* only want stat records for ifcid 2 */
+
+   if old101dte = sm101dte
+   then nop /* smfDate already set; and doesn't need to be recalculated */
+   else do /* first time or when date changes in smf date, calculate new date for output */
+           /* -------------------------------------------------------------------------- */
+      old101dte = sm101dte
+      sm101dte = left(c2x(sm101dte),7) + 1900000
+      smfDate  = date('S',date('B',left(sm101dte,4)'0101','S')-1+right(sm101dte,3),'B')
+                    /* smfdate = yyyymmdd */
+   end
+
+   sm101tme = format(c2d(sm101tme)/100,,0) /* get rid of fractions of a second */
+   secs     = (sm101tme)//60                          /* get seconds */
+   mins     = (sm101tme-secs)/60//60                  /* get minutes */
+   hours    = format((sm101tme-secs-mins*60)/3600,,0) /* get hours   */
+   smfDateTime  = "'"smfdate right('0'hours,2)':'right('0'mins,2)':'right('0'secs,2)"'"   /* 'hh:mm:ss'          */
+
+
+   /* ifcid 2; get rest of offsets, lengths, occurances */
+   /* ------------------------------------------------- */
+   parse var smfin.smfin , /* always look at prod section 1st*/
+       1 .         ,
+      33 QWS10R1O  ,        /*    the triplet for    */
+      37  QWS10R1L ,        /* ... DSNDQXST          */
+      39  QWS10R1N ,        /* ...                   */
+      41 QWS10R2O  ,        /*    the triplet for    */
+      45  QWS10R2L ,        /* ... DSNDQTST          */
+      47  QWS10R2N ,        /* ...                   */
+      49 QWS10R3O  ,        /*    the triplet for    */
+      53  QWS10R3L ,        /* ... DSNDQBST (bpool stats */
+      55  QWS10R3N ,        /* ...                   */
+      57 QWS10R4O  ,        /*    the triplet for    */
+      61  QWS10R4L ,        /* ... DSNDQIST          */
+      63  QWS10R4N ,        /* ...                   */
+      65 QWS10R5O  ,        /*    the triplet for    */
+      69  QWS10R5L ,        /* ... DSNDQTXA          */
+      71  QWS10R5N ,        /* ...                   */
+      73 QWS10R6O  ,        /*    the triplet for    */
+      77  QWS10R6L ,        /* ... DSNDQISE          */
+      79  QWS10R6N ,        /* ...                   */
+      81 QWS10R7O  ,        /*    the triplet for    */
+      85  QWS10R7L ,        /* ... DSNDQBGL          */
+      87  QWS10R7N ,        /* ...                   */
+      89 QWS10R8O  ,        /*    the triplet for    */
+      93  QWS10R8L ,        /* ... DSNDQTGS          */
+      95  QWS10R8N ,        /* ...                   */
+      97 QWS10R9O  ,        /*    the triplet for    */
+     101  QWS10R9L ,        /* ... DSNDQLES          */
+     103  QWS10R9N ,        /* ...                   */
+     105 QWS10RAO  ,        /*    the triplet for    */
+     109  QWS10RAL ,        /* ... DSNDQISJ          */
+     111  QWS10RAN ,        /* ...                   */
+     113 QWS10RBO  ,        /*    the triplet for    */
+     117  QWS10RBL ,        /* ... DSNDQ8ST          */
+     119  QWS10RBN ,        /* ...                   */
+     121 QWS10RCO  ,        /*    the triplet for    */
+     125  QWS10RCL ,        /* ... DSNDQBSP (sim bpool stats */
+     127  QWS10RCN ,        /* ...                   */
+     129 .                 /* and that's all we care about */
+
+   /* since it's ifcid 2, the qws10* offsets, etc, are valid */
+   /* ------------------------------------------------------ */
+   dsndqXstOffset = c2d(qws10r1O) + smfRecOffset
+   dsndqXstLength = c2d(qws10r1L)
+   dsndqXstNumber = c2d(qws10r1N)
+
+   dsndqTstOffset = c2d(qws10r2O) + smfRecOffset
+   dsndqTstLength = c2d(qws10r2L)
+   dsndqTstNumber = c2d(qws10r2N)
+
+   dsndqBstOffset = c2d(qws10r3O) + smfRecOffset
+   dsndqBstLength = c2d(qws10r3L)
+   dsndqBstNumber = c2d(qws10r3N)
+
+   dsndqIstOffset = c2d(qws10r4O) + smfRecOffset
+   dsndqIstLength = c2d(qws10r4L)
+   dsndqIstNumber = c2d(qws10r4N)
+
+   dsndqTxaOffset = c2d(qws10r5O) + smfRecOffset
+   dsndqTxaLength = c2d(qws10r5L)
+   dsndqTxaNumber = c2d(qws10r5N)
+
+   dsndqIseOffset = c2d(qws10r6O) + smfRecOffset
+   dsndqIseLength = c2d(qws10r6L)
+   dsndqIseNumber = c2d(qws10r6N)
+
+   dsndqBglOffset = c2d(qws10r7O) + smfRecOffset
+   dsndqBglLength = c2d(qws10r7L)
+   dsndqBglNumber = c2d(qws10r7N)
+
+   dsndqTgsOffset = c2d(qws10r8O) + smfRecOffset
+   dsndqTgsLength = c2d(qws10r8L)
+   dsndqTgsNumber = c2d(qws10r8N)
+
+   dsndqLesOffset = c2d(qws10r9O) + smfRecOffset
+   dsndqLesLength = c2d(qws10r9L)
+   dsndqLesNumber = c2d(qws10r9N)
+
+   dsndqIsjOffset = c2d(qws10raO) + smfRecOffset
+   dsndqIsjLength = c2d(qws10raL)
+   dsndqIsjNumber = c2d(qws10raN)
+
+   dsndq8stOffset = c2d(qws10rbO) + smfRecOffset
+   dsndq8stLength = c2d(qws10rbL)
+   dsndq8stNumber = c2d(qws10rbN)
+
+   dsndqBspOffset = c2d(qws10rcO) + smfRecOffset
+   dsndqBspLength = c2d(qws10rcL)
+   dsndqBspNumber = c2d(qws10rcN)
+
+   bpid.  = 0
+   /* lets start with real buffer pool statistics */
+   dsndqBstOffset = dsndqBstOffset - dsndqBstLength
+   if dsndqbstNumber > 0
+   then if dsndqBstLength <> 520
+      then do
+         say 'logic error; dsndqbstlength =' dsndqbstlength
+         exit 8
+      end
+   do bst = 1 by 1 for dsndqBstNumber
+      dsndqBstOffset = dsndqBstOffset + dsndqBstLength
+      dsndqBst = substr(smfin.smfin,dsndqBstOffset,dsndqBstLength)
+      parse var dsndqBst ,
+         1 qbstPid       , /* .4 buffer Pool id */
+         5 qbstflg       , /* .1 flag           */
+         6 .             , /* .3 reserved       */
+         9 qbstGet       , /* .8 # of get page requests (cond + non cond)*/
+        17 qbstrio       , /* .8 # of sync read i/o requests             */
+        25 qbstdwv       , /* .8 # of vdwq threshold reached             */
+        33 qbstxfl       , /* .8 # of getpage failures bpool full        */
+        41 qbstxfv       , /* .8 # of expansion failures v.stor short    */
+        49 qbstsws       , /* .8 # of setw issued for system pages       */
+        57 qbstpws       , /* .8 # of page writes for system pages       */
+        65 qbstwio       , /* .8 # of asynch write i/o                   */
+        73 qbstcba       , /* .8 # of current active buffers             */
+        81 qbstrpi       , /* .8 # of page-ins required for read i/o     */
+        89 qbstwpi       , /* .8 # of page-ins required for write i/o    */
+        97 qbstdso       , /* .8 # of datasets opened successfully       */
+       105 qbstimw       , /* .8 # of immed sync write i/o               */
+       113 qbstseq       , /* .8 # of SEQ PREFETCH REQUESTED             */
+       121 qbstspp       , /* .8 # of PAGE READ DUE TO SEQ PREFETCH      */
+       129 qbstspd       , /* .8 # of SEQ PREFETCH DISABLED buffer short */
+       137 qbstree       , /* .8 # of seq prefetch disabled unavial r.eng*/
+       145 qbstdwt       , /* .8 # of DW threshold reached               */
+       153 qbstdmc       , /* .8 # of data mngr. threshold reached       */
+       161 qbstmig       , /* .8 # of migrated datasets at open          */
+       169 qbstrto       , /* .8 # of recall timeouts                    */
+       177 qbstpio       , /* .8 # of seq prefetch read i/o              */
+       185 qbstwkpd      , /* .8 # of wk prefetch aborted, zero pre #    */
+       193 qbstmax       , /* .8 # of wk file not created; buff.resources*/
+       201 qbstwfm       , /* .8 # of max wk files allocated             */
+       209 qbstwdrp      , /* .8 # of destructive read page requests     */
+       217 qbstwbvq      , /* .8 # of dest. read page req. dq'd from dwqt*/
+       225 qbstwfr       , /* .8 # of q.req. for workfiles in sort/merge */
+       233 qbstwft       , /* .8 # of w.f. req. during sort/merge        */
+       241 qbstwfd       , /* .8 # of w.f. req. denied during sort/merge */
+       249 qbstwff       , /* .8 # of sort/merge perf. buffer shortage   */
+       257 qbstlpf       , /* .8 # of concurrent list pref same pageset  */
+       265 qbstdpf       , /* .8 # of dynamic prefetch requests          */
+       273 qbstvpa       , /* .8 # of successful vpool exp/contractions  */
+       281 qbstpco       , /* .8 # of pg on 'unlock castout'             */
+       289 qbstcio       , /* .8 # of i/o on castout                     */
+       297 qbstvpl       , /* .8 # of buffers allocated                  */
+       305 qbstdpp       , /* .8 # of pages read dynamic prefetch        */
+       313 qbstlpp       , /* .8 # of pages read list prefetch           */
+       321 qbstdio       , /* .8 # of dynamic prefetch read i/o(s)       */
+       329 qbstlio       , /* .8 # of list prefetch read i/o(s)          */
+       337 qbstsgt       , /* .8 # of get pages sequential req           */
+       345 qbstsio       , /* .8 # of sync read i/o(s)                   */
+       353 qbstngt       , /* .8 # of unsuccessful cond getpage requests */
+       361 qbstxis       , /* .8 # of highest prefetch i/o streams alloc.*/
+       369 qbstjis       , /* .8 # of # of denied prefetch i/o streams   */
+       377 qbstpqo       , /* .8 # of parallism bm/rds negotiations      */
+       385 qbstpgf       , /* .8 # of parallism down graded, bp shortage */
+       393 qbstpl1       , /* .8 # of prefetch 1/2 normal                */
+       401 qbstpl2       , /* .8 # of prefetch 1/4 normal                */
+       409 qbstnsg       , /* .8 # of cond.seq getpage fail, not in buffer*/
+       417 qbstsyio      , /* .8 # of zhyperlink read i/o(s)             */
+       425 qbstsioc      , /* .8 # of i/o hitting disk cache             */
+       433 .             , /* .8 reserved                                */
+       441 .             , /* .8 reserved                                */
+       449 qbstlpl       , /* .8 # of one or more pages added to lpl     */
+       457 qbstsmin      , /* .8 # of min buffers on slru (in interval)  */
+       465 qbstsmax      , /* .8 # of max buffers on slru (in interval)  */
+       473 qbsthst       , /* .8 # of slru chain length = vpseqt         */
+       481 qbstrhs       , /* .8 # of random getpage req found on slru   */
+       489 qbstaget      , /* .8 # of overflow total random getpages     */
+       497 qbstasge      , /* .8 # of overflow total seq.   getpages     */
+       505 qbstasyn      , /* .8 # of overflow random sync read i/o(s)   */
+       513 qbstasse      , /* .8 # of overflow seq.   sync read i/o(s)   */
+       521 .             /* the end */
+      qbstpid = c2d(qbstpid)
+      if bpool.qbstpid = 0
+      then iterate /* ignore this buffer pool */
+
+      line = line + 1
+      bpool.qbstpid = line /* remember this line number, so we can append if simulation bpool exists */
+
+         /* f0100AdjValue statements must by used before f0110PrevValue functions.  So we create partial line now */
+      PartialLine =  ','f0100AdjValue('qbstGet')  ,     /* # of get page requests (cond + non-c)'"         */
+                  || ','f0100AdjValue('qbstRio')  ,     /* # of sync read i/o requests'"                   */
+                  || ','f0100AdjValue('qbstDwv')  ,     /* # of vdwq threshold reached'"                   */
+                  || ','f0100AdjValue('qbstSws')  ,     /* # of setw issued for system pages'"             */
+                  || ','f0100AdjValue('qbstPws')  ,     /* # of page writes for system pages'"             */
+                  || ','f0100AdjValue('qbstWio')  ,     /* # of asynch write i/o(s)'"                      */
+                  || ','f0120SaveValue('qbstCba') ,     /* # of current active buffers'"                   */
+                  || ','f0100AdjValue('qbstRpi')  ,     /* # of page-ins required for read i/o'"           */
+                  || ','f0100AdjValue('qbstWpi')  ,     /* # of page-ins required for write i/o'"          */
+                  || ','f0100AdjValue('qbstImw')  ,     /* # of immed sync write i/o'"                     */
+                  || ','f0100AdjValue('qbstSeq')  ,     /* # of seq prefetch requested'"                   */
+                  || ','f0100AdjValue('qbstSpp')  ,     /* # of page read due to seq prefetch'"            */
+                  || ','f0100AdjValue('qbstSpd')  ,     /* # of seq prefetch disabled - buf shrtge'"       */
+                  || ','f0100AdjValue('qbstRee')  ,     /* # of seq prefetch disabled - unavail read eng'" */
+                  || ','f0100AdjValue('qbstDwt')  ,     /* # of DW threshold reached'"                     */
+                  || ','f0100AdjValue('qbstDmc')  ,     /* # of Data Mngr threshold reached'"              */
+                  || ','f0100AdjValue('qbstPio')  ,     /* # of seq prefetch read i/o'"                    */
+                  || ','f0100AdjValue('qbstWkpd') ,     /* # of work prefetch aborted, zero prefetch#'"    */
+                  || ','f0100AdjValue('qbstMax')  ,     /* # of wk file not created; buff.resources'"      */
+                  || ','f0120SaveValue('qbstWfm') ,     /* # of max wk files allocated'"                   */
+                  || ','f0100AdjValue('qbstWdrp') ,     /* # of destructive read page requests'"           */
+                  || ','f0100AdjValue('qbstWbvq') ,     /* # of destr. read page req. dq''d from dwqt'"    */
+                  || ','f0100AdjValue('qbstWfr')  ,     /* # of q.req. for wk files in sort/merge'"        */
+                  || ','f0100AdjValue('qbstWft')  ,     /* # of wk req. during sort/merge'"                */
+                  || ','f0100AdjValue('qbstWfd')  ,     /* # of wk req. denied during sort/merge'"         */
+                  || ','f0100AdjValue('qbstWff')  ,     /* # of sort/merge performance; buf shortage'"     */
+                  || ','f0100AdjValue('qbstLpf')  ,     /* # of concurrent list pref; same pageset'"       */
+                  || ','f0100AdjValue('qbstDpf')  ,     /* # of dynamic prefetch requests'"                */
+                  || ','f0120SaveValue('qbstVpl') ,     /* # of buffers allocated'"                        */
+                  || ','f0100AdjValue('qbstDpp')  ,     /* # of pages read dynamic prefetch'"              */
+                  || ','f0100AdjValue('qbstLpp')  ,     /* # of pages read list prefetch'"                 */
+                  || ','f0100AdjValue('qbstDio')  ,     /* # of dynamic prefetch read i/o(s)'"             */
+                  || ','f0100AdjValue('qbstLio')  ,     /* # of list prefetch read i/o(s)'"                */
+                  || ','f0100AdjValue('qbstSgt')  ,     /* # of get pages sequential req'"                 */
+                  || ','f0100AdjValue('qbstSio')  ,     /* # of sync read i/o(s)'"                         */
+                  || ','f0100AdjValue('qbstNgt')  ,     /* # of unsuccessful cond getpage req'"            */
+                  || ','f0120SaveValue('qbstXis') ,     /* # of highest prefetch i/o streams alloc'"       */
+                  || ','f0100AdjValue('qbstJis')  ,     /* # of denied prefetch i/o streams'"              */
+                  || ','f0100AdjValue('qbstPqo')  ,     /* # of parallism bm/rds negotiations'"            */
+                  || ','f0100AdjValue('qbstPgf')  ,     /* # of parallism downgraded, bp shortage'"        */
+                  || ','f0100AdjValue('qbstPl1')  ,     /* # of prefetch 1/2 normal'"                      */
+                  || ','f0100AdjValue('qbstPl2')  ,     /* # of prefetch 1/4 normal'"                      */
+                  || ','f0100AdjValue('qbstNsg')  ,     /* # of cond.seq getpage fail, not in buf'"        */
+                  || ','f0100AdjValue('qbstSioc') ,     /* # of i/o hitting disk cache'"                   */
+                  || ','f0120SaveValue('qbstSmin'),     /* # of min buffers on slru (in interval)'"        */
+                  || ','f0120SaveValue('qbstSmax'),     /* # of max buffers on slru (in interval)'"        */
+                  || ','f0100AdjValue('qbstHst')  ,     /* # of times slru chain length=vpseqt'"           */
+                  || ','f0100AdjValue('qbstRhs')  ,     /* # of random getpage found on slru'"             */
+                  /* the end of continued lines   */
+
+         /* real buffer pool stats */
+      /* calculate some residency numbers */
+      /* -------------------------------- */
+      maxResidency = f0110RefPrevValue('qbstvpl')*60    /* we consider max to be bpsize * 60 seconds       */
+
+      pagesUsedPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+                        +f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */
+                        +f0110RefPrevValue('qbstdpp') , /*+# of pages read due to dyn prefetch             */
+                        +f0110RefPrevValue('qbstlpp') , /*+# of pages read due to listprefetch             */
+                        +f0110RefPrevValue('qbstsio') , /*+# of pages read synch for seq.       ch         */
+                        ) / 60;                         /*  = pages read / 60 secs = pages/sec             */
+
+      randomPagesPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+                          +f0110RefPrevValue('qbstsio') , /*+# of sync pages read for seq.                   */
+                          ) / 60;                         /*  = pages read / 60 secs = pages/sec             */
+
+
+      if pagesUsedPerSec < 1 /* if too small, don't divide */
+      then answer1 = 0
+      else answer1 = f0110RefPrevValue('qbstvpl') / pagesUsedPerSec
+
+      if randomPagesPerSec < 1 /* if too small, don't divide */
+      then answer2 = 0
+      else answer2 = f0110RefPrevValue('qbstvpl') * (1 - vpSEQT)/ RandomPagesPerSec
+
+      residencyInSecs = format(max(answer1,answer2),,1)    /* this is an important number */
+      residencyInSecs = format(min(residencyInSecs,600),,1)/* this is an important number */
+
+      /* now transform residency in secs to an "index" in minutes */
+      /* -------------------------------------------------------- */
+      if      residencyInSecs < 60
+         then  residencyIndexInMin = format(residencyInSecs/60,,1)      /* 0.0 to 1.0 */
+      else if residencyInSecs < 730
+         then  residencyIndexInMin = format(residencyInSecs/60,,0)      /* round to nearest min 1-10*/
+      else if residencyInSecs < 3600
+         then  residencyIndexInMin = format(residencyInSecs/900,,0)*15  /* round to nearest 15, 30, 45 or 60 */
+         else  residencyIndexInMin = 60                                 /* max at 60                         */
+
+      /* calculate some hit % numbers */
+      /* -------------------------------- */
+      allRead = f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+               +f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */
+               +f0110RefPrevValue('qbstdpp') , /*+# of pages read due to dyn prefetch             */
+               +f0110RefPrevValue('qbstlpp') , /*+# of pages read due to listprefetch             */
+               +f0110RefPrevValue('qbstsio') , /*+# of pages read synch for seq.       ch         */
+               ;
+      hitRatio = 100 /* assume it's 100 */
+      hitRatio2= 100 /* assume it's 100 */
+      if f0110RefPrevValue('qbstget') - f0110RefPrevValue('qbstnsg') > 0 /* denominator non-zero? */
+      then do
+         /* calculate hitRatio, hitRatio2 */
+         hitRatioFirst = ''
+         hitRatio = format(  (  f0110RefPrevValue('qbstget')   ,
+                             - f0110RefPrevValue('qbstnsg')    ,
+                             - allread                         ,
+                             )                                 ,
+                           / (  f0110RefPrevValue('qbstget')   ,
+                              - f0110RefPrevValue('qbstnsg')   ,
+                             )                                 ,
+                           * 100                               ,
+                          ,,1) /* round to nearest tenth */
+
+         /* "re-format" hit ratio answer in hitration2   */
+         if hitratio >= -100
+         then hitratio2 = format(hitratio/10,,0) * 10 /* make it -100, -90, ... ,0, 10, 20, etc */
+         else if hitRatio < -100
+         then hitratio2 = format(hitratio/50,,0) * 50 /* make it -100, -150, -200, etc */
+      end
+      say 'debug1 hitratio ='hitratio'; qbstget='f0110RefPrevValue('qbstget')'; allRead='allRead
+
+      /* assume no simulated buffer pool, create with no sim stats */
+      /* now start producing beginning of line (before simulated bp numbers) */
+      line.line = sm101ssi',BP'qbstpid','smfdateTime          , /* ssid,BP#,'20230102 hh:mm:ss' */
+             || ','strip(residencyInSecs)                     , /* ...stat calculated after partialLine created */
+             || ",''"                                         , /* ...stat calculated after partialLine created */
+             || ','strip(residencyIndexInMin)                 , /* ...stat calculated after partialLine created */
+             || ",''"                                         , /* ...stat calculated after partialLine created */
+             || ','strip(hitRatio)                            , /* ...stat calculated after partialLine created */
+             || ",''"                                         , /* ...stat calculated after partialLine created */
+             || ','strip(hitRatio2)                           , /* ...stat calculated after partialLine created */
+             || ",''"                                         , /* ...stat calculated after partialLine created */
+             || partialLine                                   /* rest of prebuilt (partial) line */
+
+
+      /* max lrecl so far */
+      maxLrecl = max(maxLrecl,length(line.line))
+
+   end
+
+   /* now let's get simulated buffer pool stats */
+   dsndqBspOffset = dsndqBspOffset - dsndqBspLength
+   if dsndqbspNumber > 0
+   then if dsndqBspLength <> 112
+      then do
+         say 'logic error; dsndqBspLength =' dsndqBspLength
+         exit 8
+      end
+   do bsp = 1 by 1 for dsndqBspNumber
+      dsndqBspOffset = dsndqBspOffset + dsndqBspLength
+      dsndqBsp = substr(smfin.smfin,dsndqBspOffset,dsndqBspLength)
+      parse var dsndqBsp ,
+         1 qbspPid       , /* .4 buffer Pool id */
+         5 qbspflg       , /* .1 flag           */
+         6 .             , /* .3 reserved       */
+         9 qbspIus       , /* .8 Current # pages in sim. buffer pool     */
+        17 qbspHus       , /* .8 Highest # pages in sim. buffer pool     */
+        25 qbspSus       , /* .8 Current # pages for sequential/sim      */
+        33 qbspHsu       , /* .8 Highest # pages for sequential/sim      */
+        41 qbspDrr       , /* .8 # of random read sync i/o (sim) (avoided)*/
+        49 qbspDrs       , /* .8 # of seq read sync i/o (sim)    (avoided)*/
+        57 qbspDra       , /* .8 # of seq read async i/o (sim)   (avoided)*/
+        65 qbspGrr       , /* .8 # of GBP w/c                            */
+        73 qbspGRS       , /* .8 # of GBP w/c                            */
+        81 qbspGRA       , /* .8 # of GBP w/c                            */
+        89 qbspMvi       , /* .8 # of pages logically moved in sim bp    */
+        97 qbspDtm       , /* .8 time waiting for sync read i/o  (avoided)*/
+       105 .             , /* .8 reserved                                */
+       113 .             /* the end */
+      qbsppid = c2d(qbsppid) /* of course, any bsp variable should use our buffer pool id*/
+      qbstpid = qbsppid      /* any bst variable reference should use our buffer pool id */
+      x = f0120SaveValue('qbspIus')
+      x = f0120SaveValue('qbspHus')
+      x = f0120SaveValue('qbspSus')
+      x = f0120SaveValue('qbspHsu')
+      x = f0100AdjValue('qbspDrr')
+      x = f0100AdjValue('qbspDrs')
+      x = f0100AdjValue('qbspDra')
+   /* x = f0100AdjValue('qbspGrr') group buffer pool ignore */
+   /* x = f0100AdjValue('qbspGRS') group buffer pool ignore */
+   /* x = f0100AdjValue('qbspGRA') group buffer pool ignore */
+      x = f0100AdjValue('qbspMvi')
+      x = f0100AdjValue('qbspDtm')
+      if bpool.qbsppid = 0
+      then iterate /* ignore this buffer pool */
+
+         /* real buffer pool stats */
+      /* calculate some residency numbers */
+      /* -------------------------------- */
+      maxResidency = f0110RefPrevValue('qbstvpl')*60    /* we consider max to be bpsize * 60 seconds       */
+
+      pagesUsedPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+                        +f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */
+                        +f0110RefPrevValue('qbstdpp') , /*+# of pages read due to dyn prefetch             */
+                        +f0110RefPrevValue('qbstlpp') , /*+# of pages read due to listprefetch             */
+                        +f0110RefPrevValue('qbstsio') , /*+# of pages read synch for seq.       ch         */
+                        ) / 60;                         /*  = pages read / 60 secs = pages/sec             */
+
+      randomPagesPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+                          +f0110RefPrevValue('qbstsio') , /*+# of sync pages read for seq.                   */
+                          ) / 60;                         /*  = pages read / 60 secs = pages/sec             */
+
+
+      if pagesUsedPerSec < 1 /* if too small, don't divide */
+      then answer1 = 0
+      else answer1 = f0110RefPrevValue('qbstvpl') / pagesUsedPerSec
+
+      if randomPagesPerSec < 1 /* if too small, don't divide */
+      then answer2 = 0
+      else answer2 = f0110RefPrevValue('qbstvpl') * (1 - vpSEQT)/ RandomPagesPerSec
+
+      residencyInSecs = format(max(answer1,answer2),,1)    /* this is an important number */
+      residencyInSecs = format(min(residencyInSecs,600),,1)/* this is an important number */
+
+      /* now transform residency in secs to an "index" in minutes */
+      /* -------------------------------------------------------- */
+      if      residencyInSecs < 60
+         then  residencyIndexInMin = format(residencyInSecs/60,,1)      /* 0.0 to 1.0 */
+      else if residencyInSecs < 730
+         then  residencyIndexInMin = format(residencyInSecs/60,,0)      /* round to nearest min 1-10*/
+      else if residencyInSecs < 3600
+         then  residencyIndexInMin = format(residencyInSecs/900,,0)*15  /* round to nearest 15, 30, 45 or 60 */
+         else  residencyIndexInMin = 60                                 /* max at 60                         */
+
+      /* calculate some hit % numbers */
+      /* -------------------------------- */
+      allRead = f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+               +f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */
+               +f0110RefPrevValue('qbstdpp') , /*+# of pages read due to dyn prefetch             */
+               +f0110RefPrevValue('qbstlpp') , /*+# of pages read due to listprefetch             */
+               +f0110RefPrevValue('qbstsio') , /*+# of pages read synch for seq.       ch         */
+               ;
+      hitRatio = 100 /* assume it's 100 */
+      hitRatio2= 100 /* assume it's 100 */
+      if f0110RefPrevValue('qbstget') - f0110RefPrevValue('qbstnsg') > 0 /* denominator non-zero? */
+      then do
+         /* calculate hitRatio, hitRatio2 */
+         hitRatio = format(  (  f0110RefPrevValue('qbstget')   ,
+                             - f0110RefPrevValue('qbstnsg')    ,
+                             - allread                         ,
+                             )                                 ,
+                           / (  f0110RefPrevValue('qbstget')   ,
+                              - f0110RefPrevValue('qbstnsg')   ,
+                             )                                 ,
+                           * 100                               ,
+                          ,,1) /* round to nearest tenth */
+
+         /* "re-format" hit ratio answer in hitration2   */
+         if hitratio >= -100
+         then hitratio2 = format(hitratio/10,,0) * 10 /* make it -100, -90, ... ,0, 10, 20, etc */
+         else if hitRatio < -100
+         then hitratio2 = format(hitratio/50,,0) * 50 /* make it -100, -150, -200, etc */
+      end
+
+
+         /* sim. buffer pool stats */
+      /* calculate some residency numbers */
+      /* -------------------------------- */
+      simMaxResidency = f0110RefPrevValue('qbspHus')*60    /* we consider max to be sim. bpsize * 60 seconds */
+
+      simPagesUsedPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+                           +f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */
+                           +f0110RefPrevValue('qbstdpp') , /*+# of pages read due to dyn prefetch             */
+                           +f0110RefPrevValue('qbstlpp') , /*+# of pages read due to listprefetch             */
+                           +f0110RefPrevValue('qbstsio') , /*+# of pages read synch for seq.                  */
+                           -f0110RefPrevValue('qbspDrr') , /* # of sync read i/o(s) AVOIDED                   */
+                           -f0110RefPrevValue('qbspDra') , /*+# of pages read due to seq/dyn/list prefetch avoided*/
+                           -f0110RefPrevValue('qbspDrs') , /*+# of pages read synch for seq. avoided          */
+                           ) / 60;                         /*  = pages read / 60 secs = pages/sec             */
+
+      simRandomPagesPerSec = (f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+                             +f0110RefPrevValue('qbstsio') , /*+# of sync pages read for seq.                   */
+                             -f0110RefPrevValue('qbspDrr') , /* # of sync read i/o(s) avoided                   */
+                             -f0110RefPrevValue('qbspDrs') , /*+# of sync pages read for seq. avoided           */
+                             ) / 60;                         /*  = pages read / 60 secs = pages/sec             */
+
+
+      if SimPagesUsedPerSec < 1 /* if too small, don't divide */
+      then answer1 = f0110RefPrevValue('qbspHus')
+      else answer1 = f0110RefPrevValue('qbspHus') / SimPagesUsedPerSec
+
+      if simRandomPagesPerSec < 1 /* if too small, don't divide */
+      then answer2 = f0110RefPrevValue('qbspHus') * (1 - vpSEQT)
+      else answer2 = f0110RefPrevValue('qbspHus') * (1 - vpSEQT)/ simRandomPagesPerSec
+
+      simResidencyInSecs = format(max(answer1,answer2),,1)       /* this is an important number */
+      simResidencyInSecs = format(min(simResidencyInSecs,600),,1)/* this is an important number */
+
+      /* now transform residency in secs to an "index" in minutes */
+      /* -------------------------------------------------------- */
+      if      simResidencyInSecs < 60
+         then  simResidencyIndexInMin = format(simResidencyInSecs/60,,1)      /* 0.0 to 1.0 */
+      else if simResidencyInSecs < 730
+         then  simResidencyIndexInMin = format(simResidencyInSecs/60,,0)      /* round to nearest min 1-10*/
+      else if simResidencyInSecs < 3600
+         then  simResidencyIndexInMin = format(simResidencyInSecs/900,,0)     /* round to nearest 15, 30, 45 or 60 */
+         else  simResidencyIndexInMin = 60                                 /* max at 60                         */
+
+      /* calculate some hit % numbers */
+      /* -------------------------------- */
+      simAllRead = f0110RefPrevValue('qbstrio') , /* # of sync read i/o(s)                           */
+                  +f0110RefPrevValue('qbstspp') , /*+# of pages read due to seq prefetch             */
+                  +f0110RefPrevValue('qbstdpp') , /*+# of pages read due to dyn prefetch             */
+                  +f0110RefPrevValue('qbstlpp') , /*+# of pages read due to listprefetch             */
+                  +f0110RefPrevValue('qbstsio') , /*+# of pages read synch for seq.                  */
+                  -f0110RefPrevValue('qbspDrr') , /* # of sync read i/o(s) avoided                   */
+                  -f0110RefPrevValue('qbspDra') , /*+# of pages read due to seq/dyn/list prefetch avoided*/
+                  -f0110RefPrevValue('qbspDrs') , /*+# of pages read synch for seq. avoided          */
+               ;
+      if simAllRead > allRead
+      then say 'debug2 simAllread='simAllRead'; allRead='allRead
+      simHitRatio = 100 /* assume it's 100 */
+      simHitRatio2= 100 /* assume it's 100 */
+      if f0110RefPrevValue('qbstget') - f0110RefPrevValue('qbstnsg') > 0 /* denominator non-zero? */
+      then do
+         /* calculate simHitRatio, simHitRatio2 */
+         SimHitRatio = format( (  f0110RefPrevValue('qbstget')   ,
+                                  - f0110RefPrevValue('qbstnsg') ,
+                                  - simAllread                   ,
+                               )                                 ,
+                               /                                 ,
+                               (  f0110RefPrevValue('qbstget')   ,
+                                - f0110RefPrevValue('qbstnsg')   ,
+                               )                                 ,
+                               * 100                             ,
+                             ,,1) /* round to nearest tenth */
+
+         /* "re-format" hit ratio answer in SimHitration2   */
+         if simHitratio >= -100
+         then simHitratio2 = format(simHitratio/10,,0) * 10 /* make it -100, -90, ... ,0, 10, 20, etc */
+         else if simHitRatio < -100
+         then simHitratio2 = format(simHitratio/50,,0) * 50 /* make it -100, -150, -200, etc */
+         if simHitRatio < HitRatio
+         then say 'debug2 simHitRatio='simHitRatio'; hitRatio='hitRatio'; qbstget='f0110RefPrevValue('qbstget') ,
+            || '; allRead='allread'; simAllRead='simallread
+      end
+
+      /* now start producing beginning of line (before simulated bp numbers) */
+      Rline = bpool.qbsppid /* buffer pool output line to reuse */
+      line.Rline= sm101ssi',BP'qbstpid','smfdateTime          , /* ssid,BP#,'20230102 hh:mm:ss' */
+             || ','strip(residencyInSecs)                     , /* ...stat calculated in bsp created */
+             || ','strip(simResidencyInSecs)                  , /* ...stat calculated in bsp created */
+             || ','strip(hitRatio)                            , /* ...stat calculated in bsp created */
+             || ','strip(simHitRatio)                         , /* ...stat calculated in bsp created */
+             || ','strip(residencyIndexInMin)                 , /* ...stat calculated in bsp created */
+             || ','strip(simResidencyIndexInMin)              , /* ...stat calculated in bsp created */
+             || ','strip(hitRatio2)                           , /* ...stat calculated in bsp created */
+             || ','strip(simHitRatio2)                        , /* ...stat calculated in bsp created */
+             || ','f0110RefPrevValue('qbstGet') ,  /* # of get page requests (cond + non-c)'"         */
+             || ','f0110RefPrevValue('qbstRio') ,  /* # of sync read i/o requests'"                   */
+             || ','f0110RefPrevValue('qbstDwv') ,  /* # of vdwq threshold reached'"                   */
+             || ','f0110RefPrevValue('qbstSws') ,  /* # of setw issued for system pages'"             */
+             || ','f0110RefPrevValue('qbstPws') ,  /* # of page writes for system pages'"             */
+             || ','f0110RefPrevValue('qbstWio') ,  /* # of asynch write i/o(s)'"                      */
+             || ','f0110RefPrevValue('qbstcba') ,  /* # of current active buffers'"                   */
+             || ','f0110RefPrevValue('qbstRpi') ,  /* # of page-ins required for read i/o'"           */
+             || ','f0110RefPrevValue('qbstWpi') ,  /* # of page-ins required for write i/o'"          */
+             || ','f0110RefPrevValue('qbstImw') ,  /* # of immed sync write i/o'"                     */
+             || ','f0110RefPrevValue('qbstSeq') ,  /* # of seq prefetch requested'"                   */
+             || ','f0110RefPrevValue('qbstSpp') ,  /* # of page read due to seq prefetch'"            */
+             || ','f0110RefPrevValue('qbstSpd') ,  /* # of seq prefetch disabled - buf shrtge'"       */
+             || ','f0110RefPrevValue('qbstRee') ,  /* # of seq prefetch disabled - unavail read eng'" */
+             || ','f0110RefPrevValue('qbstDwt') ,  /* # of DW threshold reached'"                     */
+             || ','f0110RefPrevValue('qbstDmc') ,  /* # of Data Mngr threshold reached'"              */
+             || ','f0110RefPrevValue('qbstPio') ,  /* # of seq prefetch read i/o'"                    */
+             || ','f0110RefPrevValue('qbstWkpd') , /* # of work prefetch aborted, zero prefetch#'"    */
+             || ','f0110RefPrevValue('qbstMax') ,  /* # of wk file not created; buff.resources'"      */
+             || ','f0110RefPrevValue('qbstWfm') ,  /* # of max wk files allocated'"                   */
+             || ','f0110RefPrevValue('qbstWdrp') , /* # of destructive read page requests'"           */
+             || ','f0110RefPrevValue('qbstWbvq') , /* # of destr. read page req. dq''d from dwqt'"    */
+             || ','f0110RefPrevValue('qbstWfr') ,  /* # of q.req. for wk files in sort/merge'"        */
+             || ','f0110RefPrevValue('qbstWft') ,  /* # of wk req. during sort/merge'"                */
+             || ','f0110RefPrevValue('qbstWfd') ,  /* # of wk req. denied during sort/merge'"         */
+             || ','f0110RefPrevValue('qbstWff') ,  /* # of sort/merge performance; buf shortage'"     */
+             || ','f0110RefPrevValue('qbstLpf') ,  /* # of concurrent list pref; same pageset'"       */
+             || ','f0110RefPrevValue('qbstDpf') ,  /* # of dynamic prefetch requests'"                */
+             || ','f0110RefPrevValue('qbstVpl') ,  /* # of buffers allocated'"                        */
+             || ','f0110RefPrevValue('qbstDpp') ,  /* # of pages read dynamic prefetch'"              */
+             || ','f0110RefPrevValue('qbstLpp') ,  /* # of pages read list prefetch'"                 */
+             || ','f0110RefPrevValue('qbstDio') ,  /* # of dynamic prefetch read i/o(s)'"             */
+             || ','f0110RefPrevValue('qbstLio') ,  /* # of list prefetch read i/o(s)'"                */
+             || ','f0110RefPrevValue('qbstSgt') ,  /* # of get pages sequential req'"                 */
+             || ','f0110RefPrevValue('qbstSio') ,  /* # of sync read i/o(s)'"                         */
+             || ','f0110RefPrevValue('qbstNgt') ,  /* # of unsuccessful cond getpage req'"            */
+             || ','f0110RefPrevValue('qbstXis') ,  /* # of highest prefetch i/o streams alloc'"       */
+             || ','f0110RefPrevValue('qbstJis') ,  /* # of denied prefetch i/o streams'"              */
+             || ','f0110RefPrevValue('qbstPqo') ,  /* # of parallism bm/rds negotiations'"            */
+             || ','f0110RefPrevValue('qbstPgf') ,  /* # of parallism downgraded, bp shortage'"        */
+             || ','f0110RefPrevValue('qbstPl1') ,  /* # of prefetch 1/2 normal'"                      */
+             || ','f0110RefPrevValue('qbstPl2') ,  /* # of prefetch 1/4 normal'"                      */
+             || ','f0110RefPrevValue('qbstNsg') ,  /* # of cond.seq getpage fail, not in buf'"        */
+             || ','f0110RefPrevValue('qbstSioc') , /* # of i/o hitting disk cache'"                   */
+             || ','f0110RefPrevValue('qbstSmin') , /* # of min buffers on slru (in interval)'"        */
+             || ','f0110RefPrevValue('qbstSmax') , /* # of max buffers on slru (in interval)'"        */
+             || ','f0110RefPrevValue('qbstHst') ,  /* # of times slru chain length=vpseqt'"           */
+             || ','f0110RefPrevValue('qbstRhs') ,  /* # of random getpage found on slru'"             */
+             || ','f0110RefPrevValue('qbspIus') ,  /* Current # pages in sim. bp                 */
+             || ','f0110RefPrevValue('qbspHus') ,  /* Highest # pages in sim. bp                 */
+             || ','f0110RefPrevValue('qbspSus') ,  /* Current # seq. pages in sim. bp            */
+             || ','f0110RefPrevValue('qbspHsu') ,  /* Highest # seq. pages in sim. bp            */
+             || ','f0110RefPrevValue('qbspDrr') ,  /* # read sync i/o Random (avoided)           */
+             || ','f0110RefPrevValue('qbspDrs') ,  /* # read sync i/o Seq.   (avoided)           */
+             || ','f0110RefPrevValue('qbspDra') ,  /* # read async i/o Seq.  (avoided)           */
+             || ','f0110RefPrevValue('qbspMvi') ,  /* # pages logically moved into sim bp        */
+             || ','f0110RefPrevValue('qbspDtm')/1000000 , /* time waiting for sync read i/o (avoided) */
+             /* the end of continued lines           */
+
+
+      maxLrecl = max(maxLrecl,length(line.appendLine))
+   end
+end
+'EXECIO' line 'DISKW SMFRPT (STEM LINE. FINIS'
+if rc = 0
+then pendingRc = 0
+else do
+   if rc = 1 then say 'maxlrecl was' maxLrecl'; lrecl on SMFRPT was too small'
+   say 'Error writing and closing SMFRPT, rc='rc
+      'EXECIO 0 DISKR SMFIN (FINIS'
+   pendingRc = 8
+end
+say 'maxlrecl observaed was' maxLrecl
+'EXECIO 0 DISKR SMFIN (FINIS'
+if smfinRc <> 2 | rc <> 0
+then do
+   pendingRc = 8
+   if smfInRc <> 2
+   then say 'Error reading from SMFIN, rc='smfinRc
+   else say 'Error closing from SMFIN, rc='rc
+end
+exit pendingRc
+  /*---------- */
+  /*end of pgm */
+  /*---------- */
+
+  /* ------------------ */
+  /* start of functions */
+  /* ------------------ */
+
+
+/* f0100AdjValue function                                         */
+/*    called with variable name like:  adjValue('variableName')   */
+/*    we lookup prior value in lastValue.variableName             */
+/*    and return difference.                                      */
+f0100AdjValue:
+   parse upper arg variableName .
+
+   if      left(variableName,4) = 'QBST'
+   then bufferPool = qbstpid
+   else if left(variableName,4) = 'QBSP'
+   then bufferPool = qbsppid
+   else bufferPool = 'bp'
+
+   if lastvalue.bufferPool.variableName = ''
+   then do
+      lastvalue.bufferPool.variableName = c2d(value(variableName))
+      lastRefValue.bufferPool.variableName = 0
+      return lastRefValue.bufferPool.variableName
+   end
+   else do
+      pv = lastvalue.bufferPool.variableName
+      cv = c2d(value(variableName))
+      lastValue.bufferPool.variableName    = cv
+      lastRefValue.bufferPool.variableName = cv - pv
+      return lastRefValue.bufferPool.variableName
+   end
+   /* meaningless return, we'll never get here */
+   return 0
+
+oldCode:
+   if variableName = 'QBSTXFV'
+   then do
+      xxx = 'QBSTXFV'
+      say '(debug) lastValue.'xxx '="'lastValue.xxx'"'
+      yyy = 'JUNK'
+      say '(debug) lastValue.'yyy '="'lastValue.yyy'"'
+      say "(debug) value('lastValue.'variableName) ='"value('lastValue.'variableName)"'"
+   end
+   if value('lastValue.'variableName) = ''
+   then do
+      /* get pv (previous value (null) and set new previous value in stem */
+      cv = c2d(value(variableName))
+      pv = value('lastValue.'variableName,cv)   /* set previous starting value to cv */
+      xxx= value('lastRefValue.'variableName,0) /* set to value we are returning */
+      say 'lastValue.'variableName '='value('lastValue.'variableName)
+      say '(default) variableName='variableName', pv=, cv='cv', return value=0'
+      xxx = 'QBSTXFV'
+      say '(default) lastValue.'xxx '="'lastValue.xxx'"'
+      yyy = 'JUNK'
+      say '(default) lastValue.'yyy '="'lastValue.yyy'"'
+      say "(default) value('lastValue.'xxx) ='"value('lastValue.'xxx)"'"
+      say "(default) value('lastValue.'variableName) ='"value('lastValue.'variableName)"'"
+      return 0                                  /* first time, return 0 */
+   end
+   else do
+      /* get pv (previous value) and set new previous value in stem */
+      trace 'i'
+      cv = c2d(value(variableName))
+      pv = value('lastValue.'variableName,cv)
+      refValue = cv - pv
+      say 'variableName='variableName', pv='pv', cv='cv', returned value='refValue
+      xxx= value('lastRefValue.'variableName,refValue) /* set to value we are returning */
+      exit 8
+
+      /* return difference between this value and previous one */
+      return refValue                                  /* return same value as in lastrefvalue. */
+   end
+   /* meaningless return, we'll never get here */
+   return 0
+                /* updated by our function adjValue('variableName')          */
+/* f0110RefPrevValue function                                         */
+/*    called with variable name like:  f0110RefPrevValue('variableName')   */
+/*    we lookup prior value in lastValue.variableName             */
+/*    and return difference (that we set last time in f0100)      */
+f0110RefPrevValue:
+   parse upper arg variableName .
+
+   if      left(variableName,4) = 'QBST'
+   then bufferPool = qbstpid
+   else if left(variableName,4) = 'QBSP'
+   then bufferPool = qbsppid
+   else bufferPool = 'bp'
+
+   if lastRefValue.bufferPool.variableName = ''
+   then return 0
+   return lastRefValue.bufferPool.variableName
+
+/* f0120SaveValue function                                        */
+/*    called with variable name like: saveValue('variableName')   */
+/*    we convert and save value.                                  */
+f0120SaveValue:
+   parse upper arg variableName .
+
+   if      left(variableName,4) = 'QBST'
+   then bufferPool = qbstpid
+   else if left(variableName,4) = 'QBSP'
+   then bufferPool = qbsppid
+   else bufferPool = 'bp'
+
+   cv = c2d(value(variableName))
+   lastRefValue.bufferPool.variableName = cv
+   return lastRefValue.bufferPool.variableName
+

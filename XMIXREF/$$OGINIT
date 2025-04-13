@@ -1,0 +1,447 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN($$OGINIT)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF($$OGINIT)
+   -----------------------------------------
+
+READY
+    $$OGINIT
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRCICDS.AFO340.RKANCMD($$OGINIT)"      */
+    Generated scan code/comment:   /*      ---------------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                      */
+    Generated scan code/comment:   /*     20231217 23:07:18                        */
+    Generated scan code/comment:   /*      ---------------------------------       */
+     1 *-* /****************************REXX*************************************   *
+                     *   *                      CANDLE CORPORATION                           *   *                   COPYRIGHT (C)
+1993-2001                         *   *                            U.S.A.                                 *   *      ALL RIGHTS RES
+ERVED. USE PERMISSIBLE BY LICENSE ONLY.        *   *                                                                   *   ********
+*************************************************************   *
+ *   *   NAME        $$OGINIT                            CUSTOMIZER      *   *
+              *   *   TITLE       INSTALLATION VERIFICATION REXX TEST EXEC            *   *
+                           *   *   FUNCTION    EXECUTES WHEN THE AO/MVS COMES UP FOR               *   *               THE FIRST TI
+ME.                                     *   *                                                                   *   * IOT Change LO
+G:                                                   *   *                                                                   *   *
+Date       Person     Comments                                    *   * ---------- ---------- -------------------------------------
+------ *   * 2020-06-27 RWSUHR     Changed the STARTLOG TRAP to                *   *                        'OPER '' S STARTLOG'' *
+**'                 *   * 2021-01-21 RWSUHR     Deleted the DDCMD TRAP (TOD)                *   *
+                                 *   *                                                                   *   *
+                                              *   *********************************************************************/
+    29 *-* /****************************************************************@11*/
+    30 *-* /*  AF/OPERATOR (RSM) STARTUP                                    @11*/
+    31 *-* /****************************************************************@11*/
+    32 *-* /* START RSM */
+    33 *-* "AF AUTOREF QUIET"
+    34 *-* "AF MATINFO"
+    35 *-* /* START RCF */
+    36 *-* call KAORSTRT'SFRCICDS.AFO340.RKANISP','RCF','PROF0'
+    37 *-* /* set up ommvs/afoperator communication link ommvs1 and omvs2 */
+    38 *-* EX COMMVS
+    39 *-* /***** TOD TRAPS ******/
+    40 *-* /* start NJE lines if VTAM is active */
+    41 *-* /* "TRAP ADD(VTAMINI3)",  */
+    42 *-* /* "TOD(*)",             */
+    43 *-* /* "ACT('EX VTAMINI3')", */
+    44 *-* /* "ENABLE"              */
+    46 *-* "TRAP ADD(TCS80DST) TOD(04:00:00) ACT('EX TCS80DST')",                    "INTERVAL(24:00:00) ENABLE"
+    50 *-* /* TOD TRAP TO do SMF switch at 00:00:01 daily         */
+    51 *-* "TRAP ADD(SMFSWCH) TOD(00:00:01)",                                       "ACT('OPER ''I SMF'' console(11)')",
+                         "INTERVAL(24:00:00)",                                                   "NOLOG",
+                                      "ENABLE"
+    57 *-* /* TOD TRAP TO test NJE nodes active on Friday at 05:45 */
+    58 *-* "TRAP ADD(NJECHK2) TOD(05:45:00)",                                       "DAYS(FRI)",
+                         "INTERVAL(24:00:00)",                                                   "ACT('EX NJECHECK')",
+                                      "NOLOG",                                                                "ENABLE"
+    65 *-* /* TOD TRAP TO ISSUE START IMSPROD AT 06:30 MON-FRI */
+    66 *-* /*"TRAP ADD(IMSPRDST) TOD(06:30:00) DAYS(WEEKDAYS)",  */
+    67 *-* /* "ACT('OPER ''S IMSPROD'' console(11)')",           */
+    68 *-* /* "INTERVAL(24:00:00)",                              */
+    69 *-* /* "NOLOG",                                           */
+    70 *-* /* "ENABLE"                                           */
+    72 *-* /* TOD TRAP TO ISSUE START IMSPROD AT 07:00 ON SAT */
+    73 *-* /*"TRAP ADD(IMSPRDSA) TOD(07:00:00) DAYS(SAT)", */
+    74 *-* /* "ACT('OPER ''S IMSPROD'' console(11)')",     */
+    75 *-* /* "INTERVAL(24:00:00)",                        */
+    76 *-* /* "NOLOG",                                     */
+    77 *-* /* "DISABLE"                                    */
+    79 *-* /* TOD TRAP TO ISSUE START IMSPROD AT 08:00 ON SUN */
+    80 *-* /*"TRAP ADD(IMSPRDSU) TOD(08:00:00) DAYS(SUN)", */
+    81 *-* /* "ACT('OPER ''S IMSPROD'' console(11)')",     */
+    82 *-* /* "INTERVAL(24:00:00)",                        */
+    83 *-* /* "NOLOG",                                     */
+    84 *-* /* "ENABLE"                                     */
+    86 *-* /* TOD TRAP TO ISSUE START IMSTRNG AT 06:30 MON-FRI */
+    87 *-* /*"TRAP ADD(IMSTRGST) TOD(06:30:00) DAYS(WEEKDAYS)",  */
+    88 *-* /* "ACT('OPER ''S IMSTRNG'' console(11)')",           */
+    89 *-* /* "INTERVAL(24:00:00)",                              */
+    90 *-* /* "NOLOG",                                           */
+    91 *-* /* "ENABLE"                                           */
+    93 *-* /* TOD TRAP TO ISSUE START IMSSYST AT 04:30 DAILY */
+    94 *-* /*"TRAP ADD(IMSSYSST) TOD(04:30:00)",               */
+    95 *-* /* "ACT('OPER ''S IMSSYST'' console(11)')",         */
+    96 *-* /* "INTERVAL(24:00:00)",                            */
+    97 *-* /* "NOLOG",                                         */
+    98 *-* /* "ENABLE"                                         */
+   100 *-* /* TOD TRAP TO ISSUE START IMSREFM AT 06:30 DAILY */
+   101 *-* /*"TRAP ADD(IMSRFMST) TOD(06:30:00)",       */
+   102 *-* /*"ACT('OPER ''S IMSREFM'' console(11)')", */
+   103 *-* /*"INTERVAL(24:00:00)",                    */
+   104 *-* /*"NOLOG",                                 */
+   105 *-* /*"ENABLE"                                 */
+   107 *-* /* TOD TRAP TO Verify correct initiator status daily @ 07:00 */
+   108 *-* "TRAP ADD(RESET) TOD(07:00:00)",                                         "INTERVAL(24:00:00)",
+                         "ACT('OPER ''S RESET'' console(11) ')",                                 "NOLOG",
+                                      "ENABLE"
+   114 *-* /* TOD TRAP TO test NJE nodes active at 7:30    */
+   115 *-* "TRAP ADD(NJECHK) TOD(07:30:00)",                                        "INTERVAL(24:00:00)",
+                         "ACT('EX NJECHECK')",                                                   "NOLOG",
+                                      "ENABLE"
+   121 *-* /* TOD TRAP TO test NJE nodes active at 7:30    */
+   122 *-* "TRAP ADD(NJECHK) TOD(07:30:00)",                                        "INTERVAL(24:00:00)",
+                         "ACT('EX NJECHECK')",                                                   "NOLOG",
+                                      "ENABLE"
+   128 *-* /* TOD TRAP TO check for CMF every morning at 8  */
+   129 *-* /*"TRAP ADD(CMFCHECK) TOD(08:00:00)", */
+   130 *-* /* "INTERVAL(24:00:00)",              */
+   131 *-* /* "ACT('EX CMFCHECK')",              */
+   132 *-* /* "NOLOG",                           */
+   133 *-* /* "ENABLE"                           */
+   135 *-* /* TOD TRAP TO do expirebv at 13:00:00 daily         */
+   136 *-* "TRAP ADD(EXPIREBV) TOD(13:00:00)",                                      "ACT('OPER ''F DFHSM,EXPIREBV EXEC",
+                         "NONSMSVERSIONS(UNCATALOGEDDATA(30)) SYSOUT RESUME'' console(11)')",    "INTERVAL(24:00:00)",
+                                      "NOLOG",                                                                "ENABLE"
+   143 *-* /* TOD TRAP TO startlog      at 17:00:00 daily         */
+   144 *-* "TRAP ADD(STARTLOG) TOD(17:00:00)",                                      "ACT('EX STARTLOG')",   /* EX STARTLOG REXX
+       */                "INTERVAL(24:00:00)",                                                   "NOLOG",
+                                      "ENABLE"
+   150 *-* /* TOD TRAP TO ISSUE STOP IMSSYST AT 19:00 DAILY   */
+   151 *-* /*"TRAP ADD(IMSSYSSP) TOD(19:00:00)",                */
+   152 *-* /* "ACT('EX IMSSYSSP')",                             */
+   153 *-* /* "INTERVAL(24:00:00)",                             */
+   154 *-* /* "NOLOG",                                          */
+   155 *-* /* "ENABLE"                                          */
+   157 *-* /* TOD TRAP TO ISSUE STOP IMSREFM AT 19:00 DAILY   */
+   158 *-* /*"TRAP ADD(IMSRFMSP) TOD(19:00:00)", */
+   159 *-* /*ACT('EX IMSRFMSP')",                */
+   160 *-* /*INTERVAL(24:00:00)",                */
+   161 *-* /*NOLOG",                             */
+   162 *-* /*ENABLE"                             */
+   164 *-* /* TOD TRAP TO do HSM tapecopy at 1800 daily           */
+   165 *-* /*"TRAP ADD(HSM1800) TOD(18:00:00)", */
+   166 *-* /* "ACT('OPER ''F DFHSM,TAPECOPY ALL'' console(11)')", */
+   167 *-* /* "INTERVAL(24:00:00)", */
+   168 *-* /* "NOLOG", */
+   169 *-* /* "ENABLE" */
+   171 *-* /* TOD TRAP TO issue dbrdummy at 18:00   mon-fri       */
+   172 *-* /*   2019-05-02 RWSUHR changed time to 17:30 on request*/
+   173 *-* /*                     by Bill Kiesle                  */
+   174 *-* "TRAP ADD(DBRDUMMY) TOD(17:30:00) DAYS(WEEKDAYS)",                       "ACT('EX DBRDUMMY')",
+                         "INTERVAL(24:00:00)",                                                   "NOLOG",
+                                      "ENABLE"
+   180 *-* /* TOD TRAP TO ISSUE STOP IMSTRNG AT 19:00 MON-FRI */
+   181 *-* /*"TRAP ADD(IMSTRGSP) TOD(19:00:00) DAYS(WEEKDAYS)", */
+   182 *-* /* "ACT('EX IMSTRGSP')",                             */
+   183 *-* /* "INTERVAL(24:00:00)",                             */
+   184 *-* /* "NOLOG",                                          */
+   185 *-* /* "ENABLE"                                          */
+   187 *-* /* TOD TRAP TO ISSUE STOP IMSPROD AT 20:00 MON-FRI */
+   188 *-* /*"TRAP ADD(IMSPRDSP) TOD(20:00:00) DAYS(WEEKDAYS)",  */
+   189 *-* /* "ACT('EX IMSPRDSP')",                              */
+   190 *-* /* "INTERVAL(24:00:00)",                             */
+   191 *-* /* "NOLOG",                                          */
+   192 *-* /* "ENABLE"                                          */
+   194 *-* /* TOD TRAP TO ISSUE STOP IMSPROD AT 19:00 ON SAT */
+   195 *-* /*"TRAP ADD(IMSPRDSZ) TOD(19:00:00) DAYS(SAT)",     */
+   196 *-* /* "ACT('EX IMSPRDSP')",                            */
+   197 *-* /* "INTERVAL(24:00:00)",                            */
+   198 *-* /* "NOLOG",                                         */
+   199 *-* /* "ENABLE"                                         */
+   201 *-* /* TOD TRAP TO ISSUE STOP IMSPROD AT 16:00 ON SUN */
+   202 *-* /*  "TRAP ADD(IMSPRDSY) TOD(16:00:00) DAYS(SUN)",   */
+   203 *-* /*   "ACT('EX IMSPRDSP')",                          */
+   204 *-* /*   "INTERVAL(24:00:00)",                          */
+   205 *-* /*   "NOLOG",                                       */
+   206 *-* /*   "ENABLE"                                       */
+   208 *-* /***** CMD TRAPS ******/
+   209 *-* /* TRAP FOR JB9 command added 4/27/04                         */
+   210 *-* "TRAP ADD(JB9) CMD('JB9 *W2')",                                         "SUPPRESS",
+                        "NOLOG",                                                                "ACT('EX JB9 ''&&W2''')",
+                                     "ENABLE"
+   216 *-* /* TRAP FOR DSPLB command added 4/28/04                       */
+   217 *-* "TRAP ADD(DSPLB) CMD('DSPLB *W2')",                                     "SUPPRESS",
+                        "NOLOG",                                                                "ACT('EX DSPLB ''&&W2''')",
+                                     "ENABLE"
+   223 *-* /* TRAP FOR JCMD command added 5/05/04                       */
+   224 *-* "TRAP ADD(JCMDB) CMD('JCMD *W2')",                                      "SUPPRESS",
+                        "NOLOG",                                                                "ACT('EX JCMD ''&&W2''')",
+                                     "ENABLE"
+   230 *-* /* TRAP FOR BBCMD command added 5/05/04                       */
+   231 *-* "TRAP ADD(BBCMD) CMD('BBCMD *W2')",                                     "SUPPRESS",
+                        "NOLOG",                                                                "ACT('EX BBCMD ''&&W2''')",
+                                     "ENABLE"
+   237 *-* /***** WTO TRAPS ******/
+   238 *-* "TRAP ADD(TCS80DEN) WTO('$HASP395*') JOBNAME(TCS80D)",                    "ACT('EX TCS80DEN') ENABLE"
+   241 *-* "TRAP ADD(TCS80END) WTO('$HASP395*') JOBNAME(TCS80)",                     "ACT('EX TCS80END') ENABLE"
+   244 *-* "TRAP ADD(TCS24END) WTO('$HASP395*') JOBNAME(TCS24)",                     "ACT('EX TCS24END') ENABLE"
+   247 *-* "TRAP ADD(TCS24EN2) WTO('IEF450I*') JOBNAME(TCS24)",                      "ACT('EX TCS24END') ENABLE"
+   250 *-* /* ACTIVATE CICSVTAM CICS1 ACTIVE */
+   251 *-* "TRAP ADD(ACTCICSV) WTO('+DFHSI1517*') JOBNAME(CICS1)",                   "ACT('EX ACTCICSV') ENABLE"
+   254 *-* /* ACTIVATE ANYNET on CICS60 ACTIVE */
+   255 *-* "TRAP ADD(ACTANYNT) WTO('+DFHSI1517*') JOBNAME(CICS60)",                  "ACT('EX ACTANYNT') DISABLE"
+   258 *-* /* open CICSVTAM acb on CICSVTAM ACTIVE */
+   259 *-* "TRAP ADD(OPENCICV) WTO('IST093I CICSVTAM ACTIVE*') JOBNAME(VTAM)",       "ACT('EX OPENCICV') ENABLE"
+   262 *-* /* Watch for omegmvs startup - START OMMVS1 and            */
+   263 *-* /*                                   OMMVS2 connection and */
+   264 *-* /*                                   enable       scndoc15 */
+   265 *-* /* fix message to trap on.  Applid changed from APPLM2RC */
+   266 *-* /*                                         to   K0PM2RC  */
+   267 *-* /*                          fixed 1/14/2021 Rich Humphris*/
+   268 *-* "TRAP ADD(OMEGMACT) WTO('OMV002I  APPL K0PM2RC OPENED*')",                "JOBNAME(CANSM2RC) ACT('EX COMMVS2') ENABLE"
+   271 *-* /* watch for omegmvs closedown - disable scndoc15 */
+   272 *-* "TRAP ADD(OMEGMSTP) WTO('$HASP395*')",                                    "JOBNAME(CANSM2RC) ACT('EX DISDOC') ENABLE"
+   275 *-* "TRAP ADD(IDMSGP1) WTO('KAO01000*') JOBNAME(CANSAFO)",                    "ACT('EX TRAPGRPS') ENABLE"
+   278 *-* /* TRAP FOR BATCH OPEN/CLOSE TRIGGER MESSAGE                 */
+   279 *-* "TRAP ADD(IMSOCTRP) WTO('+AF/OPERATOR *SORTCNTL *MBR *USR *')",          "ACT('EX IMSROUTE ''&&SORTCNTL,&&MBR,&&USR'' ')
+",                       "SUPPRESS",                                                             "NOLOG",
+                                      "ENABLE",
+   285 *-* /* TRAP FOR DFS0488I DBCTL OPEN/CLOSE REPLY MESSAGE          */
+   286 *-* "TRAP ADD(DFS0488I) WTO('DFS0488I*')",                                   "ACT('EX DFS0488I')",
+                         "DESC(5)",                                                              "NOLOG",
+                                      "ENABLE"
+   292 *-* /* TRAP FOR DFS0618A IMS NON-ABNORMALLY TERMINATED MESSAGE   */
+   293 *-* "TRAP ADD(DFS0618A) WTO('DFS0618A* SYSTEM MUST*')",                      "ACT('EX DFS0618A')",
+                         "ENABLE SUPPRESS"
+   297 *-* /* TRAP FOR DFS554A IMS PROGRAM ABEND                        */
+   298 *-* "TRAP ADD(DFS554A) WTO('DFS554A*')",                                     "ACT('EX DFS554A')",
+                         "JOBNAME(IMSP*)",                                                       "ENABLE SUPPRESS"
+   303 *-* /* TRAP FOR IEE362A SMF DUMP REQUEST MESSAGE                 */
+   304 *-* /*"TRAP ADD(IEE362A) WTO('IEE362A*')",                       */
+   305 *-* /* "ACT('EX IEE362A')",                                      */
+   306 *-* /* "NOLOG",                                                  */
+   307 *-* /* "ENABLE"                                                  */
+   309 *-* /* TRAP FOR IEE391A SMF DUMP REQUEST MESSAGE                 */
+   310 *-* "TRAP ADD(IEE391A) WTO('IEE391A*')",                                     "ACT('EX IEE391A')",
+                         "LOG",                                                                  "ENABLE"
+   315 *-* /* TRAP FOR IEE852I periodic display of system dump datasets */
+   316 *-* /* "TRAP ADD(IEE852I) WTO('IEE852I*')",                      */
+   317 *-* /*  "ACT('EX DUMPCHK')",                                     */
+   318 *-* /*  "NOLOG",                                                 */
+   319 *-* /*  "ENABLE"                                                 */
+   321 *-* /* TRAP FOR IEA911E system dump message to do a notify       */
+   322 *-* "TRAP ADD(IEA911E) WTO('IEA911E*')",                                     "ACT('EX IEA911E')",
+                         "NOLOG",                                                                "ENABLE"
+   327 *-* /* WTO TRAP TO IEA405E to issure flush of wto buffers  */
+   328 *-* "TRAP ADD(IEA405E) WTO('IEA405E*')",                                     "ACT('EX KQ')",
+                         "NOLOG",                                                                "ENABLE"
+   333 *-* /* WTO TRAP CBR3778I                                         */
+   334 *-* "TRAP ADD(CBR3778I) WTO('CBR3778I*')",                                   "ACT('EX CBR3778I')",
+                         "NOLOG",                                                                "ENABLE"
+   339 *-* /* TRAP FOR BATCH LLA update trigger message                 */
+   340 *-* "TRAP ADD(AFOLLA) WTO('+AF/OPERLLA *PARM *userid')",                     "ACT('EX &&PARM')",
+                         "SUPPRESS",                                                             "NOLOG",
+                                      "ENABLE"
+   346 *-* /* TRAP FOR +IEF404I from KLS at closedown                   */
+   347 *-* "TRAP ADD(KLSBACK) WTO('IEF404I*')",                                     "JOBNAME(KLS)",
+                         "DAYS(MON)",                                                            "ACT('EX KLSBACK')",
+                                      "NOLOG",                                                                "ENABLE"
+   354 *-* /* TRAP FOR IEA480E to notify dasd guys                      */
+   355 *-* "TRAP ADD(IEA480E) WTO('IEA480E*')",                                     "ACT('EX IEA480E')",
+                         "NEWDESC(1,2,11)",                                                      "NOLOG",
+                                      "ENABLE"
+   361 *-* /* //////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\       */
+   362 *-* /* Begin Traps to page operations support when                             datacenter not manned (normally enabled manua
+lly)         */
+   364 *-* /* //////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\       */
+   366 *-* /* TRAP FOR U11-607 ca/7 abend to do a notify                */
+   367 *-* "TRAP ADD(U11607) WTO('U11-607*')",                                      "ACT('EX U11607')",
+                         "NOLOG",                                                                "DISABLE"
+   372 *-* /* TRAP FOR OP0055 vts free storage threshold crossed        */
+   373 *-* "TRAP ADD(OP0055) WTO('OP0055*')",                                       "ACT('EX OP0055')",
+                         "NOLOG",                                                                "DISABLE"
+   378 *-* /* TRAP FOR SLS0665E HSM Degraded                            */
+   379 *-* "TRAP ADD(SLS0665) WTO('SLS0665E*')",                                    "ACT('EX SLS0665')",
+                         "NOLOG",                                                                "DISABLE"
+   384 *-* /* TRAP FOR SLS2402E HSM Scratch Warning                     */
+   385 *-* "TRAP ADD(SLS2402) WTO('SLS2402E*')",                                    "ACT('EX SLS2402')",
+                         "NOLOG",                                                                "DISABLE"
+   390 *-* /* TRAP FOR IOS162A CHIPD Alert                              */
+   391 *-* "TRAP ADD(IOS162A) WTO('IOS162A*')",                                     "ACT('EX IOS162A')",
+                         "NOLOG",                                                                "DISABLE"
+   396 *-* /* TRAP FOR CBR3762E VTS Intervention                        */
+   397 *-* "TRAP ADD(CBR3762E) WTO('CBR3762E*')",                                   "ACT('EX CBR3762E')",
+                         "NOLOG",                                                                "DISABLE"
+   402 *-* /* TRAP FOR $HASP050 JES2 Shortage of TGS                    */
+   403 *-* "TRAP ADD($HASP050) WTO('$HASP050*')",                                   "ACT('EX $HASP050')",
+                         "NOLOG",                                                                "DISABLE"
+   408 *-* /* TRAP FOR CBR3660A VTS Scratch Shortage                    */
+   409 *-* "TRAP ADD(CBR3660A) WTO('CBR3660A*')",                                   "ACT('EX CBR3660A')",
+                         "NOLOG",                                                                "DISABLE"
+   414 *-* /* TRAP FOR IEA911E  DUMP REQ. (ignore car85)               */
+   415 *-* "TRAP ADD(IEA911P) WTO('IEA911E*')",                                     "ACT('EX IEA911P')",
+                         "NOLOG",                                                                "DISABLE"
+   420 *-* /* //////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\       */
+   421 *-* /* End   Traps to page operations support when                             datacenter not manned
+             */
+   423 *-* /* //////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\       */
+   425 *-* /* ACTIVATE JES TRAPS                                        */
+   426 *-* EX JESTRAPS
+   428 *-* /* ACTIVATE HSM TRAPS                                        */
+   429 *-* EX HSMTRAPS
+   431 *-* /* ACTIVATE message suppression traps                        */
+   432 *-* EX SUPTRAPS
+   434 *-* say '***************************************************************'
+   435 *-* say 'The Initialization Procedure for '
+   436 *-* say 'AO/MVS has ended..........'
+   437 *-* say '***************************************************************'
+   439 *-* exit(0)
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Variable (NEVER SET)    COMMVS        Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) COMMVS        Reference: 38
+
+Variable (NEVER SET)    EX            Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EX            Reference: 38 426 429 432
+
+Variable (NEVER SET)    HSMTRAPS      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) HSMTRAPS      Reference: 429
+
+Variable (NEVER SET)    JESTRAPS      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) JESTRAPS      Reference: 426
+
+Built-In+/External use  KAORSTRT      Reference: C(36)
+
+Variable (NEVER SET)    SUPTRAPS      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SUPTRAPS      Reference: 432
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

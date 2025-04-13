@@ -1,0 +1,97 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.REXX(NONSENSE)"      */
+/*      ---------------------       */
+/*  date/time of XREF was:          */
+/*     20231217 23:02:44            */
+/*      ---------------------       */
+
+/* rexx */
+/* nonsense but legal code */
+/*  */
+/* NO ONE ... should ever write code that looks like this */
+/* ------------------------------------------------------ */
+
+/* nested /* comment */ */ 'execio whatever' b /* another nested /* comment */ */
+/* what */ /* 2nd comm */ label1: /* more */ address tso /* more */ 'execio whatever'
+if x=1 then y=2 then y=3
+call ' x y z'
+rc = 'we can set a special variable'
+say rc /* and, of course, reference it */
+Select
+when balance > 0 then
+say 'Congratulations! You still have' balance 'dollars left.'
+when balance = 0 then do
+say 'Attention, Balance is now zero! STOP all spending.'
+say "You cut it close this month! Hope you do not have any"
+say "checks left outstanding."
+end
+Otherwise
+say "You have just overdrawn your account."
+say "Your balance now shows" balance "dollars."
+say "Oops! Hope the bank does not close your account."
+end /* Select */
+select when a = 2  then xx = 2
+       when a = 3  then xx = 2
+       when a = 4  then xx = 2
+       otherwise   a=6
+       end
+
+/* following is one "long" assignment statement */
+a = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' ,
+    'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' ,
+    'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' ,
+    'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' ,
+    'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' ,
+    b
+
+/* following is 4 rexx assignment statements on one line */
+/* bad, but not "so bad" as later statement              */
+a =1; b=2; c=3;d = 4
+
+/* following 1s basically 3 rexx statements: assignment; if exp then stmt; assignment stmt */
+/* bad, but not "so bad" as later statement                                                */
+e =5; if a = 1 then b =2; f=6
+
+/* following might LOOK like multiple rexx statements                 */
+/* BUT if you look closely, is really just "one" assignment statement */
+/* This is really TERRIBLE rexx code (in my opinion)                  */
+/*                                                                    */
+/* The rexx:  TRACE 's' instruction will illustrate this.             */
+/*                                                                    */
+/* Note:  IF, THEN and ELSE are all variables in this assignment stmt */
+
+e =5  if a = 1 then if b =2 then c =3 else d =4 f=6 /* this looks simple but is terrible rexx code*/
+
+/* better rexx code follows */
+if a = 1
+then if b = 2
+     then c =3
+     else d =4
+
+a = 3
+b = 2
+doit() rats(e)
+/* this code is almost reasonable */
+x = 0
+x = x+1; x.x = 'filling stems'
+x = x+1; x.x = 'sequentially'
+x = x+1; x.x = 'so this looks'
+x = x+1; x.x = 'reasonable'
+
+exit
+
+doit:
+   say 'something' a b
+   return 'somecmd'
+
+rats:
+   return 'rat'
+syntax:
+   say 'syntax here'
+   exit
+on:
+   say 'ON' here
+   exit

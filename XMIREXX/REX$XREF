@@ -1,0 +1,2719 @@
+00010000/* REXX */
+00020000/*                                                                           */
+00030000/* written by:  Richard Humphris                                             */
+00040000/* email:       richard.humphris@netnitco.net                                */
+00050000/* cell:        219-707-1409                                                 */
+00060000/*                                                                           */
+00070000/* version      change                                                       */
+00080000/* -------      ------------------------------------------------------------ */
+00081000/* 1.02         update "address" command:                                    */
+00082000/*              1. add explicit address commands to xreference for ease of use*/
+00083000/*              2. fix:  address syntax                                      */
+00084000/*                                                                           */
+00085000/*                 syntax 1:  address environment [exprc]                    */
+00086000/*                 syntax 2:  address [VALUE] exprv                          */
+00087000/*                    a) environment names                                   */
+00088000/*                         1) environment (1st format) is an environment if  */
+00089000/*                        it 1st word is a symbol or a constant.  In either  */
+00089100/*                        case, a symbol is treated as a constant, not a     */
+00089200/*                        variable.                                          */
+00089300/*                         2) exprv is an expression that evaluates to a     */
+00089400/*                        environment name if 1st word is not a symbol or    */
+00089500/*                        a constant.  Or if "VALUE" is explicitly specified.*/
+00089600/*                    b) command to be executed [exprc] only is an option w/ */
+00089700/*                      the 1st syntax of the address command.               */
+00089800/*                    c) The fixes to the address command:                   */
+00089900/*                         1) if VALUE was not specified, we always treated  */
+00090000/*                        the implied syntax 2 (w/o VALUE) as syntax 1.      */
+00090100/*                         2) environment (in syntax 1) is specified as a    */
+00090200/*                        constant did not appear in the xref, only "variables"*/
+00090300/*                        did.  But "variables" as "environment" in syntax 1 */
+00090400/*               3. new function.                                            */
+00090500/*                    a)  we will add a xref section for address environments*/
+00090600/*                   like:                                                   */
+00090700/*                       address 'environment'                               */
+00090800/*                       address 'environment' <cmd>                         */
+00090900/*                       address VALUE exprv                                 */
+00091000/*                                                                           */
+00091100/*              4. internal changes include:                                 */
+00091200/*                 a.  variableAddrDef.      stem added                      */
+00091300/*                     variableAddrDefValue. stem added                      */
+00091400/*                 b.  called routine "c0480AddressDefine:" created          */
+00091500/*                 c.  code for ADDRESS command modified.                    */
+00091600/*                           among other things, to call c0480               */
+00091700/*                           and it will use variable "line_without_comments"*/
+00091800/*                           for "ADDRESS VALUE" syntax.                     */
+00091900/*                 d.  xref code updated to output address info.             */
+00092000/*                 e.  change routine c0070ParseLinePass1:                   */
+00092100/*                     1.  remove comments and labels to set variable:       */
+00092200/*                            "LineWithoutCommentsNlabels"                   */
+00092300/*                     2.  Then continue parsing as before with the other    */
+00092400/*                            variables.                                     */
+00092500/*                                                                           */
+00092716/*              5. fix test for a variable/stem assignment                   */
+00092816/*                                                                           */
+00092900/* 1.01         initial "release"                                            */
+00093000/*                                                                           */
+00093100/*                                                                           */
+00093200/*    summarize process:                                                     */
+00093300/*    ------------------                                                     */
+00094000/*          Input:  a rexx exec you want a cross reference for.              */
+00095000/*                                                                           */
+00096000/*          process:                                                         */
+00097000/*             1) read rexx exec from libraryX.(member) (your exec library)  */
+00098000/*                                                                           */
+00099000/*             2) create member in hlq.SCAN(member)                          */
+00100000/*                                                                           */
+00110000/*                a) if fb, change to vb (hlq.SCAN) is vb                    */
+00120000/*                                                                           */
+00130000/*                b) remove seq #'s (either fb or vb)                        */
+00140000/*                                                                           */
+00150000/*                c) add header information (comments) to converted exec     */
+00160000/*                                                                           */
+00170000/*                d) add trace 's' after header        in converted exec     */
+00180000/*                                                                           */
+00190000/*             3) run converted member with/  trace 's'                      */
+00200000/*                                                                           */
+00210000/*                a) save output in a temporary file.                        */
+00220000/*                                                                           */
+00230000/*                b) if trace unsuccessful, update hlq.XREF with scan        */
+00240000/*                 output and we're done.                                    */
+00250000/*                                                                           */
+00260000/* ====>       4) run REX$XREF (this exec) to create the cross reference     */
+00270000/*                                                                           */
+00280000/*                a) save xref in a temporary file.                          */
+00290000/*                                                                           */
+00300000/*             5) create header, copy scan output, copy xref output and      */
+00310000/*               create a member in hlq.XREF(member)                         */
+00320000/*                                                                           */
+00330000/*    purpose of REX$XREF:                                                   */
+00340000/*    --------------------                                                   */
+00350000/*                                                                           */
+00360000/*         1)  input:  trace 's' output of exec; we want to gen a xref for.  */
+00370000/*                                                                           */
+00380000/*         2)  process trace 's' output and create s xref                    */
+00390000/*                                                                           */
+00400000/*             a)  "pass 1" reads rexx code and looks for labels, call       */
+00410000/*            instructions, function calls, signal instructions, variables   */
+00420000/*            used (assigned and/or referrenced) and stems used and/or       */
+00430000/*            referenced.  All labels, variable and stems are saved in       */
+00440000/*                                                                           */
+00450000/*                 1)  all labels, variables, stems (with variables used)    */
+00460000/*                are all saved in upperCase.                                */
+00470000/*                                                                           */
+00480000/*                 2)  stems with numeric values after the period are changed*/
+00490000/*                to # (except for 0).                                       */
+00500000/*                                                                           */
+00510000/*                    For example:                                           */
+00520000/*                                                                           */
+00530000/*                     stem as used     stem as saved for xref               */
+00540000/*                     ------------     ----------------------               */
+00550000/*                     xyz.var1.0       XYZ.VAR1.0                           */
+00560000/*                     xyz.var1.1       XYZ.VAR1.#                           */
+00570000/*                     xyz.var1.2         (see above)                        */
+00580000/*                     xyz.var1.3         (see above)                        */
+00590000/*                                                                           */
+00600000/*                                                                           */
+00610000/*             b)  "pass 2" the "output pass"                                */
+00620000/*                                                                           */
+00630000/*                 1) the "constant" xref section 1                          */
+00640000/*                                                                           */
+00650000/*                    a) variables are sorted                                */
+00660000/*                                                                           */
+00670000/*                    b) only variables that aren't assigned in rexx code    */
+00680000/*                   appear here.                                            */
+00690000/*                                                                           */
+00700000/*                    c) so labels (also used as variables) are only reported*/
+00710000/*                   here if the variable use was only a reference.          */
+00720000/*                                                                           */
+00730000/*                                                                           */
+00740000/*                                                                           */
+00750000/*    Note:                                                                  */
+00760000/*          NO syntax checking is done.  We ran the rexx syntax checker and  */
+00770000/*         what's "good" for rexx is "good" for us.                          */
+00780000/*                                                                           */
+00790000/*          Therefore, it greatly simplifies code.  For example, if you put  */
+00800000/*         a variable on a "ITERATE" statement, for example, we just assume  */
+00810000/*         it will be a single variable and references a active do loop. BUT */
+00820000/*         to simplify this code, we treat value like any other expression   */
+00830000/*         on the right hand side of an assignment statement say.  We depend */
+00840000/*         on REXX to pick up syntax problems.                               */
+00850000/*                                                                           */
+00860000/*          Also, we do NOT look at "constants" enclosed in quotes.  So if   */
+00870000/*         for example,you code a "EXECIO" command with STEM X. in quotes    */
+00880000/*         we will NOT generate a assignment for the rexx stem X. (for that  */
+00890000/*         statement).                                                       */
+00900000/*                                                                           */
+00910000/*                                                                           */
+00920000
+00930000   signal on syntax /* set trap for syntax errors */
+00940000   parse source . . . . . . . addressSpace .
+00950000   if addressSpace = 'OMVS'
+00960000   then do
+00970000      omvsSeg = 1 /* user can use bpxwunix() function */
+00980000   end
+00990000   else do
+01000000      x = syscalls('ON')
+01010000      if x = 0
+01020000      then do
+01030000           omvsSeg = 1 /* user can use bpxwunix function */
+01040000           x = syscalls('OFF')
+01050000      end
+01060000      else omvsSeg = 0 /* will have to use rexx subroutine to do sorting (slow)*/
+01070000   end
+01080000
+01090000   say ' '
+01100000   if omvsSeg = 1
+01110000   then say 'XREF will be able to use a fast omvs sort, as we have an OMVS segment)'
+01120000   else say 'XREF can''t do a fast omvs sort (no OMVS segment); will use rexx code to sort'
+01130000   say ' '
+01140000
+01150000signal startUp      /* "branch" over the syntax handling routine */
+01160000
+01170000  syntax:
+01180000/*-------*/
+01190000/*-------*/
+01200000/* syntax:  error handling */
+01210000/*   rc    is set to the syntax error number;                        */
+01220000/*         ... equivelent to IRX00nnL as rc = 00, 01 to 99           */
+01230000/*   sigl  is set to the line number in error                        */
+01240000   parse source . . execname .
+01250000   say 'IRX00'right('00'rc,2)'I Error running exec' ,
+01260000              execName 'line' sigl':' errortext(rc)
+01270000   syntaxLow = max(sigl-7,1)            /* -7 before (or pgm start) */
+01280000   syntaxHigh= min(sigl+7,sourceline()) /* +7 after  (or pgm end)   */
+01290000   do syntaxII = syntaxLow to syntaxHigh/* -7 lines back to +7 lines*/
+01300000      if syntaxII <> sigl
+01310000      then say 'line   ' right(syntaxii,length(syntaxHigh))':' ,
+01320000                     sourceline(syntaxII)
+01330000      else say 'line==>' right(syntaxii,length(syntaxHigh))':' ,
+01340000                     sourceline(syntaxII)
+01350000   end
+01360000   say 'exiting exec with rc=12'
+01370000   exit 12
+01380000
+01390000  startUp:
+01400000/*--------*/
+01410000/*--------*/
+01420000   /* start of pgm... skipped error routine "syntax:" */
+01430000   /* ----------------------------------------------- */
+01440000
+01450000   /* handle arguments/options for the execution of this exec */
+01460000   /* ------------------------------------------------------- */
+01470000debug = 'OFF'  /* set to ON or OFF; will do more say statements if ON */
+01480000parse upper arg . 'DEBUG=' valuex .
+01490000parse upper arg . 'REXXLINE=' valuey .
+01500000parse upper arg . 'WIDTH=' valuez .
+01510000parse upper arg . 'BLANK=' valueb .
+01520000
+01530000say ' '
+01540000say 'Options used:'
+01550000say '-------------'
+01560000say ' '
+01570000
+01580000if valuex = 'ON' | valuex = 'OFF'
+01590000then debug = valuex
+01600000else debug = 'OFF'
+01610000say 'DEBUG option is DEBUG='debug
+01620000say '   For DEBUG=ON, you will have to look at SYSTSPRT in step //XREF for debug output'
+01630000
+01640000if datatype(valueY,'W') = 0 | valueY < 0
+01650000then TraceRexxLine = 0
+01660000else TraceRexxline = valueY  /* line of input exec to trace */
+01670000
+01680000if traceRexxLine > 0
+01690000then do
+01700000   say ' '
+01710000   say 'REXXLINE='tracerexxLine'; we will turn on:  trace ''r'' while processing line' tracerexxline 'of input exec'
+01720000   say 'REXXLINE trace, you will have to look at SYSTSPRT in step //XREF for debug output'
+01730000end
+01740000
+01750000say ' '
+01760000if datatype(valuez,'W') = 0 | valuez = ''
+01770000then do
+01780000   say 'WIDTH option:  we will be using default width = 150'
+01790000   width = 150
+01800000   defaultMaxoutputvar = 50 /* use longer default */
+01810000end
+01820000else if valuez < 130
+01830000then do
+01840000   say 'WIDTH optione:  width='valuez 'specified, but minimum width=130 used instead'
+01850000   width = 130
+01860000   defaultMaxoutputvar = 30 /* shorten default size */
+01870000end
+01880000else do
+01890000   say 'WIDTH option:  width='valuez 'will be used'
+01900000   width = valuez
+01910000   defaultMaxoutputvar = 50 /* use longer default */
+01920000end
+01930000
+01940000say ' '
+01950000if valueb = 'BYVAR'
+01960000then do
+01970000   blankOption = valueb
+01980000   say 'Blank=BYVAR, indicates there will be a blank line between groups of xref lines w/same variable/label name'
+01990000end
+02000000else if valueB = 'NONE'
+02010000then do
+02020000   blankOption = valueb
+02030000   say 'Blank=NONE, indicates there will be no blank lines in XREF'
+02040000end
+02050000else do
+02060000   blankOption = 'BYVAR'
+02070000   say 'Blank="'valueb'" was an invalid option, using Blank=BYVAR instead'
+02080000   say 'Blank=BYVAR, indicates there will be a blank line between groups of xref lines w/same variable/label name'
+02090000end
+02100000
+02110000say 'finished process options'
+02120000say ' '
+02130000
+02140000   /* end of options handling */
+02150000   /* ----------------------- */
+02160000
+02170000   /* define some "special" variable handling for xref */
+02180000   /* ------------------------------------------------ */
+02190000specialVar. = 0 /* default (not special) */
+02200000                /* --------------------- */
+02210000special = 'RC'
+02220000specialVar.special = 1   /* set specialVar.RC = 1  */
+02230000
+02240000special = 'SIGL'
+02250000specialVar.special = 1   /* set specialVar.SIGL =1 */
+02260000
+02270000special = 'RESULT'
+02280000specialVar.special = 1   /* set specialVar.RESULT = 1 */
+02290000
+02300000special = 'SQLCODE'
+02310000specialVar.special = 1   /* set specialVar.SQLCODE = 1   (db2) dsnrexx */
+02320000
+02330000special = 'SQLERRMC'
+02340000specialVar.special = 1   /* set specialVar.SQLERRMC = 1  (db2) dsnrexx */
+02350000
+02360000special = 'SQLERRP'
+02370000specialVar.special = 1   /* set specialVar.SQLERRP  = 1  (db2) dsnrexx */
+02380000
+02390000special = 'SQLSTATE'
+02400000specialVar.special = 1   /* set specialVar.SQLSTATE = 1  (db2) dsnrexx */
+02410000
+02420000specialStem. = 0
+02430000specialStem.SQLERRD = 1
+02440000specialStem.SQLWARN = 1
+02450000   /* end of special xref defaults */
+02460000   /* ---------------------------= */
+02470000
+02480000   /* define rexx statement keywords we will handle */
+02490000   /* --------------------------------------------- */
+02500000rexxStmt. = 0
+02510000rexxStmt = 'ADDRESS'    ; rexxStmt.rexxStmt = 1
+02520000rexxStmt = 'ARG'        ; rexxStmt.rexxStmt = 1
+02530000rexxStmt = 'CALL'       ; rexxStmt.rexxStmt = 1
+02540000rexxStmt = 'DO'         ; rexxStmt.rexxStmt = 1
+02550000rexxStmt = 'END'        ; rexxStmt.rexxStmt = 1 /* not really a stmt, but 'end'(s) DO or SELECT */
+02560000rexxStmt = 'DROP'       ; rexxStmt.rexxStmt = 1
+02570000rexxStmt = 'EXIT'       ; rexxStmt.rexxStmt = 1
+02580000rexxStmt = 'IF'         ; rexxStmt.rexxStmt = 1
+02590000rexxStmt = 'THEN'       ; rexxStmt.rexxStmt = 1 /* not really a stmt, but used in IF or SELECT */
+02600000rexxStmt = 'ELSE'       ; rexxStmt.rexxStmt = 1 /* not really a stmt, but used with IF stmt    */
+02610000rexxStmt = 'INTERPRET'  ; rexxStmt.rexxStmt = 1
+02620000rexxStmt = 'ITERATE'    ; rexxStmt.rexxStmt = 1
+02630000rexxStmt = 'LEAVE'      ; rexxStmt.rexxStmt = 1
+02640000rexxStmt = 'NOP'        ; rexxStmt.rexxStmt = 1
+02650000rexxStmt = 'NUMERIC'    ; rexxStmt.rexxStmt = 1
+02660000rexxStmt = 'OPTIONS'    ; rexxStmt.rexxStmt = 1
+02670000rexxStmt = 'PARSE'      ; rexxStmt.rexxStmt = 1
+02680000rexxStmt = 'PROCEDURE'  ; rexxStmt.rexxStmt = 1
+02690000rexxStmt = 'PULL'       ; rexxStmt.rexxStmt = 1
+02700000rexxStmt = 'PUSH'       ; rexxStmt.rexxStmt = 1
+02710000rexxStmt = 'QUEUE'      ; rexxStmt.rexxStmt = 1
+02720000rexxStmt = 'RETURN'     ; rexxStmt.rexxStmt = 1
+02730000rexxStmt = 'SAY'        ; rexxStmt.rexxStmt = 1
+02740000rexxStmt = 'SELECT'     ; rexxStmt.rexxStmt = 1
+02750000rexxStmt = 'WHEN'       ; rexxStmt.rexxStmt = 1 /* not really a stmt, but used with SELECT stmt */
+02760000rexxStmt = 'OTHERWISE'  ; rexxStmt.rexxStmt = 1 /* not really a stmt, but used with SELECT stmt */
+02770000rexxStmt = 'SIGNAL'     ; rexxStmt.rexxStmt = 1
+02780000rexxStmt = 'TRACE'      ; rexxStmt.rexxStmt = 1
+02790000rexxStmt = 'UPPER'      ; rexxStmt.rexxStmt = 1
+02800000   /* end of special rexxStmt. keywords. */
+02810000   /* ---------------------------------- */
+02820000
+02830000validSymbolChars  ='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$¢.!?_' /* full set of valid symbol chars */
+02840000validVariableStart='ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$¢!?_'            /* variable can't start with . or digit */
+02850000
+02860000'EXECIO 0 DISKW RESULTS (OPEN'
+02870000if rc <> 0
+02880000then do
+02890000   say 'DDname RESULTS failed to open for output; rc='rc
+02900000   say 'exit 8'
+02910000   'EXECIO 0 DISKW RESULTS (FINIS'
+02920000   exit 8
+02930000end
+02940000
+02950000call c0050Pass1 /* find and identify variables */
+02960000call c9900OutputResults /* now, output our results */
+02970000exit 0
+02980000
+02990000c0050Pass1:
+03000000   'EXECIO 100 DISKR SCANINP (OPEN STEM IN.'
+03010000   inRc = rc
+03020000   if inRc = 0 | inRc = 2
+03030000   then nop
+03040000   else do
+03050000      say 'error opening ddname=SCANINP; rc='inRc
+03060000      say 'exiting w/rc=8'
+03070000      'EXECIO 0 DISKR SCANINP (FINIS'
+03080000      exit 8
+03090000   end
+03100000   if in.0 > 0 /* in input read, copy to output */
+03110000   then do
+03120000      /* copy scan to output member, followed by xref */
+03130000      'EXECIO' in.0 'DISKW RESULTS (STEM IN.'
+03140000      if rc <> 0
+03150000      then do
+03160000         say 'error writing to ddname=RESULTS, rc='rc
+03170000         say 'exiting w/rc=8'
+03180000         'EXECIO 0 DISKR SCANINP (FINIS'
+03190000         'EXECIO 0 DISKW RESULTS  (FINIS'
+03200000         exit 8
+03210000      end
+03220000   end
+03230000   variablesIndx. = 0
+03240000   variable = 0
+03250000      /* define defaults for structures associated with "variable." */
+03260000      /* ---------------------------------------------------------- */
+03270000      variable.          = '' /* name of variable like USER; always UpperCase*/
+03280000      variableRef.       = '' /* referencing a variable,   list of line #'s */
+03290000      variableExposeRef. = '' /* expose list ref. variable,list of line #'s */
+03300000      variableSet.       = '' /* setting     a variable,   list of line #'s */
+03310000      variableStemSet.   = '' /* used in setting stem var, list of line #'s */
+03320000      variableStemRef.   = '' /* used in ref.    stem var, list of line #'s */
+03330000      variableLabelDef.  = '' /* label definition,         list of line #'s */
+03340000      variableLabelRef.  = '' /* label reference,          list of line #'s */
+03341000      variableAddrDef.      = '' /* address definition,        list of line #'s */ /* v1.02 update */
+03342000      variableAddrDefValue. = '' /* address value definition,  list of line #'s */ /* v1.02 update */
+03342100      /* end of defaults */
+03342200
+03342300   stemIndx.      = 0
+03342400   stem     = 0
+03342500      /* define defaults for structures associated with "stem." */
+03342600      /* ------------------------------------------------------ */
+03342700      stemVariable.     = '' /* name of stem variable (like NAME.FIRST.LAST) always upper case */
+03342800      stemPeriods.      = '' /* # of periods used in stem variable */
+03342900      stemRef.          = '' /* stem variable references, list of line #'s */
+03343000      stemExposeRef.    = '' /* stem variable references, list of line #'s */
+03344000      StemAsg.          = '' /* stem variable assignment, list of line #'s */
+03345000      /* end of defaults */
+03346000
+03347000   exposeRef = 0 /* only set to 1 when reference "PROCEDURE EXPOSE" list of variables */
+03348000   line = ''
+03349000   startcmd = 0
+03350000   totalLine= 0
+03360000   in = 0
+03361000   do forever /* identify variables / stems */
+03362000      in = in + 1
+03363000      if in > in.0
+03364000      then do
+03365000         /* need another buffer */
+03366000         if inRc = 2/* finished using last buffer? */
+03367000         then leave /* ...yes, time to leave.      */
+03368000
+03369000         /* get next buffer */
+03370000         in = 0 /* reset buffer pointer, very important for forever loop */
+03380000         'EXECIO 100 DISKR SCANINP (STEM IN.'
+03390000         inRc = rc /* save read rc */
+03400000         if inRc = 0 | inRc = 2
+03410000         then do /* got next input buffer */
+03420000            if in.0 > 0 /* if input recs, copy to output */
+03430000            then do
+03440000               /* copy scan to output member, followed by xref */
+03450000               'EXECIO' in.0 'DISKW RESULTS (STEM IN.'
+03460000               if rc <> 0
+03470000               then do
+03480000                  say 'error writing to ddname=RESULTS, rc='rc
+03490000                  say 'exiting w/rc=8'
+03500000                  'EXECIO 0 DISKR SCANINP (FINIS'
+03510000                  'EXECIO 0 DISKW RESULTS  (FINIS'
+03520000                  exit 8
+03530000               end
+03540000            end
+03550000            /* normal, we read buffer successfully */
+03560000            /*         we wrote buffer successfully*/
+03570000            /*         time to resume loop         */
+03580000            /*         and variable "in" equals zero*/
+03590000            iterate /* got next input buffer, resume forever loop*/
+03600000         end
+03610000
+03620000         /* bad read rc */
+03630000         say 'error reading from ddname=SCANINP; rc='rc
+03640000         say 'exit w/rc=8'
+03650000         'EXECIO 0 DISKR SCANINP (FINIS'
+03660000         exit 8
+03670000      end
+03680000
+03690000      /* next input line in "in.in" is ready to process */
+03700000      totalLine = totalLine + 1
+03710000      if startcmd = 1
+03720000      then do /* put most likely choice first */
+03730000         parse var in.in rexxLine2 8 cmd 12 pendingCmd
+03740000         if datatype(strip(rexxLine2),'W') & cmd = '*-* '
+03750000         then do /* we have start of a "command" to process */
+03760000            call c0070ParseLinePass1 /* process previous line first */
+03770000            rexxline = strip(rexxline2)
+03780000            line = pendingCmd   /* now save start of next cmd  */
+03790000            iterate
+03800000         end
+03810000
+03820000         /* command continued, add to line, for full line to parse*/
+03830000         if left(in.in,10) = '*-*'
+03840000         then do
+03850000            call c0070ParseLinePass1 /* process previous cmd first */
+03860000            /* rexxline is still set... multiple cmds on same line  */
+03870000            line = pendingCmd   /* now save start of next cmd  */
+03880000            iterate
+03890000         end
+03900000         else line = line || in.in /* continuation of a command, append it together */
+03910000         iterate
+03920000      end
+03930000      else do
+03940000         /* this happens first, but once we set startcmd to 1*/
+03950000         /* ... it will never be reset.  So this is least used*/
+03960000         /* portion of this loop.                             */
+03970000         parse var in.in rexxline 8 cmd 12 rest
+03980000         if datatype(strip(rexxline),'W') & cmd = '*-* '
+03990000         then do /* we have start of a "command" to process */
+04000000            startcmd = 1
+04010000            line = rest
+04020000            rexxline = strip(rexxline)
+04030000            iterate
+04040000         end
+04050000         else iterate /* ignore nonsense */
+04060000      end
+04070000   end
+04080000   if startcmd = 1
+04090000   then do
+04100000      if right(line,8) = 'READYEND' & length(line) > 8 /* sure it is */
+04110000      then line = left(line,length(line)-8) /* remove "READYEND" */
+04120000      call c0070ParseLinePass1
+04130000   end
+04140000   'EXECIO 0 DISKR SCANINP (FINIS'
+04150000   return /* 1st pass is complete */
+04160000
+04170000c0070ParseLinePass1:
+04180000   /* 1.  remove comments from line, as they just confuse things. */
+04190000   /*                                                             */
+04200000   /* 2.  replace 'all literals'               with " 'LIT###     */
+04210000   /* 2.  replace 'all literal functions       with " 'FUN###(    */
+04220000   /*     replace '0101 1100'b BINARY literals with " 'LIT###B    */
+04230000   /*     replace '04E3 DD3C'x HEX literals    with " 'LIT###X    */
+04240000   /*     ... as they just confuse things.                        */
+04250000   /*                                                             */
+04260000   /* After this, any digits left in "line" are digits used by    */
+04270000   /* rexx, as opposed to those that used to be in:               */
+04280000   /*          1. comments (removed)                              */
+04290000   /*          2. literals (removed)                              */
+04300000   /*                                                             */
+04310000   if traceRexxLine > 0
+04320000   then if rexxLine = traceRexxLine
+04330000      then do
+04340000         trace 'n'
+04350000         say ' '
+04360000         say 'Turning on and/or continuing Tracing while processing line' rexxline 'of the input exec'
+04370000         trace 'i' /* turn on tracing for this one line of 'input' rexx code */
+04380000      end
+04390000   else if rexxLine > traceRexxLine
+04400000      then do
+04410000         traceRexxLine = 0 /* nothing more to trace */
+04420000         trace 'n'         /* keep tracing off      */
+04430000      end
+04440000
+04450000   originalLine = line /* save original line  */
+04460000   if debug = 'ON'
+04470000   then do
+04480000      say ' '
+04490000      say 'rexxline='rexxline
+04500000      say 'debug:  originalLine="'originalLine'"'
+04510000   end
+04520000
+04530000   /* v1.02 ... remove comments first */
+04540000   /* ------------------------------- */
+04550000
+04560000   lowerLine    = line /* in case of literals */
+04570000   upper line /* just upper case it */
+04580000   startPos = 1
+04590000   commentNested = 0
+04591000   commentStart  = 0
+04592000   literalStart  = 0
+04593000   LitValue. = ''   /* save lit values here */
+04593100   litNext    = 0   /* # of lit values saved*/
+04593200   do while pos('/*',line,startPos) > 0 ,
+04593300          | pos('*/',line,startPos) > 0 ,
+04593400          | pos("'",line,startPos)  > 0 ,
+04593500          | pos('"',line,startPos)  > 0
+04593600      /* we have a possible comment and/or literal */
+04593700      x1= pos('/*',line'/*',startPos)
+04593800      x2= pos('*/',line'*/',startPos)
+04593900      y1= pos("'",line"'",startPos)
+04594000      y2= pos('"',line'"',startPos)
+04594100
+04594200      x = min(x1,x2)
+04594300      y = min(y1,y2)
+04594400
+04594500      if commentStart > 0 /* at least one comment active */
+04594600      then do
+04594700         /* ignore "y" literals inside of comments */
+04594800         if x1 = x2 /* should be impossible */
+04594900         then leave /* ... rexx syntax should have found this */
+04595000         if x1 = x  /* start of another nested comment? */
+04595100         then do
+04595200            commentNested = commentNested + 1 /* bump number nested*/
+04595300            startPos = x + 2 /* skip past this comment delimiter */
+04595400            iterate
+04595500         end
+04595600         /* found end of a comment */
+04595700         commentNested = commentNested - 1 /* decrement number of active comments*/
+04595800
+04595900         if commentNested > 0
+04596000         then do
+04596100            /* nested comments, we need to find more end of comment literals */
+04596200            startPos = x + 2 /* skip past this comment delimiter */
+04596300            iterate
+04596400         end
+04596500         /* finally entire comment "commentStart to x" can be removed */
+04596600         /* replace with a blank, if imbedded comment                 */
+04596700         if commentStart = 1
+04596800         then do
+04596900            /* remove comment from start of line */
+04597000            line      = strip(substr(line,x+2))
+04597100            lowerLine = strip(substr(lowerLine,x+2))
+04597200            startPos = 1
+04597300            commentStart = 0 /* with no comment active any longer, this is now zero */
+04597400            iterate
+04597500         end
+04597600         /* remove comment from middle of line; replace with blank */
+04597700         line      = left(line,commentStart-1)      substr(line,x+2)
+04597800         lowerLine = left(lowerLine,commentStart-1) substr(lowerLine,x+2)
+04597900         startPos = commentStart + 1
+04598000         commentStart = 0 /* with no comment active any longer, this is now zero */
+04598100         iterate
+04598200      end
+04598300
+04598400      if x < y /* comment started before literal? */
+04598500      then do
+04598600         /* logic says (see prior "if commentNested > 0" that commentNested must be zero */
+04598700         if substr(line,x,2) = '/*'
+04598800         then do
+04598900            /* this must be true for rexx syntax approved code */
+04599000            commentNested = 1 /* this is start of a comment */
+04599100            commentStart  = x /* ... and started here       */
+04599200            startPos = x + 2  /* start looking for end of comment here */
+04599300            iterate
+04599400         end
+04599500         call logicMsg 'how can a comment end, that was never started?'
+04599600         startPos = x+2
+04599700         iterate
+04599800      end
+04599900
+04600000      /* start of literal found, it may be a:            */
+04600100      /*    'some literal value' a regular literal       */
+04600200      /* or '1010 1100'b         a binary  literal       */
+04600300      /* or '03ef ff'x           a hex     literal       */
+04600400      /*                                                 */
+04600500      /* note:  we won't verify contents of binary or hex*/
+04600600      /*    literals, the rexx syntax checker did that.  */
+04600700      /*                                                 */
+04600800      /* so we will remove literal and replace it with   */
+04600900      /*    " 'LIT' "  i.e. with 'LIT' with blanks around*/
+04601000      /*    it.                                          */
+04601100      /*                                                 */
+04601200      LiteralStart = y
+04601300      LitQuote = substr(line,y,1)
+04601400      do forever /* find end of literal */
+04601500         yy= pos(litQuote,line,y+1) /* find ending quote */
+04601600         if yy = 0
+04601700         then do
+04601800            /* literal should have ended, if syntax corrrect */
+04601900            /* add closing quote (that should have been in literal */
+04602000            litValue = substr(lowerLine,LiteralStart) || litQuote
+04602100            litNext = litNext + 1
+04602200            litValue.litNext = litValue
+04602300
+04602400            call logicMsg 'Why didn''t literal end'
+04602500            if LiteralStart = 1
+04602600            then return /* basically one long literal, even if it didn't end */
+04602700
+04602800            line = left(line,y-1) " 'LIT"||litnext
+04602900            literalStart = 0          /* basically end of parsing */
+04603000            startPos = length(line)+1 /* basically end of parsing */
+04603100            leave
+04603200         end
+04603300         if substr(line,yy,1) = substr(line,yy+1,1) /* double " or double ' */
+04603400         then do
+04603500            /* skip them by */
+04603600            y = yy + 2
+04603700            iterate
+04603800         end
+04603900         /* we found end of literal at yy*/
+04604000         leave
+04604100      end
+04604200      if literalStart = 0
+04604300      then leave
+04604400
+04604500      /* normal case, found end of literal */
+04604600
+04604700      /* is it really a binary literal.... don't want "b" to be a variable */
+04604800      if  substr(line,yy+1,2) = 'B ' ,                                       /* if B<blank>                    then a binary literal */
+04604900       | (substr(line,yy+1,1) = 'B'  & datatype(substr(line,yy+1,2),'S')= 0) /* or B<?>     is not a symbol... then a binary literal */
+04605000      then do
+04606000         startPos = yy+2
+04607000         literalStart = 0
+04608000         iterate
+04608100      end
+04608200
+04608300      /* is it really a hex literal.... don't want "x" to be a variable */
+04608400      if  substr(line,yy+1,2) = 'X ' ,                                       /* if X<blank>                    then a hex literal */
+04608500       | (substr(line,yy+1,1) = 'X'  & datatype(substr(line,yy+1,2),'S')= 0) /* or X<?>     is not a symbol... then a hex literal */
+04608600      then do
+04608700         startPos = yy+2
+04608800         literalStart = 0
+04608900         iterate
+04609000      end
+04610000
+04611000      /* just a simple literal */
+04611100      startPos = yy+1
+04611200      literalStart = 0
+04611300      iterate
+04611400   end
+04611500
+04611600   /* now comments have been removed */
+04611700   if line = '' then return
+04611800
+04611917   /* v1.02 remove label(s), if found, from lineWithoutCommentsNLabels */
+04612017   /*       note:  code will process labels later.                     */
+04612100   LineWithoutCommentsNlabels = line
+04613000   do forever
+04614000      LineWithoutCommentsNlabels = strip(LineWithoutCommentsNlabels)
+04615000      if LineWithoutCommentsNlabels = '' then leave
+04616000
+04616114      /* v1.02 line could have been continued (multiple times) with commas, eliminate commas before start of labels */
+04616214      if left(lineWithoutCommentsNlabels,1) = ','  /* could be multiple commas before / after labels, get rid of them */
+04616314      then do
+04616414         lineWithoutCommentsNlabels = strip(substr(lineWithoutCommentsNlabels,2))
+04616514         iterate
+04616614      end
+04616714
+04616800      if pos(':',LineWithoutCommentsNlabels) = 0
+04616900      then leave
+04617000
+04617100      parse var LineWithoutCommentsNlabels varX ':' rest
+04617200      if words(varx) = 1
+04617300      then if datatype(varx,'s') = 1
+04617400         then do
+04617500            LineWithoutCommentsNlabels = rest /* remove label:      */
+04617600            iterate                           /* continue looking for more labels */
+04617700         end
+04617800         else leave /* we've removed all labels, LineWithoutCommentsNlabels variable set correctly */
+04617900      else leave    /* we've removed all labels, LineWithoutCommentsNlabels variable set correctly */
+04618000   end
+04618100   lineWithoutCommentsNlabels = strip(LineWithoutCommentsNlabels) /* keep this for address command */
+04618200   if debug = 'ON'
+04618300   then say 'debug:  LineWithoutCommentsNlabels="'LineWithoutCommentsNlabels'"'
+04618400
+04618500
+04618600      /* ===>  comments, if any, now removed from "line", but labels and literals are still in "line" */
+04618700      /* ===>  -------------------------------------------------------------------------------------- */
+04618800
+04618900   /* end of V1.02 ... now do the "traditional"  c0070 code */
+04619000   /* ----------------------------------------------------- */
+04619100
+04619200   lowerLine    = line /* in case of literals */
+04619300   upper line /* just upper case it */
+04619400   startPos = 1
+04619500   commentNested = 0
+04619600   commentStart  = 0
+04619700   literalStart  = 0
+04620000   LitValue. = ''   /* save lit values here */
+04630000   litNext    = 0   /* # of lit values saved*/
+04640000   do while pos('/*',line,startPos) > 0 ,
+04650000          | pos('*/',line,startPos) > 0 ,
+04660000          | pos("'",line,startPos)  > 0 ,
+04670000          | pos('"',line,startPos)  > 0
+04680000      /* we have a possible comment and/or literal */
+04690000      x1= pos('/*',line'/*',startPos)
+04700000      x2= pos('*/',line'*/',startPos)
+04710000      y1= pos("'",line"'",startPos)
+04720000      y2= pos('"',line'"',startPos)
+04730000
+04740000      x = min(x1,x2)
+04750000      y = min(y1,y2)
+04760000
+04770000      if commentStart > 0 /* at least one comment active */
+04780000      then do
+04790000         /* ignore "y" literals inside of comments */
+04800000         if x1 = x2 /* should be impossible */
+04810000         then leave /* ... rexx syntax should have found this */
+04820000         if x1 = x  /* start of another nested comment? */
+04830000         then do
+04840000            commentNested = commentNested + 1 /* bump number nested*/
+04850000            startPos = x + 2 /* skip past this comment delimiter */
+04860000            iterate
+04870000         end
+04880000         /* found end of a comment */
+04890000         commentNested = commentNested - 1 /* decrement number of active comments*/
+04900000
+04910000         if commentNested > 0
+04920000         then do
+04930000            /* nested comments, we need to find more end of comment literals */
+04940000            startPos = x + 2 /* skip past this comment delimiter */
+04950000            iterate
+04960000         end
+04970000         /* finally entire comment "commentStart to x" can be removed */
+04980000         /* replace with a blank, if imbedded comment                 */
+04990000         if commentStart = 1
+05000000         then do
+05010000            /* remove comment from start of line */
+05020000            line      = strip(substr(line,x+2))
+05030000            lowerLine = strip(substr(lowerLine,x+2))
+05040000            startPos = 1
+05050000            commentStart = 0 /* with no comment active any longer, this is now zero */
+05060000            iterate
+05070000         end
+05080000         /* remove comment from middle of line; replace with blank */
+05090000         line      = left(line,commentStart-1)      substr(line,x+2)
+05100000         lowerLine = left(lowerLine,commentStart-1) substr(lowerLine,x+2)
+05110000         startPos = commentStart + 1
+05120000         commentStart = 0 /* with no comment active any longer, this is now zero */
+05130000         iterate
+05140000      end
+05150000
+05160000      if x < y /* comment started before literal? */
+05170000      then do
+05180000         /* logic says (see prior "if commentNested > 0" that commentNested must be zero */
+05190000         if substr(line,x,2) = '/*'
+05200000         then do
+05210000            /* this must be true for rexx syntax approved code */
+05220000            commentNested = 1 /* this is start of a comment */
+05230000            commentStart  = x /* ... and started here       */
+05240000            startPos = x + 2  /* start looking for end of comment here */
+05250000            iterate
+05260000         end
+05270000         call logicMsg 'how can a comment end, that was never started?'
+05280000         startPos = x+2
+05290000         iterate
+05300000      end
+05310000
+05320000      /* start of literal found, it may be a:            */
+05330000      /*    'some literal value' a regular literal       */
+05340000      /* or '1010 1100'b         a binary  literal       */
+05350000      /* or '03ef ff'x           a hex     literal       */
+05360000      /*                                                 */
+05370000      /* note:  we won't verify contents of binary or hex*/
+05380000      /*    literals, the rexx syntax checker did that.  */
+05390000      /*                                                 */
+05400000      /* so we will remove literal and replace it with   */
+05410000      /*    " 'LIT' "  i.e. with 'LIT' with blanks around*/
+05420000      /*    it.                                          */
+05430000      /*                                                 */
+05440000      LiteralStart = y
+05450000      LitQuote = substr(line,y,1)
+05460000      do forever /* find end of literal */
+05470000         yy= pos(litQuote,line,y+1) /* find ending quote */
+05480000         if yy = 0
+05490000         then do
+05500000            /* literal should have ended, if syntax corrrect */
+05510000            /* add closing quote (that should have been in literal */
+05520000            litValue = substr(lowerLine,LiteralStart) || litQuote
+05530000            litNext = litNext + 1
+05540000            litValue.litNext = litValue
+05550000
+05560000            call logicMsg 'Why didn''t literal end'
+05570000            if LiteralStart = 1
+05580000            then return /* basically one long literal, even if it didn't end */
+05590000
+05600000            line = left(line,y-1) " 'LIT"||litnext
+05610000            literalStart = 0          /* basically end of parsing */
+05620000            startPos = length(line)+1 /* basically end of parsing */
+05630000            leave
+05640000         end
+05650000         if substr(line,yy,1) = substr(line,yy+1,1) /* double " or double ' */
+05660000         then do
+05670000            /* skip them by */
+05680000            y = yy + 2
+05690000            iterate
+05700000         end
+05710000         /* we found end of literal at yy*/
+05720000         leave
+05730000      end
+05740000      if literalStart = 0
+05750000      then leave
+05760000
+05770000      /* normal case, found end of literal */
+05780000      Litvalue = substr(lowerLine,LiteralStart,yy-literalStart+1)
+05790000
+05800000      /* is it really a binary literal.... don't want "b" to be a variable */
+05810000      if  substr(line,yy+1,2) = 'B ' ,                                       /* if B<blank>                    then a binary literal */
+05820000       | (substr(line,yy+1,1) = 'B'  & datatype(substr(line,yy+1,2),'S')= 0) /* or B<?>     is not a symbol... then a binary literal */
+05830000      then do
+05840000         /* it's a binary/hex literal */
+05850000         litValue = litValue||'B'
+05860000         litNext = litNext + 1
+05870000         litValue.litNext = litValue /* save literal value */
+05880000
+05890000         /* now replace literal with " 'LIT#' " in line/lowerLine */
+05900000         if literalStart = 1
+05910000         then do
+05920000            line      = "'LITB"||litNext strip(substr(line,yy+2))
+05930000            lowerLine = "'LITB"||litNext strip(substr(lowerLine,yy+2))
+05940000            startPos = 6 + length(litNext)
+05950000            literalStart = 0
+05960000            iterate
+05970000         end
+05980000
+05990000         line      = left(line,literalStart-1) "'LITB"litNext substr(line,yy+2)
+06000000         lowerline = left(line,literalStart-1) "'LITB"litNext substr(lowerline,yy+2)
+06010000         startPos = literalStart + 6 + length(litNext)
+06020000         literalStart = 0
+06030000         iterate
+06040000      end
+06050000
+06060000      /* is it really a hex literal.... don't want "x" to be a variable */
+06070000      if  substr(line,yy+1,2) = 'X ' ,                                       /* if X<blank>                    then a hex literal */
+06080000       | (substr(line,yy+1,1) = 'X'  & datatype(substr(line,yy+1,2),'S')= 0) /* or X<?>     is not a symbol... then a hex literal */
+06090000      then do
+06100000         /* it's a binary/hex literal */
+06110000         litValue = litValue||'X'
+06120000         litNext = litNext + 1
+06130000         litValue.litNext = litValue /* save literal value */
+06140000
+06150000         /* now replace literal with " 'LIT#' " in line/lowerLine */
+06160000         if literalStart = 1
+06170000         then do
+06180000            line      = "'LITX"||litNext strip(substr(line,yy+2))
+06190000            lowerLine = "'LITX"||litNext strip(substr(lowerLine,yy+2))
+06200000            startPos = 6 + length(litNext)
+06210000            iterate
+06220000         end
+06230000
+06240000         line      = left(line,literalStart-1) "'LITX"litNext substr(line,yy+2)
+06250000         lowerline = left(line,literalStart-1) "'LITX"litNext substr(lowerline,yy+2)
+06260000         startPos = literalStart + 6 + length(litNext)
+06270000         literalStart = 0
+06280000         iterate
+06290000      end
+06300000
+06310000      /* just a simple literal */
+06320000      litNext = litNext + 1
+06330000      litValue.litNext = litValue /* save literal value */
+06340000
+06350000      if literalStart = 1
+06360000      then do
+06370000         if substr(line,yy+1) = '(' /* looks like a function? */
+06380000         then do /*function... remove left paren...add space before/after like 'FUN# ... */
+06390000            line      = "'FUN"||litNext strip(substr(line,yy+2))
+06400000            lowerLine = "'FUN"||litNext strip(substr(lowerLine,yy+2))
+06410000            startPos = 5 + length(litNext)
+06420000         end
+06430000         else do /* not a function... add space before/after              like 'LIT# ... */
+06440000            line      = "'LIT"||litNext strip(substr(line,yy+1))
+06450000            lowerLine = "'LIT"||litNext strip(substr(lowerLine,yy+1))
+06460000            startPos = 5 + length(litNext)
+06470000         end
+06480000         literalStart = 0
+06490000         iterate
+06500000      end
+06510000
+06520000      /* insert literal in middle of line */
+06530000      if substr(line,yy+1,1) = '(' /* looks like a function? */
+06540000      then do /* function... remove left paren.. add space before/after like 'FUN# ... */
+06550000         line      = left(line,literalStart-1)      "'FUN"||litnext substr(line,yy+2)
+06560000         lowerLine = left(lowerLine,LiteralStart-1) "'FUN"||litnext substr(lowerLine,yy+2)
+06570000         startPos = literalStart + 5 + length(litNext)
+06580000      end
+06590000      else do /* not a function... add space before/after               like 'LIT# ... */
+06600000         line      = left(line,literalStart-1)      "'LIT"||litnext substr(line,yy+1)
+06610000         lowerLine = left(lowerLine,LiteralStart-1) "'LIT"||litnext substr(lowerLine,yy+1)
+06620000         startPos = literalStart + 5 + length(litNext)
+06630000      end
+06640000      literalStart = 0
+06650000      iterate
+06660000   end
+06670000
+06680000   /* now comments have been removed */
+06690000   /* literals changed to 'LIT'      */
+06700000   if line = '' then return
+06710000
+06720000   /* handle label(s), and if found, remove them from line */
+06730000   do forever
+06740000      line = strip(line)
+06741013      lowerline = strip(lowerline)
+06750000      if line = '' then return
+06750113
+06750213      /* v1.02 line could have been continued (multiple times) with commas, eliminate commas before start of labels */
+06751013      if left(line,1) = ','
+06752013      then do
+06753013         line = strip(substr(line,2))
+06753113         lowerLine = strip(substr(lowerLine,2))
+06754013         iterate
+06755013      end
+06760000
+06770000      if pos(':',line) = 0
+06780000      then leave
+06790000
+06800000      parse var line varX ':' rest
+06810000      if words(varx) = 1
+06820000      then if datatype(varx,'s') = 1
+06830000         then do
+06840000            call c0470LabelDefine /* define this internal label */
+06850000            line = rest           /* remove label:              */
+06851013            parse var lowerLine . ':' lowerline /* remove label */
+06860000            iterate               /* continue looking for more labels */
+06870000         end
+06880000         else leave /* we've removed all labels, line variable set correctly */
+06890000      else leave    /* we've removed all labels, line variable set correctly */
+06900000   end
+06910000   line = strip(line)
+06911013   lowerLine = strip(lowerLine)
+06920000   if line = '' then return
+06930000
+06940000
+06950000
+06960000   /* ===>  comments, if any, now removed */
+06970000   /* ===>  literals changed to 'LIT'     */
+06980000   /* ===>  scientific notation #E# change to # before E   */
+06990000   /* ===>  scientific notation #E+# changed to # before E */
+07000000   /* ===>  scientific notation #E-# changed to # before E */
+07010000   call c0100ParseStatement
+07020000   return
+07030000
+07040000c0100ParseStatement:
+07050000   /* handle statement */
+07060000   /* Note:   to handle if expression THEN statement      */
+07070000   /*                   or else statement                 */
+07080000   /*                   or when expression THEN statement */
+07090000   /*         we need the c0100var loop                   */
+07100000   /* look at line, rid us of scientific notation; don't want extra variable 'E' in xref */
+07110000   /* for scientic notation just get rid of E# or E+# or E-# (keep preceding #)          */
+07120000   /*                                                                                    */
+07130000   /* ---------------------------------------------------------------------------------- */
+07140000
+07150000   /* handle first symbol in line:  */
+07160000   /*    1)  an assignment statement*/
+07170000   /*    2)  a rexx statement       */
+07180000   /*    3)  or a command for env.  */
+07190000
+07200000   if debug = 'ON'
+07210000   then do
+07220000      say 'debug:     lowerLine="'lowerLine'"'
+07230000      say 'debug:          line="'line'"'
+07240000   end
+07250000
+07251013   /* v1.02 line could have been continued (multiple times) with commas, eliminate commas before start of command */
+07251113   line = strip(line)
+07251213   lowerline = strip(lowerline)
+07252014   do while left(line,1) = ','
+07253013      line = strip(substr(line,2))
+07254013      lowerline = strip(substr(lowerLine,2))
+07255013   end
+07260000
+07270000   rexxStmt = ''     /* assume not processing a rexx statement  */
+07280000   if left(line,4) = "'LIT"
+07290000   then nop /* can't be assignment and/or rexx statement */
+07300000   else do
+07310000      x = verify(line'+',validSymbolChars,,1) /* find where it is no longer a symbol*/
+07320000      if x = 1 , /* = 1, it's not a symbol */
+07330016       | pos(left(line,1),validVariableStart) = 0 /* v1.02 fix test.  A variable/stem had to start with one of these*/
+07340000      then nop /* can't be an assignment stmt (has to start with a variable and/or stem */
+07350000      else do /* it's the start of a symbol & symbol looks like a variable and/or stem */
+07360000         /* we have start of a symbol   */
+07370000
+07380000         /* but it could be an assignment statement */
+07390000         /*              or an rexx       statement */
+07400000         /*              or a command for envirnoment*/
+07410000         theSymbol = substr(line,1,x-1) /* we have stem and/or variable (or rexx stmt)*/
+07420000         if substr(line,x,1) = '='   , /* looks like variable/stem = something ? */
+07430000          & substr(line,x,2) <> '=='   /* ... except variable/stem == somthing is not an assignment */
+07440000         then do
+07450000            /* it's an assignment statement; handle it and return   */
+07460000            varx = theSymbol
+07470000            call c0500AddVarStemAssignment /* varx being assigned a value */
+07480000
+07490000            line = strip(substr(line,x+1))
+07500000            if line <> ''
+07510000            then call c0300ParseRemaining /* expression to be evaluated */
+07520000            return
+07530000         end
+07540000         else if substr(line,x,1) = ' ' /* could be a rexx stmt or an assignment statement or command */
+07550000         then do
+07560000            y = verify(line'+',' ',,x)      /* find next position of non-blank after x */
+07570000            if substr(line,y,1) = '='     , /* looks like an assignment statement? */
+07580000               & substr(line,y,2) <> '=='   /* ... == (says its not)               */
+07590000            then do
+07600000               /* it's an assignment statement; handle it and return   */
+07610000               varx = theSymbol
+07620000               call c0500AddVarStemAssignment /* varx being assigned a value */
+07630000
+07640000               line = strip(substr(line,y+1))
+07650000               if line <> ''
+07660000               then call c0300ParseRemaining /* expression to be evaluated */
+07670000               return
+07680000            end
+07690000         end
+07700000
+07710000         /* could be a rexx statement */
+07720000         if rexxStmt.theSymbol = 1
+07730000         then rexxStmt = theSymbol /* it is, set rexxStmt to theSymbol */
+07740000      end
+07750000   end
+07760000
+07770000   if rexxStmt <> ''
+07780000   then do /* we know we are processing a rexx statement. */
+07790000      /* start processing REXX statements */
+07800000      /* -------------------------------- */
+07810000      if rexxStmt = 'ADDRESS'
+07820000      then do
+07820100         /* v1.02 fix address command */
+07820201         testline = strip(lineWithoutCommentsNlabels)
+07820301         parse var testline 1 . 8 testline
+07820401         testline = strip(testline)
+07820501         if left(testline,1) = '"' | left(testline,1) = "'"
+07820601         then do
+07820701            /* start of a literal, and literal can contain blanks */
+07820801            /* and literal can be a literal, hex literal or a binary literal */
+07820902
+07821002            /* since we verified that the first character is ACTUALLY a literal... we can depend on 'LIT 'LITB or 'LITX in line */
+07821117            parse var line . littype line /* get rmd of "address" and lit */
+07821306            if right(litvalue.1,1) = "'" | right(litvalue.1,1) = '"'
+07821406            then do
+07821506               if length(litvalue.1) <=2
+07821606               then tempvalue = ''
+07821706               else tempvalue = substr(litvalue.1,2,length(litvalue.1)-2)
+07821806            end
+07821906            else if right(litvalue.1,1) = 'B'
+07822006            then do
+07822106               if length(litvalue.1) <=3
+07822206               then tempvalue = ''
+07822306               else tempvalue = b2c(substr(litvalue.1,2,length(litvalue.1)-3))
+07822406            end
+07822506            else do /* must be x literal */
+07822606               if length(litvalue.1) <=3
+07822706               then tempvalue = ''
+07822806               else tempvalue = x2c(substr(litvalue.1,2,length(litvalue.1)-3))
+07822906            end
+07823103            parse var tempvalue tempenv tempRest
+07823204
+07823304                 if tempenv = '' & line <> ''
+07823404            then varx = 'ADDRESS' litvalue.1 '<cmd>'
+07823504            else if tempenv = ''
+07823604            then varx = 'ADDRESS' litvalue.1
+07823706            else if right(litvalue.1,1) = 'B' & temprest line <> ''
+07823804            then varx = 'ADDRESS' litvalue.1 '<cmd>'
+07823906            else if right(litvalue.1,1) = 'B'
+07824004            then varx = 'ADDRESS' litvalue.1
+07824106            else if right(litvalue.1,1) = 'X' & temprest line <> ''
+07824204            then varx = 'ADDRESS' litvalue.1 '<cmd>'
+07824306            else if right(litvalue.1,1) = 'X'
+07824404            then varx = 'ADDRESS' litvalue.1
+07824504            else if temprest line <> ''
+07824604            then varx = 'ADDRESS' "'"tempenv"' <cmd>"
+07824704            else varx = 'ADDRESS' litvalue.1
+07824810            call c0480AddrDefine         /* set up for address xref */
+07824902
+07825002            call c0300ParseRemaining     /* parse line for references */
+07825102            return
+07825202         end
+07825312         else if left(testline,1) = '('  /* address ( something ) something2 ... is equivlent to ... address value something something2 */
+07825412         then do
+07825612            /* this is exactly like an address value expression */
+07825712            varx = 'ADDRESS' testline /* expression w/ any operators */
+07825812            call c0482AddrDefineValue /* set up for special address xref */
+07825912
+07826012            parse var line . line     /* remove "address" */
+07826112            call c0300ParseRemaining  /* parse line for references */
+07826212            return
+07826312         end
+07826402         else do
+07826509            if      pos("'",word(testline,1)) > 0
+07826607            then parse var testline addrenv "'" testline
+07826709            else if pos('"',word(testline,1)) > 0
+07826807            then parse var testline addrenv '"' testline
+07826907            else parse var testline addrenv testline
+07827002            addrenv = strip(addrenv)
+07827102            upper addrenv
+07827202            if addrenv = 'VALUE'
+07827302            then do
+07827402               /* address value expression */
+07827502               varx = 'ADDRESS VALUE' testline /* expression w/ any operators */
+07827602               call c0482AddrDefineValue    /* set up for special address xref */
+07827702
+07827802               parse var line . . line      /* remove "address" and "value */
+07827902               call c0300ParseRemaining     /* parse line for references */
+07828002               return
+07828102            end
+07828202            parse var line . . line      /* remove "address" and "environment" */
+07828302
+07828402            if      addrenv = ''
+07828502            then varx = 'ADDRESS'
+07828602            else if line = ''
+07828702            then varx = 'ADDRESS' "'"addrenv"'"
+07828802            else varx = 'ADDRESS' "'"addrenv"' <cmd>"
+07828910            call c0480AddrDefine         /* set up for address xref */
+07829002
+07829102            call c0300ParseRemaining     /* parse line for references */
+07829202            return
+07830002         end
+07917000      end
+07918000      else if rexxStmt = 'ARG'
+07919000      then do
+07920000         parse var line . template /* remove ARG */
+07930000         call c0325TemplateAssignments /* handle parse template */
+07940000         return
+07950000      end
+07960000      else if rexxStmt = 'CALL'
+07970000      then do
+07980000         parse var line . line /* remove 'call' from line */
+07990000         if left(line,4) = 'OFF'
+08000000         then return /* since valid syntax, must all be valid keywords, just return */
+08010000         if left(line,3) = 'ON' /* this may specify a "trapname" */
+08020000         then do
+08030000            parse var Line onx verbx namex trapname
+08040000            /* verbx must have been ERROR, FAILURE or HALT ... for rexx to like syntax */
+08050000            /* if trapname <> '' then namex must have been NAME ... for rexx to like syntax */
+08060000            if trapname <> ''
+08070000            then do
+08080000               if left(trapName,4) = "'LIT"
+08090000               then do
+08100000                  parse var trapName . 'LIT' litNum "'" .
+08110000                  varX = litValue.Litnum
+08120000               end
+08130000               else varX = strip(trapName)
+08140000               varx = varx '(CALL ON' verbx')'
+08150000               call c0400CallReference
+08160000               return /* and we're done here */
+08170000            end
+08180000            else do
+08190000               varx = verbx '(CALL ON' verbx')'
+08200000               call c0400CallReference
+08210000               return /* and we're done here */
+08220000            end
+08230000         end
+08240000         parse var line namex expression
+08250000         if left(namex,4) = "'LIT"
+08260000         then do
+08270000            parse var namex . 'LIT' litNum "'" .
+08280000            varX = litValue.LitNum
+08290000            line = strip(expression)
+08300000         end
+08310000         else do
+08320000            x = verify(line'+',validSymbolChars,,1) /* find where it is no longer a symbol*/
+08330000            varX = left(line,x-1)
+08340000            line = strip(substr(line,x))
+08350000         end
+08360000         call C0400CallReference /* reference call to routine in "varx" */
+08370000
+08380000         call c0300ParseRemaining
+08390000         return
+08400000      end
+08410000      else if rexxStmt = 'DO'
+08420000      then do
+08430000
+08440000         doLine = subword(line,2)  /* start with everything after "DO" */
+08450000
+08460000         if doLine = '' | doline = 'FOREVER'
+08470000         then return  /* nothing more to do */
+08480000
+08490000         if word(doline,1) = 'WHILE' ,
+08500000          | word(doline,1) = 'UNTIL'
+08510000         then do
+08520000            /* it began with WHILE expr or UNTIL expr; handle it quickly */
+08530000            parse var doline . line
+08540000            if line <> ''
+08550000            then call c0300ParseRemaining
+08560000            return
+08570000         end
+08580000
+08590000         if subword(doline,1,2) = 'FOREVER WHILE' ,
+08600000          | subword(doline,1,2) = 'FOREVER UNTIL'
+08610000         then do
+08620000            /* remove 'forever while' or 'forever until' and process remaining expression */
+08630000            parse var doline . . line
+08640000            if line <> ''
+08650000            then call c0300ParseRemaining
+08660000            return
+08670000         end
+08680000
+08690000         /* figure out if we have a conditional expression (and remove word) */
+08700000         /* ---------------------------------------------------------------- */
+08710000         x1 = wordpos('WHILE',doline 'WHILE') /* note:  illegal to have both WHILE and UNTIL in same do stmt */
+08720000         x2 = wordpos('UNTIL',doline 'UNTIL') /* note:  illegal to have both WHILE and UNTIL in same do stmt */
+08730000
+08740000         if x1 < x2
+08750000         then doline = subword(doline,1,x1-1) subword(doline,x1+1) /* just make longer expression, remove WHILE */
+08760000         else if x1 > x2
+08770000         then doline = subword(doline,1,x2-1) subword(doline,x2+1) /* just make longer expression, remove UNTIL */
+08780000
+08790000
+08800000         /* now, let's look at 'repetitor */
+08810000         /* ----------------------------- */
+08820000         repetitor = doLine
+08830000         if repetitor = '' | repetitor = 'FOREVER'
+08840000         then return
+08850000
+08860000         parse var repetitor namex '=' doRest
+08870000         if namex <> '' & f9920VerifyRexxSymbol(nameX,'S') = 1 ,
+08880000          & dorest <> ''                                       ,
+08890000          & left(strip(doRest),1) <> '=' /* variable/Stem '=' expri (not == expr) */
+08900000         then do
+08910000            /* we've got:  do name=expri <TO exprt> <BY exprb> <FOR exprf> */
+08920000            /* ... eliminate 'TO' 'BY' or 'FOR' */
+08930000            /* and use one big expression */
+08940000
+08950000            /* namex used in an assignement */
+08960000            varx = namex
+08970000            call c0500AddVarStemAssignment /* add assignment reference */
+08980000
+08990000            /* TO exprt (BY exprb) or (FOR exprf) can occur in any order */
+09000000            x = min(wordpos('TO',dorest' TO'),wordpos('BY',dorest' BY'),wordpos('FOR',dorest' FOR'))
+09010000
+09020000            if x > words(dorest)
+09030000            then do
+09040000               line = strip(dorest)
+09050000               if line <> ''
+09060000               then call c0300ParseRemaining /* parse expri for references */
+09070000               return
+09080000            end
+09090000
+09100000            doKeyword = word(dorest,x)    /* remember keyword (TO, BY or FOR */
+09110000            dorest = subword(dorest,1,x-1) subword(dorest,x+1) /* just remove keyword, make longer expression */
+09120000
+09130000            /* find end of next expression, at unused 'TO' 'BY' or 'FOR' */
+09140000                 if doKeyword = 'TO'
+09150000            then x = min(wordpos('BY',dorest' BY'),wordpos('FOR',dorest' FOR'))
+09160000            else if doKeyword = 'BY'
+09170000            then x = min(wordpos('TO',dorest' TO'),wordpos('FOR',dorest' FOR'))
+09180000            else if doKeyword = 'FOR'
+09190000            then x = min(wordpos('TO',dorest' TO'),wordpos('BY',dorest' BY'))
+09200000            else x = words(dorest) + 1 /* this can't happen, but looks good */
+09210000
+09220000            if x > words(dorest)
+09230000            then do /* just one more expression to process */
+09240000               line = strip(dorest)
+09250000               if line <> ''
+09260000               then call c0300ParseRemaining /* process this expression */
+09270000               return
+09280000            end
+09290000
+09300000            /* multiple expressions */
+09310000            /* ... just remove keyword... and make a longer expression */
+09320000            doKeyword = doKeyword word(dorest,x)
+09330000            dorest = subword(dorest,1,x-1) subword(dorest,x+1) /* just remove keyword, make longer expression */
+09340000
+09350000            /* find end of next expression, at unused 'TO' 'BY' or 'FOR' */
+09360000                 if wordpos('TO',doKeyword)  = 0 then x = wordpos('TO',dorest)
+09370000            else if wordpos('BY',doKeyword)  = 0 then x = wordpos('BY',dorest)
+09380000            else if wordpos('FOR',doKeyword) = 0 then x = wordpos('FOR',dorest)
+09390000            else                                      x = 0 /* just looks good */
+09400000
+09410000            if x > 0
+09420000            then dorest = subword(dorest,1,x-1) subword(dorest,x+1) /* just remove keyword, make longer expression */
+09430000
+09440000            line = strip(dorest)
+09450000            if line <> ''
+09460000            then call c0300ParseRemaining /* parse references to one big expression */
+09470000            return
+09480000         end
+09490000         else do
+09500000            line = strip(repetitor)
+09510000            if line = ''
+09520000            then return
+09530000
+09540000            call c0300ParseRemaining /* parse line for references */
+09550000            return
+09560000         end
+09570000      end
+09580000      else if rexxStmt = 'END' /* end could be for "do" or for "select" */
+09590000      then do
+09600000         parse var line . line . /* remove 'end' */
+09610000         if line <> ''
+09620000         then call c0300ParseRemaining /* might have been:  end <name> */
+09630000         return
+09640000      end
+09650000      else if rexxStmt = 'DROP'
+09660000      then do
+09670000         parse var line . line
+09680000         line = translate(line,'  ','()') /* remove parens */
+09690000         call c0300ParseRemaining /* parse line for references */
+09700000         return
+09710000      end
+09720000      else if rexxStmt = 'EXIT'
+09730000      then do
+09740000         parse var line . line
+09750000         call c0300ParseRemaining /* parse line for references */
+09760000         return
+09770000      end
+09780000      else if rexxStmt = 'IF'
+09790000      then do
+09800000         parse var line . line
+09810000         call c0300ParseRemaining /* parse line for references */
+09820000         return
+09830000      end
+09840000      else if rexxStmt = 'THEN' /* it's either just "THEN" or "THEN ," */
+09850000      then return
+09860000      else if rexxStmt = 'ELSE' /* it's either just "ELSE" or "ELSE ," */
+09870000      then return
+09880000      else if rexxStmt = 'INTERPRET'
+09890000      then do
+09900000         parse var line . line
+09910000         call c0300ParseRemaining /* parse line for references */
+09920000         return
+09930000      end
+09940000      else if rexxStmt = 'ITERATE'
+09950000      then do
+09960000         parse var line . line
+09970000         call c0300ParseRemaining /* parse line for references */
+09980000         return
+09990000      end
+10000000      else if rexxStmt = 'LEAVE'
+10010000      then do
+10020000         parse var line . line
+10030000         call c0300ParseRemaining /* parse line for references */
+10040000         return
+10050000      end
+10060000      else if rexxStmt = 'NOP'
+10070000      then return
+10080000      else if rexxStmt = 'NUMERIC'
+10090000      then do
+10100000         parse var line word1 word2 word3 .
+10110000
+10120000         if word2 word3 = 'FORM SCIENTIFIC'  then return
+10130000         if word2 word3 = 'FORM ENGINEERING' then return
+10140000
+10150000         if word2 word3 = 'FORM VALUE'       then parse var line . . . line
+10160000         else if word2  = 'FORM'             then parse var line . . line
+10170000         else if word2  = 'DIGITS'           then parse var line . . line
+10180000         else if word2  = 'FUZZ'             then parse var line . . line
+10190000         else return /* this looks wrong, but can't happen with syntax checking*/
+10200000
+10210000         call c0300ParseRemaining /* parse line for references */
+10220000         return
+10230000      end
+10240000      else if rexxStmt = 'OPTIONS'
+10250000      then return /* we don't handle the options statement */
+10260000      else if rexxStmt = 'PARSE'
+10270000      then do
+10280000         parse var line . line      /* remove 'parse' from line */
+10290000
+10300000         if word(line,1) = 'UPPER'
+10310000         then parse var line . line /* remove 'upper' from line */
+10320000
+10330000         if wordpos(word(line,1),'ARG EXTERNAL NUMERIC PULL SOURCE VERSION') > 0
+10340000         then do
+10350000            parse var line . template     /* get template */
+10360000            call c0325TemplateAssignments /* handle parse template */
+10370000            return
+10380000         end
+10390000         if word(line,1) = 'VALUE'
+10400000         then do
+10410000            /* parse ... VALUE expression WITH template */
+10420000            parse var line . expression ' WITH ' template
+10430000            line = expression
+10440000            call c0300ParseRemaining      /* handle references in expression */
+10450000
+10460000            call c0325TemplateAssignments /* handle parse template */
+10470000            return
+10480000         end
+10490000         if word(line,1) = 'VAR'
+10500000         then do
+10510000            /* parse ... VAR name template */
+10520000            parse var line . name template
+10530000            line = name
+10540000            call c0300ParseRemaining      /* handle references in expression */
+10550000
+10560000            call c0325TemplateAssignments /* handle parse template */
+10570000            return
+10580000         end
+10590000         return /* this would be invalid syntax (which can't happen) but it looks better */
+10600000      end
+10610000      else if rexxStmt = 'PROCEDURE'
+10620000      then do
+10630000         parse var line . line      /* remove 'procedure' from line */
+10640000
+10650000         if word(line,1) = 'EXPOSE'
+10660000         then do
+10670000            parse var line . line /* remove 'expose' from line */
+10680000            line = translate(line,'  ','()') /* remove any parens from line */
+10690000            if line <> ''
+10700000            then do
+10710000               exposeRef = 1 /* turn on now */
+10720000               template = line
+10730000               call c0326TemplateList   /* handle references in rest of line */
+10740000               exposeRef = 0 /* turn off now */
+10750000            end
+10760000            return
+10770000         end
+10780000         return
+10790000      end
+10800000      else if rexxStmt = 'PULL'
+10810000      then do
+10820000         parse var line . template  /* remove 'pull' from line, put rest into template */
+10830000         if template <> ''
+10840000         then call c0325TemplateAssignments /* handle parse template */
+10850000         return
+10860000      end
+10870000      else if rexxStmt = 'PUSH'
+10880000      then do
+10890000         parse var line . line      /* remove 'push' from line */
+10900000         if line <> ''
+10910000         then call c0300ParseRemaining /* handle references in expression */
+10920000         return
+10930000      end
+10940000      else if rexxStmt = 'QUEUE'
+10950000      then do
+10960000         parse var line . line      /* remove 'queue' from line */
+10970000         if line <> ''
+10980000         then call c0300ParseRemaining /* handle references in expression */
+10990000         return
+11000000      end
+11010000      else if rexxStmt = 'RETURN'
+11020000      then do
+11030000         parse var line . line      /* remove 'return' from line */
+11040000         if line <> ''
+11050000         then call c0300ParseRemaining /* handle references in expression */
+11060000         return
+11070000      end
+11080000      else if rexxStmt = 'SAY'
+11090000      then do
+11100000         parse var line . line      /* remove 'say' from line */
+11110000         if line <> ''
+11120000         then call c0300ParseRemaining /* handle references in expression */
+11130000         return
+11140000      end
+11150000      else if rexxStmt = 'SELECT'
+11160000      then do
+11170000         parse var line . ' WHEN ' expression ' THEN ' statement
+11180000         if expression <> ''
+11190000         then do
+11200000            line = expression
+11210000            call c0300ParseRemaining /* handle references in expression */
+11220000
+11230000            if statement <> ''
+11240000            then do
+11250000               line = statement
+11260000               call c0100ParseStatement /* recursive call to ourselves */
+11270000            end
+11280000         end
+11290000         return
+11300000      end
+11310000      else if rexxStmt = 'UPPER'
+11320000      then do
+11330000         parse var line . template /* get template */
+11340000         if template <> ''
+11350000         then call c0325TemplateAssignments /* handle parse template */
+11360000         return
+11370000      end
+11380000      else if rexxStmt = 'WHEN'
+11390000      then do
+11400000         parse var line . line /* remove 'when' from line */
+11410000         if line <> ''
+11420000         then call c0300ParseRemaining /* handle references in expression */
+11430000         return
+11440000      end
+11450000      else if rexxStmt = 'OTHERWISE'
+11460000      then return /* trace 's' puts 'select' by itself.  "when expression" by itself. "otherwise" by itself. */
+11470000      else if rexxStmt = 'SIGNAL'
+11480000      then do
+11490000         parse var line . line      /* remove 'signal' from line */
+11500000         parse var line word1 word2 word3 word4 word5
+11510000         if word1 = 'VALUE'
+11520000         then do
+11530000            parse var line . line /* remove 'value' */
+11540000            call c0300ParseRemaining /* handle references in expression */
+11550000            return
+11560000         end
+11570000         if word1 = 'OFF'
+11580000         then do
+11590000            parse var line . sType . /* sType will = ERROR, FAILURE, HALT, NOVALUE or SYNTAX */
+11600000            varX = sType '(SIGNAL OFF' stype')'
+11610000            call c0430SignalReference
+11620000            return
+11630000         end
+11640000         if word1 = 'ON'
+11650000         then do
+11660000            /* sType will = ERROR, FAILURE, HALT, NOVALUE or SYNTAX */
+11670000            /* if namex and/or trapname not null; then NAMEX=NAME and trapname will be routine for sType */
+11680000            parse var line . sType namex trapname
+11690000            if namex = 'NAME' & trapname <> ''
+11700000            then do
+11710000               varx = trapname '(SIGNAL ON' stype trapname')'
+11720000               call c0430SignalReference
+11730000            end
+11740000            else do
+11750000               varx = stype '(SIGNAL ON' stype')'
+11760000               call c0430SignalReference
+11770000            end
+11780000            return
+11790000         end
+11800000         /* line has label */
+11810000         parse var line varx .
+11820000         if varx <> ''
+11830000         then call c0430SignalReference /* generate reference for: signal labelname */
+11840000         return
+11850000      end
+11860000      else if rexxStmt = 'TRACE'
+11870000      then return
+11880000   end /* end of handling rexx commands */
+11890000
+11900000   /* anything else is just an expression/command for the enviornment */
+11910000   call c0300ParseRemaining
+11920000   return
+11930000
+11940000c0300ParseRemaining:
+11950000   /* this is an expression */
+11960000   /*    1.  let's remove operators  */
+11970000   /*    2.  let's remove functions  */
+11980000   /*    3.  let's remove literals   */
+11990000   /* then look for variables and reference them */
+12000000
+12010000   /* remove the "easy" operators to remove */
+12020000   line = translate(line,'            ','+-*/%=<>,|&¬\;)')
+12030000   /*   say 'rexxline='rexxline 'line="'line'"' */
+12040000
+12050000   /* now, (easier) find and remove literals and (literal)functions */
+12060000   /*   while removing 'LIT### or 'FUN### from expression           */
+12070000   /* ------------------------------------------------------------- */
+12080000   do while pos("'",line) > 0
+12090000
+12100000      /* starting at "'" get LIT### or FUN### */
+12110000      /* ...and remove it from 'line'         */
+12120000      parse var line leftLine "'" litFun rightline
+12130000      line = leftLine rightLine
+12140000
+12150000      /* either LIT### or FUN### */
+12160000      if left(litFun,3) = 'LIT'
+12170000      then iterate
+12180000
+12190000      /* FUN### */
+12200000      parse var litfun . 4 functionNum .
+12210000      varx = litValue.functionNum /* reference the function name */
+12220000      call c0415FunctionReference
+12230000   end
+12240000
+12250000   /* now, find variable/stem and/or built=in or internal functions */
+12260000   /* ------------------------------------------------------------- */
+12270000   line = strip(line)
+12280000   do forever
+12290000      if line = ''
+12300000      then return
+12310000
+12320000      line = strip(line)
+12330000      if left(line,1) = '('
+12340000      then do
+12350000         line = strip(substr(line,2))
+12360000         iterate
+12370000      end
+12380000
+12390000      x = min(pos(' ',line' '),pos('(',line'('))
+12400000      if substr(line,x,1) = '('
+12410000      then do                            /* token(something*/
+12420000         token = left(line,x)            /* token = token( */
+12430000         line  = strip(substr(line,x+1)) /* line  = something */
+12440000      end
+12450000      else parse var line token line     /* token something*/
+12460000
+12470000      if right(token,1) = '('
+12480000      then do
+12490000         /* potential built-in and/or internal function */
+12500000         varX = substr(token,1,length(token)-1)
+12510000         if f9920VerifyRexxSymbol(varX,'S') = 1   /* valid symbol */
+12520000         then do
+12530000            /* token looks good */
+12540000            if pos('.',varX) = 0
+12550000            then do
+12560000               /* we have a built-in or internal function call */
+12570000               varx = substr(token,1,length(token)-1)
+12580000               call c0415FunctionReference
+12590000               line = strip(line)
+12600000               iterate
+12610000            end
+12620000            /* we have a stem variable followed by a ( paren */
+12630000            /* ... just ignore paren and handle stem         */
+12640000            call c0510AddVarStemReference
+12650000            line = strip(line)
+12660000            iterate
+12670000         end
+12680000
+12690000         iterate
+12700000      end
+12710000
+12720000
+12730000      /* if token is a valid variable/stem then reference it */
+12740000      /* --------------------------------------------------- */
+12750000      varX = token
+12760000      if f9920VerifyRexxSymbol(varX,'S') = 1   /* valid symbol */
+12770000      then do
+12780000         call c0510AddVarStemReference /* add reference */
+12790000         line = strip(line)
+12800000         iterate
+12810000      end
+12820000
+12830000      iterate
+12840000   end
+12850000
+12860000   return
+12870000
+12880000c0325TemplateAssignments:/* these variables are assigned values */
+12890000   /* this is an template   */
+12900000   /*    1.  let's remove operators  */
+12910000   /*    2.  let's remove literals   */
+12920000   /* then look for variables and reference them */
+12930000
+12940000   /* remove the operators (but not parens) */
+12950000   template = translate(template,'              ','+-*/%=<>,|&;,')
+12960000
+12970000   /* look for and remove (var) */
+12980000   /* these are references, not assignments */
+12990000   do while pos('(',template) > 0
+13000000      parse var template leftTemplate '(' expression ')' rightTemplate
+13010000      template = leftTemplate rightTemplate
+13020000
+13030000      do while expression <> ''
+13040000         parse var expression word1 expression
+13050000         if left(word1,1) = "'"
+13060000         then iterate
+13070000
+13080000         if f9920VerifyRexxSymbol(word1,'S') = 1 /* valid symbol? */
+13090000         then do
+13100000            varX = word1
+13110000            call c0510AddVarStemReference /* reference var */
+13120000         end
+13130000      end
+13140000   end
+13150000
+13160000   /* we turned literals into 'LIT just ignore those */
+13170000   do while template <> ''
+13180000      parse var template word1 template
+13190000      if left(word1,1) = "'"
+13200000      then iterate
+13210000      if f9920VerifyRexxSymbol(word1,'S') = 1 /* valid symbol */
+13220000      then do
+13230000         /* we have a variable / stem reference */
+13240000         varX = word1
+13250000         call c0500AddVarStemAssignment /* this is assigned a value */
+13260000      end
+13270000   end
+13280000   return
+13290000
+13300000c0326TemplateList:       /* these variables are referenced */
+13310000   /* this is an template   */
+13320000   /*    1.  let's remove operators  */
+13330000   /*    2.  let's remove literals   */
+13340000   /* then look for variables and reference them */
+13350000
+13351000   /* remove the operators */
+13352000   template = translate(template,'                ','+-*/%=<>,|&;,()')
+13353000
+13354000
+13355000   /* we turned literals into 'LIT just ignore those */
+13356000   do while template <> ''
+13357000      parse var template word1 template
+13358000      if left(word1,1) = "'"
+13359000      then iterate
+13360000      if f9920VerifyRexxSymbol(word1,'S') = 1 /* valid symbol */
+13361000      then do
+13361100         /* we have a variable / stem reference */
+13361200         varX = word1
+13361300         call c0510AddVarStemReference  /* this variable is being referenced */
+13361400      end
+13361500   end
+13361600   return
+13361700
+13361800   /* these routine handle references to a varx subroutine:  CALL varx        */
+13361900   /*                                 to a varx function:    varx()           */
+13362000   /*                                 to a signal:           SIGNAL varx      */
+13362100   /*                                 to a signal on:        SIGNAL ON  varx  */
+13362200   /*                                 to a signal off:       SIGNAL OFF varx  */
+13362300   /*                   or defining a label                                   */
+13362400
+13362500c0400CallReference:
+13362600   /* make a reference for:  call varx */
+13362700   labelRefx = 'C('rexxline')'
+13362800   call c0450LabelReference
+13362900   return
+13363000
+13364000c0415FunctionReference:
+13365000   /* make a reference for function:  varx() */
+13366000   LabelRefx = 'F('rexxline')'
+13367000   call c0450LabelReference
+13368000   return
+13369000
+13370000c0430SignalReference:
+13380000   /* make a reference for signal  :  varx   */
+13390000   labelRefx = 'S('rexxline')'
+13400000   call c0450LabelReference
+13410000   return
+13420000
+13430000c0450LabelReference:
+13440000   /* code to update label references for calls, functions and/or signals */
+13450000   varX = strip(varX)
+13460000   upper varX
+13470000
+13480000   /* note:  all valid symbols including numbers, periods, etc, are used "as is" */
+13490000   /* this is a simple variable (label)*/
+13500000   if variablesIndx.varX = 0
+13510000   then do /* we need to add variable */
+13520000      variable = variable + 1
+13530000      variable.variable = varX
+13540000      variableLabelRef.variable = labelRefx
+13550000        /* we need to define quick lookup (index) to find this entry */
+13560000      variablesIndx.varX = variable        /* create quick index .Varx to # (variable) */
+13570000
+13580000      if debug = 'ON'
+13590000      then say 'debug:  c0450LabelReference: ('labelRefx') label='varx
+13600000
+13610000   end
+13620000   else do
+13630000      /* known simple var re-referenced */
+13640000      /*    this is illegal, but reference it anyway */
+13650000      /*    this is illegal, but reference it anyway */
+13660000      indx = variablesINdx.varX
+13670000
+13680000      /* make sure we only add one RexxLine reference */
+13690000      if wordpos(labelRefx,variableLabelRef.indx) = 0
+13700000      then do
+13710000         variableLabelRef.indx = variableLabelRef.indx labelRefx
+13720000
+13730000         if debug = 'ON'
+13740000         then say 'debug:  c0450LabelReference: ('labelRefx') label='varx
+13750000      end
+13760000   end
+13770000   return
+13780000
+13790000c0470LabelDefine:
+13800000   /* code to define a label used in the rexx code */
+13810000   varX = strip(varX)
+13820000   upper varX
+13830000   if datatype(varX,'S') <> 1
+13840000   then return /* if not a symbol, return */
+13850000
+13860000   /* but all symbols including .123 or X.Y.Z etc are allowed */
+13870000   /* this is a simple variable (label)*/
+13880000   if variablesIndx.varX = 0
+13890000   then do /* we need to add variable */
+13900000      variable = variable + 1
+13910000      variable.variable = varX             /* remember label */
+13920000      variableLabelDef.variable= rexxline  /* remember where defined          */
+13930000        /* we need to define quick lookup (index) to find this entry */
+13940000      variablesIndx.varX = variable        /* create quick index .Varx to # (variable) */
+13950000
+13960000      if debug = 'ON'
+13970000      then say 'debug:  c0470LabelDefine: ('rexxline') label='varx
+13980000   end
+13990000   else do
+14000000      /* known simple var re-referenced */
+14010000      /*    it can be defined multiple times, but only first label used in call/function/signal */
+14020000      /*    will actually be used.                                                              */
+14030000      indx = variablesINdx.varX
+14040000
+14050000      /* make sure we only add one RexxLine reference */
+14060000      if wordpos(rexxline,variableLabelDef.indx) = 0
+14070000      then do
+14080000         if words(variableLabelDef.indx) = 1
+14090000         then do
+14100000            /* start of (potentially) many duplicate labels */
+14110000            variableLabelDef.indx = variableLabelDef.indx ,
+14120000                                    '///Dup. IGNORED LABEL def''s:'
+14130000         end
+14140000         variableLabelDef.indx = variableLabelDef.indx rexxline
+14150000
+14160000         if debug = 'ON'
+14170000         then say 'debug:  c0470LabelDefine: ('rexxline') label='varx
+14180000      end
+14190000   end
+14200000   return
+14210000
+14220000   /* v1.02 update... c0480AddrDefine: added */
+14230000   /* -------------------------------------- */
+14240000c0480AddrDefine:
+14250000   /* code to define a address 'constant' used in the rexx code */
+14260000   /*   caller set varx to something like:  address 'TSO'              for:  address TSO               OR address 'TSO'          */
+14261000   /*   caller set varx to something like:  address 'TSO' expression   for:  address TSO anything      OR address 'TSO' anything */
+14262000   /*   caller set varx to something like:  address VALUE environment  for:  address VALUE environment                           */
+14263000   /*   caller set varx to something like:  address VALUE environment expression                                                 */
+14264000   /*                                                                  for:  address VALUE environement anything                 */
+14265000
+14266000   if variablesIndx.varX = 0
+14267000   then do /* we need to add variable */
+14268000      variable = variable + 1
+14269000      variable.variable = varX            /* remember addr def */
+14269100      variableAddrDef.variable= rexxline  /* remember where defined          */
+14269200        /* we need to define quick lookup (index) to find this entry */
+14269300      variablesIndx.varX = variable        /* create quick index .Varx to # (variable) */
+14269400
+14269500      if debug = 'ON'
+14269600      then say 'debug:  c0480AddrDefine: ('rexxline') addr='varx
+14269700   end
+14269800   else do
+14269900      /* add to references of this type of address command */
+14270000      indx = variablesINdx.varX
+14270100      variableAddrDef.indx = variableAddrDef.indx rexxline /* keep adding references */
+14270200
+14270300      if debug = 'ON'
+14270400      then say 'debug:  c0480AddrDefine: ('rexxline') addr='varx
+14270500   end
+14270600   return
+14270700
+14270800   /* v1.02 update... c0480AddrDefine: added */
+14270900   /* -------------------------------------- */
+14271000c0482AddrDefineValue:
+14271100   /* code to define a address value expression used in the rexx code */
+14271200   /*   caller set varx to something like:  address 'TSO'              for:  address TSO               OR address 'TSO'          */
+14271300   /*   caller set varx to something like:  address 'TSO' expression   for:  address TSO anything      OR address 'TSO' anything */
+14271400   /*   caller set varx to something like:  address VALUE environment  for:  address VALUE environment                           */
+14271500   /*   caller set varx to something like:  address VALUE environment expression                                                 */
+14271600   /*                                                                  for:  address VALUE environement anything                 */
+14271700
+14271800   if variablesIndx.varX = 0
+14271900   then do /* we need to add variable */
+14272000      variable = variable + 1
+14272100      variable.variable = varX                 /* remember addr def */
+14272200      variableAddrDefValue.variable= rexxline  /* remember where defined          */
+14272300        /* we need to define quick lookup (index) to find this entry */
+14272400      variablesIndx.varX = variable        /* create quick index .Varx to # (variable) */
+14272500
+14272600      if debug = 'ON'
+14272700      then say 'debug:  c0480AddrDefine: ('rexxline') addr='varx
+14272800   end
+14272900   else do
+14273000      /* add to references of this type of address command */
+14273100      indx = variablesINdx.varX
+14273200      variableAddrDefValue.indx = variableAddrDefValue.indx rexxline /* keep adding references */
+14273300
+14273400      if debug = 'ON'
+14273500      then say 'debug:  c0480AddrDefine: ('rexxline') addr='varx
+14273600   end
+14273700   return
+14273800
+14273900
+14274000c0500AddVarStemAssignment:
+14275000   /* this could be a "simple" variable in varx or a "stem" variable being set */
+14276000   /* ... we need to keep track of assignments (and in case of a stem, also    */
+14277000   /* ... variables and/or constants referenced in the stem).                  */
+14278000   /* */
+14279000   varX = strip(varX)
+14280000   upper varX
+14290000   if pos('.',varX) = 0
+14300000   then do
+14310000      /* this is a simple variable */
+14320000      if variablesIndx.varX = 0
+14330000      then do /* we need to add variable */
+14340000         variable = variable + 1
+14350000         variable.variable = varX        /* remember variable name */
+14360000         variableSet.variable = rexxLine /* remember where it was set */
+14370000           /* we need to define quick lookup (index) to find this entry */
+14380000         variablesIndx.varX = variable        /* create quick index .Varx to # (variable) */
+14390000
+14400000         if debug = 'ON'
+14410000         then say 'debug:  c0500AddVarStemAssignment: ('rexxline') var='varx
+14420000      end
+14430000      else do
+14440000         /* known simple var re-referenced */
+14450000         indx = variablesINdx.varX
+14460000
+14470000         /* make sure we only add one RexxLine reference */
+14480000         if wordpos(rexxLine,variableSet.indx) = 0
+14490000         then do
+14500000            variableSet.indx = variableSet.indx rexxline
+14510000
+14520000            if debug = 'ON'
+14530000            then say 'debug:  c0500AddVarStemAssignment: ('rexxline') var='varx
+14540000         end
+14550000      end
+14560000      return
+14570000   end
+14580000
+14590000   /* this is a stem variable */
+14600000   periods = 0
+14610000   pPos = pos('.',varX)
+14620000   do while pPos <> 0
+14630000      periods = periods + 1
+14640000      pPos = pos('.',varX,pPos+1)
+14650000   end
+14660000
+14670000   /* if part of stem is a hard coded # (other than zero), replace with # sign*/
+14680000   parse var varx psuedoVar '.' rest
+14690000   do while rest <> ''
+14700000      psuedoVar = psuedoVar'.'
+14710000      parse var rest stemPortion '.' rest
+14720000      if datatype(stemPortion,'W')
+14730000      then if stemPortion == '0'
+14740000         then psuedoVar = psuedoVar || '0'
+14750000         else psuedoVar = psuedoVar || '#'
+14760000      else psuedoVar = psuedoVar || stemPortion
+14770000   end
+14780000   if right(varx,1) = '.'
+14790000   then psuedoVar = psuedoVar'.'
+14800000
+14810000   /* define psuedoVar for tracking stems */
+14820000   if stemIndx.psuedoVar = 0
+14830000   then do
+14840000      /* add to stem variables */
+14850000      stem = stem + 1
+14860000      stemVariable.stem = psuedoVar
+14870000      stemPeriods.stem  = periods
+14880000      stemRef.stem= ''
+14890000      StemAsg.stem= RexxLine
+14900000        /* we need to define quick lookup (index) to find this psuedoVar */
+14910000      stemIndx.psuedoVar = stem
+14920000
+14930000      if debug = 'ON'
+14940000      then say 'debug:  c0500AddVarStemAssignment: ('rexxline') var='psuedoVar
+14950000   end
+14960000   else do
+14970000      /* known stem var re-referenced */
+14980000      indx = stemIndx.psuedoVar
+14990000
+15000000      /* only one RexxLine assignment needed */
+15010000      if wordpos(rexxLine,stemAsg.indx) = 0
+15020000      then do
+15030000         stemAsg.indx= stemAsg.indx rexxLine
+15040000
+15050000         if debug = 'ON'
+15060000         then say 'debug:  c0500AddVarStemAssignment: ('rexxline') var='psuedoVar
+15070000      end
+15080000   end
+15090000
+15100000   /* now go thru stem's and "reference" those vars */
+15110000   parse var varX . '.' varX /* throw away top level */
+15120000   do while varX <> ''
+15130000      parse var varX simpleVar '.' varX /* get next potential stem var */
+15140000      if f9920VerifyRexxSymbol(simpleVar,'S') = 1 /* if a symbol and not a digit */
+15150000      then do
+15160000         /* add simple variable reference's from the stem */
+15170000         if variablesIndx.simpleVar = 0
+15180000         then do /* we need to add variable */
+15190000            variable = variable + 1
+15200000            variable.variable     = simpleVar   /* remember the name */
+15210000            variableStemSet.variable = rexxline /* remember where it was used to help set stem var */
+15220000              /* we need to define quick lookup (index) to find this simpleVar */
+15230000            variablesIndx.simpleVar = variable
+15240000
+15250000            if debug = 'ON'
+15260000            then say 'debug:  (VarRef In stem) c0500AddVarStemAssignment: ('rexxline') var='simpleVar
+15270000         end
+15280000         else do
+15290000            /* known simple var re-referenced */
+15300000            indx = variablesINdx.simpleVar
+15310000
+15320000            /* make sure we only add one RexxLine reference */
+15330000            if wordpos(rexxLine,variableStemRef.indx) = 0
+15340000            then do
+15350000               variableStemSet.indx = variableStemSet.indx rexxline
+15360000
+15370000               if debug = 'ON'
+15380000               then say 'debug:  (VarRef in stem) c0500AddVarStemAssignment: ('rexxline') var='simpleVar
+15390000            end
+15400000         end
+15410000      end
+15420000   end
+15430000   return
+15440000
+15450000
+15460000c0510AddVarStemReference:
+15470000   /* this could be a "simple" variable in varx or a "stem" variable reference */
+15480000   /* ... we need to keep track of references  (and in case of a stem, also    */
+15490000   /* ... variables and/or constants referenced in the stem).                  */
+15500000   /* */
+15510000   varX = strip(varX)
+15520000   upper varX
+15530000
+15540000   if pos('.',varX) = 0  /* not stem variable by definition */
+15550000   then do
+15560000      /* this is a simple variable */
+15570000      if variablesIndx.varX = 0
+15580000      then do /* we need to add variable */
+15590000         variable = variable + 1
+15600000         variable.variable = varX              /* remember the name */
+15610000         if exposeRef = 1
+15620000         then variableExposeRef.variable = rexxLine /* remember line # in reference */
+15630000         else variableRef.variable       = rexxLine /* remember line # in reference */
+15640000           /* we need to define quick lookup (index) to find this entry */
+15650000         variablesIndx.varX = variable        /* create quick index .Varx to # (variable) */
+15660000
+15670000         if debug = 'ON'
+15680000         then say 'debug:  (Var.Ref) c0510AddVarStemReference: ('rexxline') var='varx
+15690000      end
+15700000      else do
+15710000         /* known simple var re-referenced */
+15720000         indx = variablesINdx.varX
+15730000
+15740000         /* make sure we only add one RexxLine reference */
+15750000         if exposeref = 1
+15760000         then do
+15770000            if wordpos(rexxLine,variableExposeRef.indx) = 0
+15780000            then do
+15790000               variableExposeRef.indx = variableExposeRef.indx rexxline
+15800000
+15810000               if debug = 'ON'
+15820000               then say 'debug:  (Var.Ref) c0510AddVarStemReference: ('rexxline') var='varx
+15830000            end
+15840000         end
+15850000         else do
+15860000            if wordpos(rexxLine,variableRef.indx) = 0
+15870000            then do
+15880000               variableRef.indx = variableRef.indx rexxline
+15890000
+15900000               if debug = 'ON'
+15910000               then say 'debug:  (Var.Ref) c0510AddVarStemReference: ('rexxline') var='varx
+15920000            end
+15930000         end
+15940000      end
+15950000      return
+15960000   end
+15970000
+15980000   /* this is a stem variable */
+15990000   periods = 0
+16000000   pPos = pos('.',varX)
+16010000   do while pPos <> 0
+16020000      periods = periods + 1
+16030000      pPos = pos('.',varX,pPos+1)
+16040000   end
+16050000
+16060000   /* if part of stem is a hard coded # (other than zero), replace with # sign*/
+16070000   parse var varx psuedoVar '.' rest
+16080000   do while rest <> ''
+16090000      psuedoVar = psuedoVar'.'
+16100000      parse var rest stemPortion '.' rest
+16110000      if datatype(stemPortion,'W')
+16120000      then if stemPortion == '0'
+16130000         then psuedoVar = psuedoVar || '0'
+16140000         else psuedoVar = psuedoVar || '#'
+16150000      else psuedoVar = psuedoVar || stemPortion
+16160000   end
+16170000   if right(varx,1) = '.'
+16180000   then psuedoVar = psuedoVar'.'
+16190000
+16200000   /* define psuedoVar for tracking stems */
+16210000   if stemIndx.psuedoVar = 0
+16220000   then do
+16230000      /* add to stem variables */
+16240000      stem = stem + 1
+16250000      stemVariable.stem = psuedoVar
+16260000      stemPeriods.stem  = periods
+16270000      if exposeRef = 1
+16280000      then stemExposeRef.stem = RexxLine
+16290000      else stemRef.stem       = RexxLine
+16300000        /* we need to define quick lookup (index) to find this psuedoVar */
+16310000      stemIndx.psuedoVar = stem
+16320000
+16330000      if debug = 'ON'
+16340000      then say 'debug:  (StemRef) c0510AddVarStemReference: ('rexxline') var='psuedoVar
+16350000   end
+16360000   else do
+16370000      /* known stem var re-referenced */
+16380000      indx = stemIndx.psuedoVar
+16390000
+16400000      /* only one RexxLine reference needed */
+16410000      if exposeRef = 1
+16420000      then do
+16430000         if wordpos(rexxLine,stemExposeRef.indx) = 0
+16440000         then do
+16450000            stemExposeRef.indx= stemExposeRef.indx rexxLine
+16460000
+16470000            if debug = 'ON'
+16480000            then say 'debug:  (StemRef) c0510AddVarStemReference: ('rexxline') var='psuedoVar
+16490000         end
+16500000      end
+16510000      else do
+16520000         if wordpos(rexxLine,stemRef.indx) = 0
+16530000         then do
+16540000            stemRef.indx= stemRef.indx rexxLine
+16550000
+16560000            if debug = 'ON'
+16570000            then say 'debug:  (StemRef) c0510AddVarStemReference: ('rexxline') var='psuedoVar
+16580000         end
+16590000      end
+16600000   end
+16610000
+16620000   /* now go thru stem's and "reference" those vars */
+16630000   parse var varX . '.' varX /* throw away top level */
+16640000   do while varX <> ''
+16650000      parse var varX simpleVar '.' varX /* get next potential stem var */
+16660000      if f9920VerifyRexxSymbol(simpleVar,'S') = 1 /* if a symbol and not a digit */
+16670000      then do
+16680000         /* add simple variable reference's from the stem */
+16690000         if variablesIndx.simpleVar = 0
+16700000         then do /* we need to add variable */
+16710000            variable = variable + 1
+16720000            variable.variable     = simpleVar    /* remember the name */
+16730000            variableStemRef.variable = rexxline  /* used in stem */
+16740000              /* we need to define quick lookup (index) to find this simpleVar */
+16750000            variablesIndx.simpleVar = variable
+16760000
+16770000            if debug = 'ON'
+16780000            then say 'debug:  (varRef in stem) c0510AddVarStemReference: ('rexxline') var='simpleVar
+16790000         end
+16800000         else do
+16810000            /* known simple var re-referenced */
+16820000            indx = variablesINdx.simpleVar
+16830000
+16840000            /* make sure we only add one RexxLine reference */
+16850000            if wordpos(rexxLine,variableStemRef.indx) = 0
+16860000            then do
+16870000               variableStemRef.indx = variableStemRef.indx rexxline
+16880000
+16890000               if debug = 'ON'
+16900000               then say 'debug:  (varRef in stem) C0510AddVarStemReference: ('rexxline') var='simpleVar
+16910000            end
+16920000         end
+16930000      end
+16940000   end
+16950000   return
+16960000
+16970000c9900OutputResults:
+16980000   if debug = 'ON'
+16990000   then say 'debug:  before variable sort'
+17000000   maxVarLength = 0
+17010000   do sortedVariable = 1 by 1 for variable
+17020000      sortedVariable.sortedVariable = variable.sortedVariable /* copy variable name */
+17030000      if length(sortedVariable.sortedVariable) > maxVarLength
+17040000      then maxVarLength = length(sortedVariable.sortedVariable)
+17050000      if debug = 'ON'
+17060000      then say 'debug:  sortedVariable.'sortedVariable'='sortedVariable.sortedVariable
+17070000   end
+17080000   sortedVariable.0 = variable
+17090000
+17100000   /* sort variables for xref listing */
+17110000   /* ------------------------------- */
+17120000   if omvsSeg = 1
+17130000   then y2=      BPXWUNIX('sort','sortedVariable.','sortedVariable.') /* fast omvs sort */
+17140000   else y2= f9910SlowSort('sort','sortedVariable.','sortedVariable.') /* slow rexx sort */
+17150000
+17160000   if y2<> 0 then say 'error:  stemsort returned y2='y2'; omvsSeg='omvsSeg
+17170000   if debug = 'ON'
+17180000   then do
+17190000      say ' '
+17200000      say 'debug:  after variable sort'
+17210000      do sortedVariable = 1 by 1 for variable
+17220000         say 'debug:  SortedVariable.'sortedVariable'='SortedVariable.sortedVariable
+17230000      end
+17240000      say ' '
+17250000   end
+17260000
+17270000   if debug = 'ON'
+17280000   then say 'debug:  before stem sort'
+17290000   maxStemLength = 0
+17300000   do sortedStemVariable = 1 by 1 for stem
+17310000      sortedStemVariable.sortedStemVariable = StemVariable.sortedStemVariable /* copy stem name */
+17320000      if length(sortedStemVariable.sortedStemVariable) > maxStemLength
+17330000      then maxStemLength = length(sortedStemVariable.sortedStemVariable)
+17340000      if debug = 'ON'
+17350000      then say 'debug:  sortedStemVariable.'sortedStemVariable'='sortedStemVariable.sortedStemVariable
+17360000   end
+17370000   sortedStemVariable.0 = stem
+17380000
+17390000   /* sort stem variables for xref listing */
+17400000   /* ------------------------------------ */
+17410000   if omvsSeg = 1
+17420000   then y3=      BPXWUNIX('sort','sortedStemVariable.','sortedStemVariable.') /* fast omvs sort */
+17430000   else y3= f9910SlowSort('sort','sortedStemVariable.','sortedStemVariable.') /* slow rexx sort */
+17440000
+17450000   if y3<> 0 then say 'error:  stemsort returned y3='y3'; omvsSeg='omvsSeg
+17460000   if debug = 'ON'
+17470000   then do
+17480000      say ' '
+17490000      say 'debug:  after stem sort'
+17500000      do sortedStemVariable = 1 by 1 for stem
+17510000         say 'debug:  SortedStemVariable.'sortedStemVariable'='SortedStemVariable.sortedStemVariable
+17520000      end
+17530000      say ' '
+17540000   end
+17550000
+17560000   out = 0
+17570000   x = f9970Card(' ')
+17580000   x = f9970Card(' ')
+17590000   x = f9970Card(' ------------ now xreference begins -----------------------')
+17600000   x = f9970Card(' ------------ now xreference begins -----------------------')
+17610000   x = f9970Card(' ')
+17620000   x = f9970Card('                                                                 ')
+17630000   x = f9970Card('    xref (1 of 2) section 1 is for variables (not stem.''s)       ')
+17640000   x = f9970Card('    xref (1 of 2) section 1 is for variables (not stem.''s)       ')
+17650000   x = f9970Card('    ----------------------------------------------------------   ')
+17660000   x = f9970Card('                                                                 ')
+17670000   x = f9970Card('       variables/labels are in "upperCase" if variable was never ')
+17680000   x = f9970Card('                       assigned a value.                         ')
+17690000   x = f9970Card('                                                                 ')
+17700000   x = f9970Card('                        they are in "lowercase", otherwise.      ')
+17710000   x = f9970Card('                                                                 ')
+17720000   x = f9970Card('       variables/stems set via a command, like EXECIO for        ')
+17730000   x = f9970Card('                       example, where the stem is within quotes  ')
+17740000   x = f9970Card('                       will not be shown in the xref as either   ')
+17750000   x = f9970Card('                       an assignment or a reference.             ')
+17760000   x = f9970Card('                                                                 ')
+17770000   x = f9970Card('       Note special variables like:  RC, SIGL, can be assigned   ')
+17780000   x = f9970Card('                       values explictly.  But rexx can set them  ')
+17790000   x = f9970Card('                       as well implicitly.  Implicit assignments ')
+17800000   x = f9970Card('                       are not in the xref.                      ')
+17810000   x = f9970Card('    ----------------------------------------------------------   ')
+17820000   x = f9970Card('                                                                 ')
+17830000   x = f9970Card(' ')
+17840000   x = f9970Card(' ')
+17850000   /* variables used as constants */
+17860000   maxOutputVar = min(DefaultMaxOutputVar,maxVarLength+5) /* maxoutputvar was 30, 40 or 50 */
+17870000   do indx2 = 1 by 1 for variable
+17880000      /* get next sorted variable, then report it's information */
+17890000      sortedVariable =  SortedVariable.indx2
+17900000      indx = variablesIndx.sortedVariable /* use indx to info for this variable */
+17910000
+17920000      if variableSet.indx <> ''     /* if assigned a value, make variable name "lowerCase */
+17930000      then tempname = translate(variable.indx,'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+17940000      else if right(sortedVariable,1) = '+' /* v1.02 */
+17950000      then tempname = left(sortedVariable,length(sortedVariable)-1)
+17960000      else tempname = variable.indx /* else, keep upper case */
+17970000
+17980000      if specialVar.sortedVariable > 0
+17990000      then do
+18000000
+18010000         if variableSet.indx <> ''       , /* if special variable used in rexx somehow; mention it's special attributes */
+18020000          | variableRef.indx <> ''       , /* if special variable used in rexx somehow; mention it's special attributes */
+18030000          | variableExposeRef.indx <> '' , /* if special variable used in rexx somehow; mention it's special attributes */
+18040000          | variableStemSet.indx   <> '' , /* if special variable used in rexx somehow; mention it's special attributes */
+18050000          | variableStemRef.indx   <> ''   /* if special variable used in rexx somehow; mention it's special attributes */
+18060000         then x = f9930OutputVarInfo('SpecialVar(set no-XREF)',tempName,' *Special:',' No xref; set w/ADDR env cmd and/or REXX itself')
+18070000
+18080000         if variableSet.indx <> ''
+18090000         then x = f9930OutputVarInfo('SpecialVar(set w/ code)',tempName,'Assigned :',variableSet.indx)
+18100000
+18110000         if variableRef.indx <> ''
+18120000         then x = f9930OutputVarInfo('SpecialVar(used w/rexx)',tempName,'Reference:',variableRef.indx)
+18130000
+18140000         if variableExposeRef.indx <> ''
+18150000         then x = f9930OutputVarInfo('SpecialVar(used w/rexx)',tempName,'Expose Ref:',variableExposeRef.indx)
+18160000
+18170000         if variableStemSet.indx   <> ''
+18180000         then x = f9930OutputVarInfo('SpecialVar(w/stem set):',tempName,'w/Stem set',variableStemSet.indx)
+18190000
+18200000         if variableStemRef.indx   <> ''
+18210000         then x = f9930OutputVarInfo('SpecialVar(w/stem ref):',tempName,'W/Stem ref',variableStemRef.indx)
+18220000
+18230000         if variableLabelDef.indx  <> ''
+18240000         then x = f9930OutputVarInfo('Label (internal label) ',variable.indx,'Defined  :',variableLabelDef.indx)
+18250000
+18260000         if variableLabelRef.indx  <> '' & variableLabelDef.indx <> ''
+18270000         then x = f9930OutputVarInfo('Label (int. label ref) ',variable.indx,'Reference:',variableLabelRef.indx)
+18280000
+18290000         if variableLabelRef.indx  <> '' & variableLabelDef.indx = ''
+18300000         then x = f9930OutputVarInfo('BuiltoIn+/External use ',variable.indx,'Reference:',variableLabelRef.indx)
+18310000
+18320000         /* v1.02 if an address reference, report it */
+18330000         if variableAddrDef.indx   <> ''
+18340011         then x = f9930OutputVarInfo('Address Envir.Constant:',variable.indx,'Reference:',variableAddrDef.indx)
+18341000         if variableAddrDefValue.indx <> ''
+18342011         then x = f9930OutputVarInfo('Address Envir.ValueExp:',variable.indx,'Reference:',variableAddrDefValue.indx)
+18343000
+18344000         iterate
+18345000
+18346000      end
+18347000
+18348000      /* if not assigned a value... but referenced "as a variable" in rexx code... report it */
+18349000      if variableSet.indx = '' ,
+18350000       & ( variableRef.indx <> '' | variableStemSet.indx   <> '' | variableStemRef.indx   <> '' ,
+18360000          |variableExposeRef.indx <> '')
+18370000      then x = f9930OutputVarInfo('Variable (NEVER SET)   ',tempName,'Not Assgn:',' EITHER used as upper case value OR set via cmd')
+18380000
+18390000      /* if assigned a value, report it */
+18400000      if variableSet.indx <> ''                                          /* assigned a value, report it */
+18410000      then x = f9930OutputVarInfo('Variable (set w/rexx)  ',tempName,'Assigned :',variableSet.indx)
+18420000
+18430000      if variableRef.indx       <> '' ,
+18440000       | variableExposeRef.indx <> '' ,
+18450000       | variableStemSet.indx   <> '' ,
+18460000       | variableStemRef.indx   <> ''
+18470000      then do
+18480000         /* if variable refernce, report it*/
+18490000         if variableRef.indx <> ''
+18500000         then x = f9930OutputVarInfo('Variable (used in/rexx)',tempName,'Reference:',variableRef.indx)
+18510000
+18520000         /* if variable expose refernce, report it*/
+18530000         if variableExposeRef.indx <> ''
+18540000         then x = f9930OutputVarInfo('Variable (used in/rexx)',tempName,'Expose Ref:',variableExposeRef.indx)
+18550000
+18560000         /* if variable used in stem, report it */
+18570000         if variableStemSet.indx   <> ''
+18580000         then x = f9930OutputVarInfo('Variable (in Stem Set) ',tempName,'Assigned :',variableStemSet.indx)
+18590000
+18600000         /* if variable used in stem, report it */
+18610000         if variableStemRef.indx   <> ''
+18620000         then x = f9930OutputVarInfo('Variable (in Stem Ref) ',tempName,'Reference:',variableStemRef.indx)
+18630000      end
+18640000      else if variableSet.Indx <> '' /* if wasn't referenced, but it was assigned a value */
+18650000      then x = f9930OutputVarInfo('Variable (NEVER USED)  ',tempName,'No Ref.  :',' If actually referenced, it must be via a cmd.')
+18660000
+18670000      /* if it's an internal label, report it */
+18680000      if variableLabelDef.indx  <> ''
+18690000      then x = f9930OutputVarInfo('Label (internal label) ',variable.indx,'Defined  :',variableLabelDef.indx)
+18700000
+18710000      /* if label (internal or external) is used, report it */
+18720000      if 7ariableLabelRef.indx  <> '' & variableLabelDef.Indx <> ''
+18730000      then x = f9930OutputVarInfo('Label (int. label ref) ',variable.indx,'Reference:',variableLabelRef.indx)
+18740000      else if variableLabelRef.indx  <> ''
+18750000      then x = f9930OutputVarInfo('Built-In+/External use ',variable.indx,'Reference:',variableLabelRef.indx)
+18760000
+18770000      /* v1.02 if an address reference, report it */
+18780000      if variableAddrDef.indx   <> ''
+18790011      then x = f9930OutputVarInfo('Address Envir.Constant:',variable.indx,'Reference:',variableAddrDef.indx)
+18800000      if variableAddrDefValue.indx <> ''
+18810011      then x = f9930OutputVarInfo('Address Envir.ValueExp:',variable.indx,'Reference:',variableAddrDefValue.indx)
+18811000
+18812000
+18813000   end
+18814000
+18815000   'EXECIO' out 'DISKW RESULTS (STEM OUT.'
+18816000   if rc <> 0
+18817000   then do
+18818000      say 'error writing to RESULTS ddname; rc='rc
+18819000      say 'exit 8'
+18820000      'EXECIO 0 DISKW RESULTS (FINIS'
+18830000      exit 8
+18840000   end
+18850000
+18860000   /* variables used as variables */
+18870000   out = 0
+18880000   x = f9970Card('    xref (1 of 2) ends here                                      ')
+18890000   x = f9970Card('    xref (1 of 2) ends here                                      ')
+18900000   x = f9970Card('    -----------------------                                      ')
+18910000   x = f9970Card('                                                                 ')
+18920000   x = f9970Card('    xref (2 of 2) section 2 is for stem variable xreference.     ')
+18930000   x = f9970Card('    xref (2 of 2) section 2 is for stem variable xreference.     ')
+18940000   x = f9970Card('    ----------------------------------------------------------   ')
+18950000   x = f9970Card('       note:     Assignments/references to rexx stems            ')
+18960000   x = f9970Card('              is only for stem references in rexx code           ')
+18970000   x = f9970Card('              itself.                                            ')
+18980000   x = f9970Card('                                                                 ')
+18990000   x = f9970Card('                 Therefore, references to stem variables         ')
+19000000   x = f9970Card('              that are made INSIDE of quotes, say as             ')
+19010000   x = f9970Card('              part of an EXECIO command, will NOT show           ')
+19020000   x = f9970Card('              up in the XREF as they are part of a "string       ')
+19030000   x = f9970Card('              constant" and not used as a rexx variable or       ')
+19040000   x = f9970Card('              rexx stem directly.                                ')
+19050000   x = f9970Card('                                                                 ')
+19060000   x = f9970Card('                 This is because it often may not be obvious     ')
+19070000   x = f9970Card('              which address environment a command may (or may    ')
+19080000   x = f9970Card('              not) be valid in.  Or for us to know all the       ')
+19090000   x = f9970Card('              ways a rexx stem might be used.                    ')
+19100000   x = f9970Card('                                                                 ')
+19110000   x = f9970Card('    ----------------------------------------------------------   ')
+19120000   x = f9970Card('                                                                 ')
+19130000   x = f9970Card(' ')
+19140000   x = f9970Card(' ')
+19150000   x = f9970Card(' ')
+19160000   x = f9970Card(' ')
+19170000   x = f9970Card(' ')
+19180000   maxOutputVar = min(defaultMaxOutputVar,maxStemLength+5)
+19190000   do indx2 = 1 by 1 for stem
+19200000      /* get next sorted stem variable, then report it's information */
+19210000      sortedStemVariable =  SortedStemVariable.indx2
+19220000      indx = stemIndx.sortedStemVariable /* use indx to info for this variable */
+19230000
+19240000      /* now report on it */
+19250000      tempname = stemVariable.indx /* get name of stem variable w/all variables*/
+19260000      parse var tempname buildname '.' rest
+19270000      stemName = buildName
+19280000      do while rest <> ''
+19290000         parse var rest tempname '.' rest
+19300000         x = variablesIndx.tempname
+19310000         if variableSet.x <> '' | specialVar.tempname = 1 /* upper case to lower case */
+19320000         then tempname = translate(tempname,'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+19330000         buildname = buildname'.'tempname
+19340000      end
+19350000      if substr(stemVariable.indx,length(stemVariable.indx),1) = '.'
+19360000      then buildname = buildname'.'
+19370000
+19380000      if specialStem.stemName
+19390000      then x = f9930OutputVarInfo('Stem-'stemPeriods.indx,buildname,' *Special:',' Assigned via an ADDR env cmd and/or REXX itself')
+19400000
+19410000      if stemAsg.indx <> ' '
+19420000      then x = f9930OutputVarInfo('Stem-'stemPeriods.indx,buildname,'Assigned :',stemAsg.indx)
+19430000
+19440000      if stemRef.indx <>  ' '
+19450000      then x = f9930OutputVarInfo('Stem-'stemPeriods.indx,buildname,'Reference:',stemRef.indx)
+19460000
+19470000      if stemExposeRef.indx <>  ' '
+19480000      then x = f9930OutputVarInfo('Stem-'stemPeriods.indx,buildname,'Expose Ref:',stemExposeRef.indx)
+19490000
+19500000      if out > 99
+19510000      then do
+19520000         'EXECIO' out 'DISKW RESULTS (STEM OUT.'
+19530000         if rc <> 0
+19540000         then do
+19550000            say 'error writing to ddname= RESULTS; rc='rc
+19560000            say 'exit 8'
+19570000            'EXECIO 0 DISKW RESULTS (FINIS'
+19580000            exit 8
+19590000         end
+19600000          out = 0
+19610000      end
+19620000   end
+19630000   'EXECIO' out 'DISKW RESULTS (STEM OUT.'
+19640000   out = 0
+19650000   x = f9970Card('    xref (2 of 2) ends here                                      ')
+19660000   x = f9970Card('    xref (2 of 2) ends here                                      ')
+19670000   x = f9970Card('    -----------------------                                      ')
+19680000   x = f9970Card(' ')
+19690000   x = f9970Card(' ')
+19700000   x = f9970Card(' ------------ tips for label references ----------------------------')
+19710000   x = f9970Card(' ------------ tips for label references ----------------------------')
+19720000   x = f9970Card('     tip:  c# is a ref to CALL stmt to this   internal/external name')
+19730000   x = f9970Card('     tip:  f# is a ref to FUNCTION call to    internal/external function')
+19740000   x = f9970Card('     tip:  s# is a ref to SIGNAL stmt to this internal label     ')
+19750000   x = f9970Card(' ')
+19760000   x = f9970Card(' ')
+19770000   x = f9970Card(' ------------ now xreference for stem variables (tips) -------------')
+19780000   x = f9970Card(' ------------ now xreference for stem variables (tips) -------------')
+19790000   x = f9970Card('     tip:     Note:- stem variables (after 1st period) are in lower case  ')
+19800000   x = f9970Card('     tip:          - stem "constants" (will be shown in UPPER case)       ')
+19810000   x = f9970Card('     tip:          - stem "constants" that are whole numbers (and not 0)  ')
+19820000   x = f9970Card('     tip:               will be summarized as a # sign (in place of       ')
+19830000   x = f9970Card('     tip:               individual digits/numbers) so it summarizes them. ')
+19840000   x = f9970Card('     tip:     What XREF for stems can help you fix:                       ')
+19850000   x = f9970Card('     tip:     -------------------------------------                       ')
+19860000   x = f9970Card('     tip:      - seeing a variable (lower case) used in a stem where you  ')
+19870000   x = f9970Card('     tip:       EXPECTED it to always be a constant.                      ')
+19880000   x = f9970Card('     tip:      - seeing a constant (upper case) used in a stem where you  ')
+19890000   x = f9970Card('     tip:       EXPECTED it to be a variable (maybe it was misspelled).   ')
+19900000   x = f9970Card('     tip:                                              )                  ')
+19910000   x = f9970Card('     tip:line sample rexx code (followed by sample xref)                  ')
+19920000   x = f9970Card('     tip:---- ------------                                                ')
+19930000   x = f9970Card('     tip:  1     x = "Richard"                                            ')
+19940000   x = f9970Card('     tip:  2     firstName.y.x.1 = "Hi"                                   ')
+19950000   x = f9970Card('     tip:  3     firstName.y.x.2 = "Buddy"                                ')
+19960000   x = f9970Card('     tip:  4     firstName.y.x.0 = 2                                      ')
+19970000   x = f9970Card('     tip:                                                                 ')
+19980000   x = f9970Card('     tip:sample xref listing                                              ')
+19990000   x = f9970Card('     tip:-----------                                                      ')
+20000000   x = f9970Card('     tip:  --xref section 1 (variables)                                   ')
+20010000   x = f9970Card('     tip:  --xref section 1 (variables)                                   ')
+20020000   x = f9970Card('     tip:                                                         ')
+20030000   x = f9970Card('     tip:Variable (set)         X               Assigned : 1      ')
+20040000   x = f9970Card('     tip:Variable(w/ stem use): X               Reference: 2 3 4  ')
+20050000   x = f9970Card('     tip:Constant(w/ stem use): Y               Reference: 2 3 4  ')
+20060000   x = f9970Card('     tip:                                                         ')
+20070000   x = f9970Card('     tip:  --xref section 2 (stem variables)                              ')
+20080000   x = f9970Card('     tip:  --xref section 2 (stem variables)                              ')
+20090000   x = f9970Card('     tip:                                                         ')
+20100000   x = f9970Card('     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3    ')
+20110000   x = f9970Card('     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4      ')
+20120000   x = f9970Card('     tip:                                       Reference: 2 3 4  ')
+20130000   x = f9970Card('     tip:     note:  Stem-3 refers to # of periods in the stem.           ')
+20140000   x = f9970Card('     tip:                                                                 ')
+20150000   x = f9970Card('     tip:  rexx tip: remember stem value on the right is "tricky":        ')
+20160000   x = f9970Card('     tip:        Given following rexx code:                               ')
+20170000   x = f9970Card('     tip:             x = "RICHARD.HUMPHRIS"                              ')
+20180000   x = f9970Card('     tip:             y = "RICHARD"                                       ')
+20190000   x = f9970Card('     tip:             z = "HUMPHRIS"                                      ')
+20200000   x = f9970Card('     tip:        References to a stem variable, as shown below, are       ')
+20210000   x = f9970Card('     tip:          referring to the SAME stem variable:                   ')
+20220000   x = f9970Card('     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS          ')
+20230000   x = f9970Card('     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS          ')
+20240000   x = f9970Card('     tip:        This is because x contains a period.  And because      ')
+20250000   x = f9970Card('     tip:          everything to the right of the first period is evaluated')
+20260000   x = f9970Card('     tip:          first.  Then the stem variable is "looked up".         ')
+20270000   x = f9970Card('     tip:                                                                 ')
+20280000   x = f9970Card('     tip:   rexx tip:  referencing pgm above, if you set variable "a"     ')
+20290000   x = f9970Card('     tip:         to a upper/lower case value.  The stem will NOT upper   ')
+20300000   x = f9970Card('     tip:         case it.                                                ')
+20310000   x = f9970Card('     tip:        So if assignment statement set "a" to "richard"          ')
+20320000   x = f9970Card('     tip:         then stem.y is NOT the same as stem.a                   ')
+20330000   x = f9970Card('     tip:        Because stem.y    refers to STEM.RICHARD                 ')
+20340000   x = f9970Card('     tip:        and     stem.a    refers to STEM.richard                 ')
+20350000   x = f9970Card('     tip:                                                                 ')
+20360000   'EXECIO' out 'DISKW RESULTS (STEM OUT. FINIS'
+20370000   if rc <> 0
+20380000   then do
+20390000      say 'error writing/closing ddname= RESULTS; rc='rc
+20400000      say 'exit 8'
+20410000      'EXECIO 0 DISKW RESULTS (FINIS'
+20420000      exit 8
+20430000   end
+20440000   return
+20450000
+20460000f9910SlowSort:
+20470000   /* x = f9910SlowSort('sort','unsortedVariable.','sortedVariable.') */ /* slow rexx sort */
+20480000   /* ... */
+20490000   /* we don't have an omvs segment... so we have to do sort (slowly) using rexx code instead*/
+20500000   /* ---------------------------------------------------------------------------------------*/
+20510000
+20520000   parse upper arg f9910_sort . , f9910_Stem1 . , f9910_Stem2 .
+20530000
+20540000   /* need to verify 1st parm is "SORT" */
+20550000   /* --------------------------------- */
+20560000   if f9910_sort <> 'SORT'
+20570000   then return 1  /* error, 1st parm must be "sort" */
+20580000
+20590000   /* need to verify f9910_stem1 is not null */
+20600000   /* -------------------------------------- */
+20610000   if f9910_Stem1 = ''
+20620000   then return 2  /* error, 2nd parm must be specified */
+20630000
+20640000   /* need to verify f9910_stem1 is a valid symbol */
+20650000   /* -------------------------------------------- */
+20660000   if f9920VerifyRexxSymbol(f9910_Stem1,'S') <> 1
+20670000   then return 3                    /* invalid symbol */
+20680000
+20690000   /* default stem2 and/or verify it's a symbol */
+20700000   /* ----------------------------------------- */
+20710000   if f9910_stem2 = ''
+20720000   then f9910_stem2 = f9910_stem1 /* default to stem1 */
+20730000   else do
+20740000      /* need to verify f9910_stem2 is a valid symbol */
+20750000      /* -------------------------------------------- */
+20760000      if f9920VerifyRexxSymbol(f9910_Stem2,'S') <> 1
+20770000      then return 3                    /* invalid symbol */
+20780000   end
+20790000
+20800000   /* verify stem1.0 coutains a valid whole number >= 0 */
+20810000   /* ------------------------------------------------- */
+20820000   if value(f9910_stem1||'0') = ''
+20830000   then return 4
+20840000   if datatype(value(f9910_Stem1 || '0'),'W') = 0 | value(f9910_Stem1 || '0') < 0
+20850000   then return 4  /* error, stem 0 must be numeric and a whole number*/
+20860000
+20870000   /* anything to sort? */
+20880000   /* ----------------- */
+20890000   if value(f9910_Stem1 || '0') = 0
+20900000   then do
+20910000      /* nothing to sort, return 0 */
+20920000      if f9910_Stem2 <> f9910_Stem1
+20930000      then x = value(f9910_Stem2 || '0','0') /* set f9910_stem2.0 = 0 */
+20940000      return 0
+20950000   end
+20960000
+20970000   /* time to sort stems */
+20980000   /* ------------------ */
+20990000   top = value(f9910_Stem1||'0')
+21000000   if f9910_Stem2 <> f9910_Stem1
+21010000   then do
+21020000      /* 1st copy stem1 into stem2; as stem2 should get sorted output */
+21030000      do f9910_k = 0 by 1 while f9910_k <= top
+21040000         x = value(f9910_stem2||f9910_k,value(f9910_stem1||f9910_k))
+21050000      end
+21060000   end
+21070000
+21080000   /* now sort stems in output stem f9910_stem2 */
+21090000   /* ----------------------------------------- */
+21100000   f9910_varX = top /* all stem rows need to be checked */
+21110000   do until f9910_varX < 2
+21120000      f9910_LastSwap = 1 /* set to 1, if never changed it's all sorted */
+21130000      f9910_varX_minus1 = f9910_varX - 1
+21140000      do f9910_VarY = 1 until f9910_VarY >= f9910_VarX_minus1
+21150000         if value(f9910_Stem2||f9910_VarY) > value(f9910_Stem2||f9910_VarY+1)
+21160000         then do
+21170000            swap = value(f9910_Stem2||f9910_VarY+1,value(f9910_Stem2||f9910_VarY))
+21180000            x    = value(f9910_Stem2||f9910_VarY,swap)
+21190000            f9910_LastSwap = f9910_VarY /* last swap occured here */
+21200000         end
+21210000      end
+21220000      f9910_VarX = f9910_LastSwap /* next loop, only have to check from 1 to here */
+21230000   end
+21240000   return 0
+21250000
+21260000f9920VerifyRexxSymbol:
+21270000   /* datatype(var,'s') returns a 1 even for numeric symbols starting with 0-9 or a period */
+21280000   /*            ... so we need to consistently check if numeric (and if truly a symbol).  */
+21290000
+21300000   arg f9920_symbol . , f9920_option .
+21310000
+21320000   if f9920_option <> 'S'
+21330000   then do
+21340000      say "someone called function f9920VerifyRexxSymbol without the 'S' option"
+21350000      say 'function called from line' sigl
+21360000      say 'f9920_option = "'f9920_option'" expected "S"'
+21370000      say 'exiting w/rc=12'
+21380000      exit 12
+21390000   end
+21400000
+21410000   if f9920_symbol = ''
+21420000   then return 0 /* not a symbol, return 0 */
+21430000
+21440000   if datatype(f9920_symbol,'S') = 0
+21450000   then return 0 /* not a symbol, return 0 */
+21460000
+21470000   if pos(left(f9920_symbol,1),'0123456789.') > 0
+21480000   then return 0 /* not a symbol (looks numeric), return 0 */
+21490000   return 1      /* this is a real rexx symbol */
+21500000
+21510000f9930OutputVarInfo:
+21520000   parse arg f9930LHS, f9930Var, f9930RHS, f9930Ref
+21530000
+21540000   if firstTime = 'FIRSTTIME'
+21550000   then do
+21560000      parse upper var f9930Var lastF9930Var '.' .
+21570000      firstTime = ''
+21580000   end
+21590000
+21600000   if blankOption = 'BYVAR'
+21610000   then do
+21620000      parse upper var f9930Var leftSide '.' .
+21630000      if leftSide <> lastF9930Var
+21640000      then do /* add a blank line between variables */
+21650000         out = out + 1.
+21660000         out.out = ' '
+21670000         lastF9930Var = leftSide
+21680000      end
+21690000   end
+21700000
+21710000   if length(f9930Var) > maxOutputVar
+21720000   then do  /* have var and contents on seperate lines */
+21730000      out = out + 1 /* output variable, of any length */
+21740000      out.out = f9930LHS f9930Var /* output long variable name */
+21750000      f9930Lhs = left('',length(f9930LHS))
+21760000      f9930Var = left('...',maxoutputvar)
+21770000   end
+21780000   else f9930var = left(f9930Var,maxoutputvar)
+21790000
+21800000   spaceremaining = width - length(f9930lhs f9930var f9930rhs) - 3
+21810000
+21820000   if length(f9930ref) < spaceRemaining
+21830000   then wordx = words(f9930ref)
+21840000   else wordx = words(left(f9930ref,spaceRemaining)) - 1
+21850000
+21860000   if wordx < 1
+21870000   then wordx = 1
+21880000
+21890000   leftwords = subword(f9930ref,1,wordx)
+21900000   f9930ref  = subword(f9930ref,wordx+1)
+21910000
+21920000   out = out+1 /* output 1st (or 2nd) line */
+21930000   out.out = f9930LHS f9930var f9930rhs leftwords
+21940000
+21950000   f9930Lhs = left('',length(f9930LHS))
+21960000   f9930Var = left('...',maxoutputvar)
+21970000   f9930Rhs = left('',length(f9930RHS))
+21980000   spaceremaining = width - length(f9930lhs f9930var f9930rhs) - 3
+21990000
+22000000   do while f9930ref <> ''
+22010000      if length(f9930ref) < spaceRemaining
+22020000      then wordx = words(f9930ref)
+22030000      else wordx = words(left(f9930ref,spaceRemaining)) - 1
+22040000
+22050000      if wordx < 1
+22060000      then wordx = 1
+22070000
+22080000      leftwords = subword(f9930ref,1,wordx)
+22090000      f9930ref  = subword(f9930ref,wordx+1)
+22100000
+22110000      out = out+1 /* output continuation lines*/
+22120000      out.out = f9930LHS f9930var f9930rhs leftwords
+22130000   end
+22140000
+22150000   return 0
+22160000
+22170000
+22180000f9970Card:
+22190000   /* just output info */
+22200000   parse arg cardx
+22210000   /* we only need one out.out stem created for this call */
+22220000   out = out + 1
+22230000   out.out = cardx
+22240000   return 0
+22250000
+22260000logicMsg:
+22270000   parse arg logicMsg1
+22280000   say 'LogicMsg001I line('sigl')' logicMsg1 /* give logic message w/line + msg */
+22290000   return

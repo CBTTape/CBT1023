@@ -1,0 +1,271 @@
+   (contents described in $TECHIDX)
+   (------------------------------)
+
+
+data structures specific to REXXXREF
+-----------------------------------
+-->  Required reading.  Read $TECH01 to understand how "indexes" are built
+   and used in rexx code in REXXREF.
+
+     To understand data structures mentioned below, you must understand
+   how "indexes" are built and maintained.
+
+     Note:  table. and tableindx. are NOT the stems/datastructure we use in our code in
+   rexxxref; but were merely examples in $TECH01.  Real datastuctures are documented below.
+
+
+
+Stems and associated "fast" indexes used in REXXXREF:
+-----------------------------------------------------
+
+   -------------------------   --------------------------------  -----------------------------------------
+   Stem used:                  "fast index" stems used:          purpose:
+   -------------------------   --------------------------------  -----------------------------------------
+   variable.                   variablesIndx.                    variable.x = variable/label/ etc for xref
+
+   stem.                       stemIndx.                         stem.x     = stem variable       for xref
+
+note:  when we store something in variable.x or stem.x, the value in x is ALWAYS in uppercase.
+
+       Thus, when rexxxref finds in the input rexx it is looking at, a variable being referenced or assigned
+       a value, we always have than variable in upper case (for searches and storing of variable info).
+
+       It is not until we generate a cross reference that we upper/low case variables (for output only in
+       the xref).  See $TECH04 for discription of xref listing.
+
+These routines:
+---------------
+      call c0500AddVarStemAssignment
+      call c0500AddVarStemReference
+
+      uses variables:
+          contents of "varX"     as variable and/or stem variable
+          #        in "rexxline" as line# variable and/or stem variable was used.
+
+      When the contents of "varX" does NOT contain a period, it uses the "non-stem"
+      data structures.
+
+      When the contents of "varX" DOES contain a period, it uses the "stem" data
+      structures.
+
+These routines handle labels (labels can have periods but they aren't stem variables)
+----------------------------
+
+      call c0450LabelReference
+      call c0470LabelDefine
+
+      uses variables:
+          contents of "varX"     as variable name (even though it's actually a label name)
+                                 Note: if label used as part of "SIGNAL ON" or "CALL ON" instruction
+                               then varX has additional information appended after label which will
+                               appear in the xref later.  Signal on/call on is for c0450LabelReference only.
+
+          #        in "rexxline" as line# for c0470LabelDefine reference.
+
+          C(#), F(#) or S(#)
+                   in "labelRefx" (only for c0450LabelReference) used instead of rexxLine.
+
+         Note:  labels can begin with digits or a period (unlike variables).
+         Note:  labels can contain all characters that any rexx symbol can contain.
+         Note:  labels (with periods) are NOT treated by rexx as stem variables (either when
+             definded AND/OR used in a call/function/or signal statement).
+
+         Therefore, labels when inserted into our datastructures are always treated the same
+         as a variable name (and never a stem name).
+
+
+These routines handle "Address Envir.Constant" and "Address Envir.ValueExp" cross reference
+-------------------------------------------------------------------------------------------
+
+      call c0480AddrDefine            (for address environment constants,  like:  address 'TSO'    or  address tso
+      call c0482AddrDefineValue       (for address environment expresions, like:  address value x  OR  address (x)
+
+      called routines use varX input variable:
+          contents of "varX"     For c0480AddrDefine, the environment (whether originally in quotes or not) is specified in quotes.  And if
+                                                     a command was specified, the variable has "<cmd>" appended.  Example varx variables are:
+                                                         varx = 'ADDRESS 'environment'
+                                                         varx = 'ADDRESS 'environment' <cmd>
+
+         contents of "varX"      For c0482AddrDefine, the expression on the address command is part of the varx contents.  For example:
+                                                         varx = 'ADDRESS VALUE t||s||o
+                                                         varx = 'ADDRESS (t || s || o)
+                                                      note:  varx for c0482AddrDefine will never have a "<cmd>" appended because a command
+                                                            can never be specified with a address expression.
+      called routines update the following stem variables:
+          variable                   /* total variables in cross reference */
+          variable.variable = varx   /* contains actual variable; variable=variable+1 ; if needed to add new variable.# entry */
+          variablesIndx.varx = #     /* quick index to find variable number for assignments/references; = 0 if not defined yet*/
+          variableAddrDef.#     = '' /* address definition,        list of line #'s */
+          variableAddrDefValue.#= '' /* address value definition,  list of line #'s */
+
+      example:  address tso
+          "tso" is NOT a variable.  And so TSO will not appear as a variable in the cross reference.  And will only appear as part of the
+                                    "address" cross listing for all address commands.
+
+      example:  address tso someCmd
+          "tso" is NOT a variable.  And so TSO will not appear as a variable in the cross reference.  And will only appear as part of the
+                                    "address" cross listing for all address commands; ie.  "ADDRESS 'TSO" <cmd>
+
+          "someCmd" is a variable.  So a reference to variable "someCmd" will appear in the cross reference.  But for the address cross reference
+                                    ... it will be listed as "ADDRESS 'TSO' <cmd>"
+
+Data structures related to non-stem variables ins REXXXREF code:
+----------------------------------------------------------------
+
+   Non-stem variables are (typically) variables that do not contain a period when
+   the are being set and/or referenced (see exception for "label" handling).
+
+   structure (for adding/referencing known variables).  See $TECH01.
+   -----------------------------------------------------------------
+       variablesIndx. = 0  /* default for any unknown variable in "varX" is zero  See $TECH01)
+
+       variable            (initially 0; it is set to the highest number of known variables;
+                            bumped by 1 when setting a new "unique" variable.)
+
+       variable.variable = varX     /* when adding a new "known" unique varX variable */
+       variablesIndx.varX= variable /* index always updated when adding a new "known" unique varX variable */
+
+   associated information about "non-stem" variables.
+   --------------------------------------------------
+       iii = variablesIndx.varX /* this does lookup for varX */
+       if iii <> 0
+       then do
+          /* we know about this variable name contained in "varX"            */
+          /* to see info about this variable we can use these stem variables */
+
+          contents of this:              will contain this:
+          -------------------------      ------------------------------------------------------------------------
+          variable.iii                   the value of varX
+
+          variableRef.iii                a string of rexxline numbers (referencing this variable)
+
+          variableSet.iii                a string of rexxline numbers (for assignment(s) of this variable)
+
+          variableStemSet.iii            a string of rexxline numbers (for variable use in a stem)
+                                           Note: this variable was used as a variable in the right hand side of a stem
+                                           ...and was used to help SET that stem variable.
+
+          variableStemRef.iii            a string of rexxline numbers (for variable use in a stem)
+                                           Note: this variable was used as a variable in the right hand side of a stem
+                                           ...and was used to help REFERENCE a stem variable.
+
+          variableLabelDef.iii           a string of rexxline numbers for where a label was defined.
+                                           Note: labels may start with digits and/or a period.  And labels are NOT
+                                           ...treated as stems.  So variable.iii may start with digits and/or a period
+                                           ...etc in variable.iii.  (unlike any other variable.iii)
+                                           Note: labels may also appear as a literal like 'XTRNL' if user was calling
+                                           and external routine and/or function with name in quotes.
+
+          variableLabelRef.iii           a string of rexxline numbers with call/function/signal info like C(#) F(#) or S(#).
+                                           Note: labels may start with digits and/or a period.  And labels are NOT
+                                           ...treated as stems.  So variable.iii may start with digits and/or a period
+                                           ...etc in variable.iii.  (unlike any other variable.iii)
+                                           Note: labels may also appear as a literal like 'XTRNL' if user was calling
+                                           and external routine and/or function with name in quotes.
+       end
+
+
+Data structures related to stem variables ins REXXXREF code:
+------------------------------------------------------------
+
+   Stem variables are variables that used one (or more) periods.  Labels are never stem variables, so appear (above) in
+   the non-stem variable data structures.
+
+   structure (for "fast index search").  See $TECH01.
+   --------------------------------------------------
+       stemIndx. = 0  /* default for any unknown variable in "varX" is zero  See $TECH01)
+
+       stem           (initially 0; it is set to the highest number of known stem variables.
+                       bumped by 1 when setting a new "unique" variable.)
+
+       stem.stem          = varX     /* when adding a new "known" unique varX stem variable */
+       stem.stemIndx.varX = stem     /* index always updated when adding a new "known" unique stem varX variable */
+
+   associated information about "stem" variables.
+   --------------------------------------------------
+       iii = stemIndx.varX /* this does lookup for varX (as a stem variable) */
+       if iii <> 0
+       then do
+          /* we know about this variable name contained in "varX"            */
+          /* to see info about this variable we can use these stem variables */
+
+          contents of this:              will contain this:
+          -------------------------      ------------------------------------------------------------------------
+          stem.iii                       the value of varX (for example:  stem. stem.iii stem.x)
+
+          stemAsg.iii                    a string of rexxline numbers assigning values to this stem
+
+          stemRef.iii                    a string of rexxline numbers referencing this stem
+
+       end
+
+some special lookup "only" type "indexes"
+-----------------------------------------
+   Usually we build up indexes along with expanding a "table".  Like variable. + variable (size of variable. "table")
+                                                                  or stem.     + stem     (size of stem.     "table")
+
+   But REXXXREF builds some "read only" fast lookup stem variables for other reasons.
+
+   For example, The handling of "special" variables.
+   -------------------------------------------------
+      Some variables rexx will automatically update/create variables for your use.  BUT, rexx also allows us to
+      modify and/or reference these same variables.
+
+      As a result, the xref tells us about that, as a line item, if we also "modified" some special variables.
+
+      To do this, the code does the following:
+          specialVar. = 0 /* default:  not a special variable */
+      then it defines a series of specialVar (s)              */
+          specialVar.RC      = 1
+          specialVar.SIGL    = 1
+          specialVar.RESULT  = 1
+          specialVar.SQLCODE = 1
+          specialVar.SQLERRMC= 1
+          specialVar.SQLERRP = 1
+          specialVar.SQLSTATE= 1
+
+   For example, The handling of "special" stem variables:
+   ------------------------------------------------------
+      Some variables rexx will automatically update/create variables for your use.  BUT, rexx also allows us to
+      modify and/or reference these same variables.
+
+      As a result, the xref tells us about that, as a line item, if we also "modified" some special variables.
+
+      To do this, the code does the following:
+          specialStem.= 0 /* default:  not a special stem */
+      then it defines a series of specialStem (s)         */
+          specialStem.SQLERRD  = 1
+          specialStem.SQLWARN  = 1
+
+   For example, defining REXX statements to handle:
+   ------------------------------------------------
+   rexxStmt. = 0
+   rexxStmt = 'ADDRESS'    ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'ARG'        ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'CALL'       ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'DO'         ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'END'        ; rexxStmt.rexxStmt = 1 /* not really a stmt, but 'end'(s) DO or SELECT */
+   rexxStmt = 'DROP'       ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'EXIT'       ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'IF'         ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'THEN'       ; rexxStmt.rexxStmt = 1 /* not really a stmt, but used in IF or SELECT */
+   rexxStmt = 'ELSE'       ; rexxStmt.rexxStmt = 1 /* not really a stmt, but used with IF stmt    */
+   rexxStmt = 'INTERPRET'  ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'ITERATE'    ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'LEAVE'      ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'NOP'        ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'NUMERIC'    ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'OPTIONS'    ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'PARSE'      ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'PROCEDURE'  ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'PULL'       ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'PUSH'       ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'QUEUE'      ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'RETURN'     ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'SAY'        ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'SELECT'     ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'WHEN'       ; rexxStmt.rexxStmt = 1 /* not really a stmt, but used with SELECT stmt */
+   rexxStmt = 'OTHERWISE'  ; rexxStmt.rexxStmt = 1 /* not really a stmt, but used with SELECT stmt */
+   rexxStmt = 'SIGNAL'     ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'TRACE'      ; rexxStmt.rexxStmt = 1
+   rexxStmt = 'UPPER'      ; rexxStmt.rexxStmt = 1

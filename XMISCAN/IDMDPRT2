@@ -1,0 +1,172 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRCICDS.AFO340.RKANCMD(IDMDPRT2)"      */
+/*      ---------------------------------       */
+/*  date/time of XREF was:                      */
+/*     20231217 23:07:51                        */
+/*      ---------------------------------       */
+
+/*   REXX   --------------- IDMTSTPR -------------- */
+/* DOC GROUP(AO)       FUNC(IDMSOPER ) CODE(XX)     */
+/* DOC AUTHOR(SFR609)                               */
+/* DOC DESC(RESPONSE TO IDMDOC15 FOR PRINTER)       */
+/* ------------------------------------------------ */
+/*   SIGNON AND DO                                  */
+/*        DCMT D REP                                */
+/* ------------------------------------------------ */
+/*  M O D I F I C A T I O N   L O G                 */
+/* DATE    WHO               WHAT                   */
+/* 5/12/03  EARL             MADE CHANGES TO RUN IN AF/OPERATOR */
+/*                            SIGNON ONE TIME AND DO THE STARTS */
+/*                                                        */
+/*  03/15/10 EARL             UPGRADING TO V16            */
+/*                            CV NAME IDMDOC16            */
+/*                                                        */
+/*                    TEXT CHANGED                        */
+/*        "NEXT TASK CODE:        CA-IDMS RELEASE 16.0 NODE SYST0150"*/
+/*                                                        */
+/* 04/05/11   EARL  UPGRADED IDMDOC V17                   */
+/*                                                        */
+/* 03/17/14   EARL  UPGRADED IDMDOC V18.5                 */
+/*                                                        */
+/*                                                        */
+/* 10/22/15   EARL           STORING USE IDMS PASS IN HEX        */
+/*                           ADDING CODE TO EXTRACT CORRRECTLY   */
+/*                                                               */
+/* 02/10/22   R.Humphris  1. add code to look at transactions    */
+/*                  that are running.  We might actually monitor */
+/*                        2. just general cleanup of Chris's code*/
+/*                  so that it reads a bit better.               */
+/*                                                               */
+/* ------------------------------------------------ */
+
+/* TRACE I  */
+
+ADDRESS AFHOST
+
+
+ISUP = ACTIVE(IDMDOC18)
+
+IF  ISUP = 0
+then do
+   call ERROR_RTN '!!!@@@ IDMS CV NOT ACTIVE ' || 'IDMDOC18'
+   exit 33
+END /* END OF ISUP  */
+
+
+/* get logon password */
+"ALLOC DD(PASWORD) DSN('SFRDBMDT.IDMS.SECURITY(IDMSPASX)') SHR "
+ADDRESS MVS "EXECIO * DISKR PASWORD (FINIS STEM TOKENX.)"
+"FREE F(PASWORD)"
+if tokenx.0 = 0
+then do
+   call error_rtn 'No password available, erroring out'
+   exit 33
+end
+
+parse var tokenx.1 toknx . /* get first word partial password */
+pass = X2C(toknx) /* convert hex to readable password */
+UidPass = "IDMS " || pass /* add password prefix      */
+
+
+   /* ---------- */
+   /* signon now */
+   /* ---------- */
+"EXEC IDMSOPER 'IDMDOC18 99SIGNON "UidPass"'"
+IF RC ¬= 0
+then do
+   call ERROR_RTN 'BAD RETURN ON SIGNON IDMDOC18 MAY NOT BE ACTIVE.'
+   exit 33
+END   /*  END OF RC CHECK  */
+
+   /* ----------------------------------------- */
+   /* enter command to look at reports/printers */
+   /* ----------------------------------------- */
+"EXEC IDMSOPER 'IDMDOC18 99DCMT D REPORTS'"
+IF RC ¬= 0
+then do
+   call ERROR_RTN 'BAD RETURN ON DCMT D REPORTS'
+   exit 33
+END   /*  END OF RC CHECK  */
+
+   /* ------------------------------------------------- */
+   /* look at response to see if we need to take action */
+   /* ------------------------------------------------- */
+
+x = 'GLBVGET'('LINE#')
+do responseLine = 1 by 1 while responseLine <= line#
+   /* ------------------------------------- */
+   /* find header line (1st word = CL/DEST) */
+   /* ------------------------------------- */
+
+   /* have a line we need to look at */
+   x = GLBVGET("LINE"responseLine)     /* get variable LINEn */
+   lineInfo = value("Line"responseLine) /* set lineInfo to LINEn */
+   parse var lineInfo dest .
+   if dest = 'CL/DEST'
+   then leave
+end
+
+   /* ------------------------------------- */
+   /* process detail lines with print info  */
+   /* ------------------------------------- */
+pendingError = 0 /* did any printer fail to start ? */
+printer      = 0 /* did we have to start a printer? */
+DO responseLine = responseLine + 1 by 1 while responseLine <= line#
+
+   /* have a line we need to look at */
+   x = GLBVGET("LINE"responseLine)     /* get variable LINEn */
+   lineInfo = value("Line"responseLine) /* set lineInfo to LINEn */
+   parse var lineInfo dest .
+   /*  IF WORDS =  " ENTER NEXT TASK CODE:" THEN */
+   if dest =  "ENTER"
+   then leave
+
+   printer = printer + 1
+   dest.printer = dest /* remember which dest(s) need to be started */
+end
+
+   /* ----------------------------------- */
+   /* start all printers that have output */
+   /* ----------------------------------- */
+printer.0 = printer
+do printer = 1 by 1 for printer.0
+   "WAIT SECONDS(8)"
+   "EXEC      IDMSOPER 'IDMDOC18 99DCMT V PRINTER" dest.printer "START'"
+    IF RC ¬= 0 THEN DO
+       call error_rtn 'BAD RETURN ON DCMT V PRINTER' dest.printer "START"
+       pendingError = pendingError + 1
+    END /* END OF RC CHECK */
+end
+
+   /* ----------------- */
+   /* now we can logoff */
+   /* ----------------- */
+"WAIT SECONDS(10)"
+"EXEC IDMSOPER 'IDMDOC18 99SIGNOFF'"
+
+   /* -------------- */
+   /* give us status */
+   /* -------------- */
+if printer.0 = 0
+then do
+   SAY 'NO REPORTS QUEUED'
+END  /* END OF JUST SAY NO */
+else if printer.0 > 0 & pendingError = 0
+then say 'Successfully started' printer.0 'printers'
+else if printer.0 > 0 & printer.0 = pendingError
+then say 'Tried to start' printer.0 'printers, but start cmds failed'
+else do
+   startedPrinters = printer.0 - pendingError
+   say 'Successfully started' startedPrinters 'printers out of' printer.0 ,
+       'start printer commands'
+end
+
+EXIT 0
+
+ERROR_RTN:
+   parse arg msg /* get message to send */
+   SAY MSG
+   return

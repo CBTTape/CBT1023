@@ -1,0 +1,835 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.CNTL.RACFDB2(FIXOWNER)"      */
+/*      -----------------------------       */
+/*  date/time of XREF was:                  */
+/*     20231217 23:05:44                    */
+/*      -----------------------------       */
+
+/*Rexx*/
+/*   argument passed to exec:                                      */
+/*      ssid function                                              */
+/*      where:                                                     */
+/*         ssid = db2 ssid (like DSN1, DSN5, etc)                  */
+/*         function = 'GENERATE'                                   */
+/*            And we generate drops/rebinds but return rc=2;       */
+/*            so that seceeding step won't actually do any         */
+/*            drops and/or rebinds.                                */
+/*         function = 'EXECUTE'                                    */
+/*            And we generate drops/rebinds and return rc=0;       */
+/*            so that seceeding step will do the drops/rebinds.    */
+/*         Of course, bigger problems will return other rc's.      */
+/*                                                                 */
+/*      example:  FIXOWNER DSN0 GENERATE                           */
+/*      example:  FIXOWNER DSN0 EXECUTE                            */
+/*                                                                 */
+/*                                                                 */
+/*   Intention:                                                    */
+/*      1)  there are plans and/or packages we may want to drop.   */
+/*          a)  read in FREEPKG for a where clause to identify     */
+/*          these packages.  If null (or ddname FREEPKG) fails     */
+/*          to open, ignore package drops.                         */
+/*                                                                 */
+/*          b)  read in FREEPLAN for a where clause to identify    */
+/*          these plans.  If null (or ddname FREEPLAN) fails       */
+/*          to open, ignore plan drops.                            */
+/*                                                                 */
+/*          c)  requirement:  a where clause is providing          */
+/*          that uses columns in sysibm.syspackage and/or          */
+/*          sysibm.sysplan that identify packages (or plans)       */
+/*          that should be dropped.                                */
+/*                                                                 */
+/*             example FREEPKG input:                              */
+/*             ----------------------                              */
+/*     where pdsname in (                                          */
+/*                 'SFRDBMDS.DB2V81.T0.DBRMLIB.DATA'               */
+/*                ,'SFRDBMDS.DB2V81.T0.SDSNDBRM'                   */
+/*                ,'SFRDBMDS.DB2V81.T0.SDSNSAMP'                   */
+/*                ,'SFRDBMDS.DB2V81.T0.SDSQDBRM'                   */
+/*                ,'SFRDBMDS.DB2V91.T0.AOCDBRM'                    */
+/*                ,'SFRDBMDS.DB2V91.T0.DBRMLIB.DATA'               */
+/*                ,'SFRDBMDS.DB2V91.T0.SDSNDBRM'                   */
+/*                ,'SFRDBMDS.DB2V91.T0.SDSNSAMP'                   */
+/*                ,'SFRDBMDS.DB2V91.T0.SDSQDBRM'                   */
+/*                ,'SFRMVSDS.TMON.DB241.TDBSAMP'                   */
+/*                      )                                          */
+/*                                                                 */
+/*                                                                 */
+/*      2)  fix owners of packages and/or plans from some indiv.   */
+/*   userid to a group ownerid by rebinding packages and/or plans. */
+/*   Therefore, this exec is expected to identify what needs to    */
+/*   be rebound and to generate the rebind commands.               */
+/*          a)  read in dataset CHNGEUID in format:                */
+/*                uid1 uid2                                        */
+/*                where uid1 = existing ownerid                    */
+/*                      uid2 = new ownerid to use                  */
+/*                                                                 */
+/*          b)  then group changes by uid2 (select statement       */
+/*              will be generated per (distinct) uid2 union'ed     */
+/*              with each other.  Uid2 will be part of generated   */
+/*              rebind, where clause will have the uid1's for      */
+/*              associated uid2.                                   */
+/*                                                                 */
+/*          c)  generate rebind statements; but exclude any plans  */
+/*              and/or packages we are dropping.                   */
+/*                                                                 */
+/*          example CHNGEUID input:                                */
+/*          -----------------------                                */
+/*                                 (note: new uid does not have    */
+/*                                   to be in sorted order)        */
+/*                                 (Note: indentation shown to     */
+/*                                   more easily see different     */
+/*                                   uid2's.  extra blanks don't   */
+/*                                   matter; use if you want).     */
+/*              SFR609  DB2ENGNR                                   */
+/*              WEA115 WEADB2DV                                    */
+/*              WEA116 WEADB2DV                                    */
+/*              SFRH66  DB2ENGNR                                   */
+/*              WEA199    WEADBAFS                                 */
+/*              WEA114 WEADB2DV                                    */
+/*              WEA117 WEADB2DV                                    */
+/*              WEA118 WEADB2DV                                    */
+/*              WEA119 WEADB2DV                                    */
+/*                                                                 */
+/*      3)  output all FREE PLAN, FREE PACKAGE and/or REBINDS      */
+/*     out to file COMMANDS                                        */
+/*                                                                 */
+/*      4)  write any information out to file INFO                 */
+/*                                                                 */
+/*  */
+Arg ssid function .
+address 'TSO' 'EXECIO 0 DISKW INFO (OPEN'
+infoRc = rc
+info = 0
+
+address 'TSO' 'EXECIO 0 DISKW COMMANDS (OPEN'
+commandRc = rc
+command = 0
+
+address 'TSO' 'EXECIO * DISKR FREEPKG   (STEM PKG. OPEN FINIS'
+if rc <> 0
+then pkg.0 = 0
+
+address 'TSO' 'EXECIO * DISKR FREEPLAN (STEM PLAN. OPEN FINIS'
+if rc <> 0
+then plan.0 = 0
+
+address 'TSO' 'EXECIO * DISKR CHNGEUID (STEM CUID. OPEN FINIS'
+if rc <> 0
+then chngeUid.0 = 0
+
+dropCuidRc = rc
+
+pendingRc = 0
+if function = 'EXECUTE'
+then defaultRc = 0
+else if function = 'GENERATE'
+then defaultRc = 2
+else do
+   if ssid = ''
+   then do
+      call infomsg 'exec FIXOWNER invoked w/o arguements'
+      call infomsg 'needs to be invoked with "ssid function"'
+      call infomsg ' '
+      call infomsg 'like:  FIXOWNER DSN5 GENERATE'
+      call infomsg '  or:  FIXOWNER DSN2 EXECUTE'
+      call infomsg ' '
+      call infomsg 'where ssid = db2 subsystem like DSN5'
+      call infomsg 'where function needs to be either:'
+      call infomsg '   "GENERATE" and generates cmds w/rc=2'
+      call infomsg '   "EXECUTE"  and generates cmds w/rc=0'
+   end
+   if function <> ''
+   then do
+      call infomsg 'function specified: "'function'" is invalid'
+      call infomsg '   allowed functions are "GENERATE" or' ,
+                '"EXECUTE"'
+   end
+   else do
+      call infomsg 'function not specified.'
+      call infomsg '   allowed functions are "GENERATE" or' ,
+                '"EXECUTE"'
+   end
+   pendingRc = 8
+   call infomsg '===> pending rc=8'
+   call infomsg ' '
+end
+
+uid1Indx. = 0
+uid1      = 0
+uid1.     = 0
+if cuid.0 > 0
+then do
+   call infomsg ' '
+   call infomsg 'Processing chngeuid input'
+   call infomsg '-------------------------'
+   do i = 1 by 1 for cuid.0
+      cuid.i = left(cuid.i,72) /* strip off seq number, if any */
+      call infomsg '   'strip(cuid.i)
+      parse upper var cuid.i user1 user2 .
+      if user1 = ''          then iterate i
+      if left(user1,1) = '*' then iterate i
+      if user2 = ''
+      then do
+         call infomsg 'Userids need to specified in pairs like:'
+         call infomsg '   oldUserid newUserid'
+         call infomsg '2nd userid is missing, pending rc=8'
+         call infomsg ' '
+         pendingRc = 8
+      end
+
+      /* user1 should not be able to be changed to multiple */
+      /*    new groups.                                     */
+      if uid1Indx.user1 = 0
+      then do /* need to add userid/group info */
+         uid1 = uid1 + 1
+         uid1.uid1.User = user1    /* add to sequential list */
+         uid1.uid1.NewUser = user2 /* who new user is        */
+         uid1Indx.user1 = uid1  /* add to quick index     */
+      end
+      else do /* verify it's a duplicate or an error */
+         x = uid1Indx.user1 /* get index */
+         if user2 = uid1.x.NewUser/*duplicate (same group)?*/
+         then nop /* just ignore it then */
+         else do
+            pendingRc = 8
+            call infomsg 'user "'user1'" can''t be changed to' ,
+               'both "'user2'" and "'uid1.x.NewUser'"'
+            call infomsg 'Set pending rc=8'
+            call infomsg ' '
+         end
+      end
+   end
+   call infomsg ' '
+   call infomsg 'Finished looking at chngeuid input'
+   call infomsg '----------------------------------'
+end
+
+pkg = '' /* assume no pkg processing */
+wherepkg = 0
+if pkg.0 > 0
+then do
+   call infomsg ' '
+   call infomsg 'Processing FREEPKG input'
+   call infomsg '------------------------'
+   do i = 1 by 1 for pkg.0
+      pkg.i  = left(pkg.I,72) /* strip off seq number, if any */
+      pkgLine = strip(pkg.i)
+      call infomsg '   'pkgline
+      if pkgline = ''           then iterate i
+      if left(pkgline,1) = '*'  then iterate i
+      if pkg = ''
+      then if translate(left(pkgline,6)) <> 'WHERE '
+      then do
+         call infomsg 'FREEPKG sql must begin with a' ,
+             '"WHERE" clause found "'word(pkgline,1)'"'
+         pendingRc = 8
+         call infomsg 'Set pending rc=8'
+         call infomsg ' '
+         leave
+      end
+      wherepkg = wherepkg + 1
+      wherepkg.wherepkg = strip(pkg.i,'T')
+      pkg = pkg pkgline
+   end
+   call infomsg ' '
+   call infomsg 'Finished looking at FREEPKG input'
+   call infomsg '---------------------------------'
+end
+
+plan = '' /* assume no plan processing */
+whereplan = 0
+if plan.0 > 0
+then do
+   call infomsg ' '
+   call infomsg 'Processing FREEPLAN input'
+   call infomsg '------------------------'
+   do i = 1 by 1 for plan.0
+      plan.i = left(plan.i,72) /* strip off seq number, if any*/
+      planLine = strip(plan.i)
+      call infomsg '   'planline
+      if planline = ''          then iterate i
+      if left(planline,1) = '*' then iterate i
+      if plan = ''
+      then if translate(left(planline,6)) <> 'WHERE '
+      then do
+         call infomsg 'FREEPLAN sql must begin with a' ,
+             '"WHERE" clause found "'word(planline,1)'"'
+         pendingRc = 8
+         call infomsg 'Set pending rc=8'
+         call infomsg ' '
+         leave
+      end
+      whereplan = whereplan + 1
+      whereplan.whereplan = strip(plan.i,'T')
+      plan = plan planline
+   end
+   call infomsg ' '
+   call infomsg 'Finished looking at FREEPLAN input'
+   call infomsg '----------------------------------'
+end
+
+if pkg  = '' , /* no where clause */
+ & plan = '' , /* no where clause */
+ & uid2 = 0    /* no rebind needed*/
+then do
+   call infoMsg ' '
+   call infomsg 'All input files (FREEPKG, FREEPLAN and/or CHNGEUID)'
+   call infomsg '   either didn''t open properly and/or contain no'
+   pendingrc = 8
+   call infomsg '   work to do.  Now pending rc=8'
+end
+
+if infoRc <> 0 | commandRc <> 0
+then do
+   if infoRc <> 0
+   then call infomsg 'ddname=INFO failed to open w/rc='infoRc
+   if commandRc <> 0
+   then call infomsg 'ddname=COMMANDS failed to open w/rc=' ,
+      || commandRc
+   call infoMsg 'exiting with rc=8, now'
+   signal forceRc8Exit
+end
+
+if pendingRc > 2
+then signal DefaultRcExit
+
+signal startUp  /* now start processing input */
+
+/* -------------------- */
+/* exit routines follow */
+/* exit routines follow */
+/* -------------------- */
+ForceRc8Exit:  /* close output files; exit with rc=8 */
+   address 'TSO' 'EXECIO' info 'DISKW INFO (STEM INFO. FINIS'
+   address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND.  FINIS'
+   exit 8
+
+DefaultRcExit:  /* close output files; exit with defaultRc */
+   address 'TSO' 'EXECIO' info 'DISKW INFO (STEM INFO. FINIS'
+   address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND.  FINIS'
+   exit max(defaultRc,pendingRc)
+
+/* -------- */
+/* startUp: */
+/* -------- */
+startUp:
+  /* Set addressability to DB2 Rexx function */
+if info > 50
+then call writeInfo
+
+ADDRESS TSO "SUBCOM DSNREXX"
+If RC = 1 Then S_RC = RXSUBCOM('ADD','DSNREXX','DSNREXX')
+Else Do
+  call infoMsg 'Can not access DB2 Rexx Function.  Ending...'
+  signal ForceRc8Exit
+End
+
+
+ADDRESS DSNREXX
+"CONNECT "ssid
+if rc <> 0
+then do
+  call infoMsg '"CONNECT' ssid'" failed with rc='rc
+  call infoMsg 'returning rc=8'
+  signal ForceRc8Exit
+End
+
+
+  /*---------------------------------------------------*/
+  /* Start processing DB2 authorization tables         */
+  /*---------------------------------------------------*/
+FreePkgIndx.  = 0        /* default not freeing any pkgs */
+call GenerateFreePackage /* ...and update FreePkgIndx too*/
+
+FreePlanIndx. = 0     /* default not freeing any plans*/
+call GenerateFreePlan /* and update FreePlanIndx. too */
+
+call GenerateRebindPackage
+
+call GenerateRebindPlan
+
+"DISCONNECT"
+address 'TSO' 'EXECIO' info 'DISKW INFO (STEM INFO. FINIS'
+address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND. FINIS'
+Exit
+
+  GenerateFreePackage:
+/*-------------------*/
+/*-------------------*/
+  if pkg = ''
+  then return /* if nothing to do, return */
+
+  call infomsg '  GenerateFreePackage sql'
+  call infomsg '  -----------------------'
+  sql = ''
+  call BuildSql 'Select NAME'
+  call BuildSql '      ,COLLID'
+  call BuildSql '      ,VERSION'
+  call BuildSql '      ,OWNER'
+  call BuildSql '      ,VALID'
+  call BuildSql '      ,OPERATIVE'
+  call BuildSql '      ,LASTUSED'
+  call BuildSql '      ,PCTIMESTAMP'
+  call BuildSql '      ,TIMESTAMP'
+  call BuildSql '      ,PDSNAME'
+  call BuildSql '  from sysibm.syspackage'
+  do x = 1 by 1 for wherePkg
+            /* '  where clause added here ' */
+     call BuildSql wherePkg.x
+  end
+  call BuildSql '  order by name, collid, version'
+  call infomsg '  -----------------------'
+
+  call ZSQL  /* do prepare, etc */
+
+  call infomsg '  Generating FREE PACKAGE commands'
+  call infomsg '  --------------------------------'
+  call infomsg '   Lu    is LastUsed'
+  call infomsg '   v/o   is valid/operative'
+  call infomsg '   pcTS  is pcTimeStamp'
+  call infomsg '   TS    is TimeStamp'
+  call infomsg '   PDS   is PDSname'
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name,"       ,
+                          ":COLLID,"     ,
+                          ":VERSION,"    ,
+                          ":OWNER,"      ,
+                          ":VALID,"      ,
+                          ":OPERATIVE,"  ,
+                          ":LASTUSED,"   ,
+                          ":PCTIMESTAMP,",
+                          ":TIMESTAMP,"  ,
+                          ":PDSNAME"
+    If SQLCODE = 0
+    then do
+       version = '('strip(version)')'
+       name    = strip(name)
+       collid  = strip(collid)
+       owner   = strip(owner)
+       pdsname = strip(pdsname)
+
+       FreePkgIndx.name.collid.version = 1 /* indicate free */
+       freecmd = 'FREE PACKAGE('collid"."name"."version')'
+       call addCommand freecmd
+       call infoMsg freecmd 'Lu='lastused';' ,
+          'v/o='valid'/'operative';' ,
+          'pcTS='pctimestamp';' ,
+          'TS='timestamp';' ,
+          'Owner='left(owner,max(8,length(owner)))';',
+          'PDSname='pdsname
+    end
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+Return
+
+
+  GenerateFreePlan:
+/*----------------*/
+/*----------------*/
+  if plan = ''
+  then return /* if nothing to do, return */
+
+  call infomsg '  GenerateFreePlan sql'
+  call infomsg '  --------------------'
+  sql = ''
+  call BuildSql '  Select NAME'
+  call BuildSql '        ,CREATOR'
+  call BuildSql '        ,VALID'
+  call BuildSql '        ,OPERATIVE'
+  call BuildSql '        ,BOUNDTS'
+  call BuildSql '    from sysibm.sysplan'
+  do x = 1 by 1 for wherePlan
+            /* '  where clause added here ' */
+     call BuildSql '  'wherePlan.x
+  end
+  call BuildSql 'UNION'
+  call BuildSql '  Select a.NAME'
+  call BuildSql '        ,a.CREATOR'
+  call BuildSql '        ,a.VALID'
+  call BuildSql '        ,a.OPERATIVE'
+  call BuildSql '        ,a.BOUNDTS'
+  call BuildSql '    from sysibm.sysplan     as a'
+  call BuildSql '    where'
+  call BuildSql '         strip(a.name) not in'
+  call BuildSql '           (select distinct strip(b.planname)'
+  call BuildSql '              from sysibm.syspacklist as b,'
+  call BuildSql '                   sysibm.syspackage  as c'
+  call BuildSql '              where strip(b.collid) = strip(c.collid)'
+  call BuildSql '           )'
+  call BuildSql '  order by name'
+  call infomsg  '  -------------'
+
+  call ZSQL  /* do prepare, etc */
+
+  call infomsg '  Generating FREE PLAN commands'
+  call infomsg '  -----------------------------'
+  call infomsg '   Cr    is Creator'
+  call infomsg '   v/o   is valid/operative'
+  call infomsg '   BTS   is BoundTS'
+  previousName = ''
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name,"        ,
+                          ":CREATOR,"     ,
+                          ":VALID,"       ,
+                          ":OPERATIVE,"   ,
+                          ":BOUNDTS"
+    If SQLCODE = 0
+    then do
+       name    = strip(name)
+       if previousName = name
+       then iterate
+       previousName = name
+       collid  = strip(collid)
+       creator = strip(creator)
+
+       FreePlanIndx.name = 1 /* indicate free */
+       freecmd = 'FREE PLAN('name')'
+       call addCommand freecmd
+       call infoMsg freecmd 'Cr='creator';' ,
+          'v/o='valid'/'operative';' ,
+          'BTS='boundTS
+    end
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+Return
+
+
+  GenerateReBindPackage:
+/*---------------------*/
+/*---------------------*/
+  if uid1 = 0
+  then return /* if nothing to do, return */
+
+
+  vocnt  = ''
+  vocnt. = 0
+  sql = ''
+  call BuildSql 'Select NAME'
+  call BuildSql '      ,COLLID'
+  call BuildSql '      ,VERSION'
+  call BuildSql '      ,OWNER'
+  call BuildSql '      ,VALID'
+  call BuildSql '      ,OPERATIVE'
+  call BuildSql '      ,LASTUSED'
+  call BuildSql '      ,PCTIMESTAMP'
+  call BuildSql '      ,TIMESTAMP'
+  call BuildSql '      ,PDSNAME'
+  call BuildSql '      ,TYPE'
+  call BuildSql '  from sysibm.syspackage'
+  call BuildSql "  where owner in ('"uid1.1.User"'"
+  do x = 2 by 1 while x <= uid1
+            /* '  in list continued here ' */
+     call BuildSql "                ,'"uid1.x.User"'"
+  end
+  call BuildSql "                 )"
+  call BuildSql '  order by name, collid, version'
+  call infomsg '  -------------------------'
+
+  call ZSQL  /* do prepare, etc */
+
+  call infomsg '  Generating ReBind PACKAGE commands'
+  call infomsg '  ----------------------------------'
+  call infomsg '   Lu    is LastUsed'
+  call infomsg '   v/o   is valid/operative'
+  call infomsg '   pcTS  is pcTimeStamp'
+  call infomsg '   TS    is TimeStamp'
+  call infomsg '   Ou    is Old Owner'
+  call infomsg '   Nu    is New Owner'
+  call infomsg '   PDS   is PDSname'
+  command2 = 0 /* prep for addcommand2 */
+  command3 = 0 /* prep for addcommand3 */
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :NAME,"        ,
+                          ":COLLID,"      ,
+                          ":VERSION,"     ,
+                          ":OWNER,"       ,
+                          ":VALID,"       ,
+                          ":OPERATIVE,"   ,
+                          ":LASTUSED,"    ,
+                          ":PCTIMESTAMP," ,
+                          ":TIMESTAMP,"   ,
+                          ":PDSNAME,"     ,
+                          ":TYPE"
+    If SQLCODE = 0
+    then do
+       version = '('strip(version)')'
+       name    = strip(name)
+       collid  = strip(collid)
+       owner   = strip(owner)
+       pdsname = strip(pdsname)
+       y = uid1Indx.owner
+       newUid = uid1.y.NewUser
+
+       if FreePkgIndx.name.collid.version = 0 ,
+        & (type = ' ' | type = 'T')
+       then do /* we didn't free it, so rebind it */
+          if type = ' '
+          then rebindcmd1 ='REBIND PACKAGE('collid"."name"."version') +'
+          else rebindcmd1 = 'REBIND TRIGGER' ,
+                                  'PACKAGE('collid"."name"."version') +'
+          rebindcmd2 = '         OWNER('newUid') +'
+          rebindcmd3 = '         ACTION(REPLACE) +'
+          rebindcmd4 = '         /* valid/operative was "'valid'/' ,
+                                    ||operative'" */'
+          xyz = valid||'/'||operative
+          if wordpos(xyz,vocnt) = 0
+          then vocnt = vocnt xyz
+          vocnt.xyz = vocnt.xyz + 1
+          if xyz = 'Y/Y' | xyz = 'A/Y'
+          then do
+             /* rebind packages for...                  */
+             /* valid/operative ='y/y' will appear first*/
+             call addCommand2 rebindcmd1
+             call addCommand2 rebindcmd2
+             call addCommand2 rebindcmd3
+             call addCommand2 rebindcmd4
+          end
+          else do
+             /* rebind packages for...                  */
+             /* valid/operative ='?/?' will appear later*/
+             call addCommand3 rebindcmd1
+             call addCommand3 rebindcmd2
+             call addCommand3 rebindcmd3
+             call addCommand3 rebindcmd4
+          end
+          call infoMsg rebindcmd1 'Lu='lastused';' ,
+             'v/o='valid'/'operative';' ,
+             'pcTS='pctimestamp';' ,
+             'TS='timestamp';' ,
+             'Ou='left(owner,max(8,length(owner)))';',
+             'Nu='left(newUid,max(8,length(newuid)))';',
+             'PDS='pdsname
+       end
+    end
+  End /* do until */
+  address 'TSO' 'EXECIO' command2 'DISKW COMMANDS (STEM COMMAND2.'
+  address 'TSO' 'EXECIO' command3 'DISKW COMMANDS (STEM COMMAND3.'
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+  call Infomsg ' '
+  do while vocnt <> ''
+     parse var vocnt xyz vocnt
+     call Infomsg 'rebind packages v/o='xyz 'has' vocnt.xyz 'rebinds'
+  end
+
+Return
+
+  GenerateReBindPlan:
+/*---------------------*/
+/*---------------------*/
+  if uid1 = 0
+  then return /* if nothing to do, return */
+
+  call infomsg '  GenerateRebindPlan sql'
+  call infomsg '  ---------------==-----'
+  sql = ''
+  call BuildSql 'Select NAME'
+  call BuildSql '      ,CREATOR'
+  call BuildSql '      ,VALID'
+  call BuildSql '      ,OPERATIVE'
+  call BuildSql '      ,BOUNDTS'
+  call BuildSql '  from sysibm.sysplan'
+  call BuildSql "  where creator in ('"uid1.1.User"'"
+  do x = 2 by 1 while x <= uid1
+            /* '  in list continued here ' */
+     call BuildSql "                   ,'"uid1.x.User"'"
+  end
+  call BuildSql "                   )"
+  call BuildSql '  order by name'
+  call infomsg '  --------------'
+
+  call ZSQL  /* do prepare, etc */
+
+  call infomsg '  Generating ReBind PLAN commands'
+  call infomsg '  -------------------------------'
+  call infomsg '   Ou    is OldUserid/Creator'
+  call infomsg '   Nu    is NewUserid/Creator'
+  call infomsg '   v/o   is valid/operative'
+  call infomsg '   BTS   is BoundTS'
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name,"        ,
+                          ":CREATOR,"     ,
+                          ":VALID,"       ,
+                          ":OPERATIVE,"   ,
+                          ":BOUNDTS"
+    If SQLCODE = 0
+    then do
+       name    = strip(name)
+       creator = strip(creator)
+       y = uid1Indx.creator
+       newUid = uid1.y.NewUser
+
+       if FreePlanIndx.name = 0
+       then do /* we didn't free it, so rebind it */
+          rebindcmd1 = 'REBIND PLAN('name')' ,
+                         'OWNER('newUid') ACTION(REPLACE) RETAIN'
+          call addCommand rebindcmd1
+          call infoMsg rebindcmd1 ,
+             'v/o='valid'/'operative';' ,
+             'BTS='boundts';' ,
+             'Ou='left(creator,max(8,length(creator)))';',
+             'Nu='left(newUid,max(8,length(newuid)))';'
+       end
+    end
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+Return
+
+
+
+ZSQL:
+  err_sw = "0"
+  "EXECSQL DECLARE C1 CURSOR FOR S1"
+  If SQLCODE \= 0 Then call prtsqlca 'DECLARE C1 CURSOR'
+  "EXECSQL PREPARE S1 INTO :outsqlca FROM :sql"
+  If SQLCODE \= 0 Then call prtsqlca 'PREPARE S1'
+  "EXECSQL OPEN C1"
+  If SQLCODE \= 0 Then call prtsqlca 'OPEN C1 '
+Return  /* zsql */
+
+prtsqlca:
+  err_sw = "1"
+  call infomsg '** Error SQL statement - ' arg(1)
+  call infomsg '** failing SQL statement - ' sql
+  call infomsg 'SQLCODE = 'SQLCODE
+  call infomsg 'SQLERRMC = 'SQLERRMC
+  call infomsg 'SQLERRP = 'SQLERRP
+  call infomsg 'SQLERRD = 'SQLERRD.1',',
+              || SQLERRD.2',',
+              || SQLERRD.3',',
+              || SQLERRD.4',',
+              || SQLERRD.5',',
+              || SQLERRD.6
+
+  call infomsg 'SQLWARN = 'SQLWARN.1',',
+              || SQLWARN.2',',
+              || SQLWARN.3',',
+              || SQLWARN.4',',
+              || SQLWARN.5',',
+              || SQLWARN.6',',
+              || SQLWARN.7',',
+              || SQLWARN.8',',
+              || SQLWARN.9',',
+              || SQLWARN.10
+
+  call infomsg 'SQLSTATE= 'SQLSTATE
+  /* we want to exit ... signal to controlled error exit*/
+  signal ForceRc8Exit
+
+infoMsg:
+   parse arg infomsgX
+   if info > 50
+   then do
+      /* if info > 50, infoRc must be 0 */
+      /* ... and time to empty buffer   */
+      address 'TSO' 'EXECIO' info 'DISKW INFO (STEM INFO.'
+      infoRc = rc
+      info = 0
+   end
+   if infoRc = 0
+   then do
+      /* we can write to INFO, add to buffer  */
+      info = info + 1
+      info.info = infomsgX
+   end
+   say infomsgX /* with or w/o buffer, send output somewhere*/
+   return
+
+writeInfo:
+   /* empty buffer, reset rc and buffer size */
+   address 'TSO' 'EXECIO' info 'DISKW INFO (STEM INFO.'
+   infoRc = rc
+   info = 0
+   return
+
+buildSql:
+   /* append to variable SQL (for dsnrexx) */
+   /* ...but setup for output to INFO for human use*/
+   parse arg buildSQLline
+   sql = sql strip(buildSQLline)
+   call infomsg buildSQLline
+   return
+
+addCommand:
+   parse arg commandX
+   if command > 50
+   then do
+      /* time to empty buffer   */
+      address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND.'
+      commandRc = rc
+      command = 0
+   end
+   if commandRc = 0
+   then do
+      /* we can write to Command buffer  */
+      command = command + 1
+      command.command = left(commandX,80) /* must be fixed 80 */
+   end
+   else do
+      call infoMsg 'write to DDNAME COMMANDS, got rc='commandrc
+      call infoMsg 'exit rc=8'
+      signal ForceRc8Exit
+   end
+   return
+
+addCommand2:
+   parse arg commandX
+   if command > 0 /* empty previous buffer (one time) */
+   then do
+      /* time to empty buffer   */
+      address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND.'
+      commandRc = rc
+      command = 0
+   end
+   if commandRc = 0
+   then do
+      /* we can write to Command buffer  */
+      command2 = command2 + 1
+      command2.command2 = left(commandX,80) /* must be fixed 80 */
+   end
+   else do
+      call infoMsg 'write to DDNAME COMMANDS, got rc='commandrc
+      call infoMsg 'exit rc=8'
+      signal ForceRc8Exit
+   end
+   return
+
+addCommand3:
+   parse arg commandX
+   if command > 0 /* empty previous buffer (one time) */
+   then do
+      /* time to empty buffer   */
+      address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND.'
+      commandRc = rc
+      command = 0
+   end
+   if commandRc = 0
+   then do
+      /* we can write to Command buffer  */
+      command3 = command3 + 1
+      command3.command3 = left(commandX,80) /* must be fixed 80 */
+   end
+   else do
+      call infoMsg 'write to DDNAME COMMANDS, got rc='commandrc
+      call infoMsg 'exit rc=8'
+      signal ForceRc8Exit
+   end
+   return
+

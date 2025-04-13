@@ -1,0 +1,198 @@
+/* Describes members in &hlq.REXX */
+/* ------------------------------ */
+
+
+
+
+
+member:  PRETRACE
+         --------
+         --------
+  The PRETRACE member is used to convert an (input) rexx exec into a rexx exec that
+  runs under:  trace 's' control.
+
+  In addition, it adds comments about the original rexx library + member that
+  this scan is being run for.
+
+  And it also strips sequence number from original exec (from left and/or right
+  side (if variable and/or fixed length records).
+
+  This exec is invoked from step "MODIFY" in the REXXXREF JOB.
+
+  process note:
+  -------------
+  The exec that "PRETRACE" created is actually invoked in the "SCAN" step so that
+  the rexx scan output can be fed into the 'REX$XREF' exec below.
+
+
+member:  PSTTRACE
+         --------
+         --------
+  The PSTTRACE member is used to take our scan output ... and comment out some of
+  the rexx code the scan used (and turn them into (obvious) comment heading lines
+  and remove line numbers.  In addition, the scan of the actual exec had line #'s
+  that didn't match the actual line numbers in the exec.  So we offset those line
+  numbers to start with line 1.  So the xref (and the scan) use line numbers
+  associated with the exec we wanted a cross reference for.
+
+  This exec is invoked from step "SCAN2" in the REXXXREF JOB.
+
+member:  REX$XREF
+         --------
+         --------
+  This exec takes rexx "trace 's'" output and creates a output member with the
+  original "trace 's'" output (as modified by PSTTRACE) and adds the xref to the
+  end of the member.
+
+  note:  the xref is composed of two parts.
+
+  xref (1 of 2) section 1 is for variables (not stem.''s)
+  ------------------------------------------------------
+
+     This is where "simple" (non-stem items appear in the cross reference).
+        - rexx allows labels to also be used as variable names.
+
+     Note:  A lower case variable in xref:
+                  has been assigned a value via a assignment stmt, parse, arg, upper, etc.
+
+     Note:  A UPPER CASE variable in xref:
+                  has only been used as a "constant" (an upper case value of itself (that we know of).
+                  BUT it may have been set outside of rexx (via an execio command, for example).
+
+     Here are the type(s) of items that may appear in the part 1 xref
+          - label definition (and line# where it is defined)
+
+          - label reference (and where it is "called", "signal to" or "function use")
+               label references are "F(#)" for function call  from line #
+               label references are "C(#)" for call statement from line #
+               label references are "S(#)" for signal stmt    from line #
+
+          - label reference (special case... where a SIGNAL ON or CALL ON, event may use it)
+               see (SYNTAX) lines in example below.
+
+          - variable (set in rexx; this is via and assignment statement or some parse statement (arg, parse, etc)
+
+          - variable (used in rexx) this has references to variable use in an expression
+
+          - variable (used in stem) this is because variable was used in part of the stem part of a stem variable.
+                  - used as part of a stem variable reference
+                  - used as part of a stem variable assignment
+                  - if variable itself, was never set, it''s used a (upper case) constant as part of the stem value.
+
+          - variable (NEVER SET)    this variable may have been set via some command (like EXECIO) but it so it wasn''t in rexx code,
+                per se.  Special variables like the "result" or "rc" code variable will not show up in a cross reference (either).
+                However, you may be using the variable as an "upper case constant too".  Or you may have mispelled the variable in
+                a variable reference (and it was never actually set).  This MAY BE a indication of something wrong.
+                Note:  you should always look at "never set" variable references to see if variable was mispelled or if you wanted
+                   to use this as a constant.
+
+          - special variables may be set (implicitly) by rexx.  BUT of course, you may change their value as well.  Therefore,
+                if a special variable is referenced, then a like indicating it may be set implicitly is also generated.  If you
+                explictly update the variable, another line showing that will also be generated.  See example below for "RC".
+                Note:  Because "rc" was set explicitly, it appears in the xref in lower case.
+                Note:  The following are reported as "special" variables in the xref:
+                            RC, RESULT and SIGL
+                Note:  In addition, for IBM''s DB2 rexx interface, the following are also reported as "special" variables:
+                            SQLCODE, SQLERRMC, SQLERRP and SQLSTATE
+
+
+examples from xref (part 1)
+---------------------------
+xref (1 of 2) section 1 is for variables (not stem(s))
+xref (1 of 2) section 1 is for variables (not stem(s))
+
+Variable (set w/rexx)   access                         Assigned : 1589 2635 4475 4703 4863
+Variable (used in/rexx) access                         Reference: 1590 2636 4480 4708 4868
+Label (internal label)  ADDEXCLUDE                     Defined  : 5447
+Label (int. label ref)  ADDEXCLUDE                     Reference: F(705)
+Variable (set w/rexx)   allprivs                       Assigned : 2184 2188 2269 2331 2334 2361 2399
+Variable (used in/rexx) allprivs                       Reference: 2186 2192 2193 2196 2208 2235 2270 2297 2330 2331 2334 2362 2364 2399
+Built-In+/External use  ARG                            Reference: F(5026) F(5515) F(5516) F(5517)
+Variable (NEVER SET)    AUDITING                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) AUDITING                       Reference: 1889 1994 2016
+Label (internal label)  SYNTAX                         Defined  : 421
+Built-In+/External use  SYNTAX (SIGNAL ON SYNTAX)      Reference: S(418)
+Variable (set w/rexx)   clistx                         Assigned : 857 5229 5238 5254 5262 5266 5274 5291 5299 5303 5310 5322 5330 5334 5351
+Variable (used in/rexx) clistx                         Reference: 5238 5254 5262 5266 5274 5291 5299 5303 5310 5322 5330 5334 5338 5340 5354
+Variable (in Stem Set)  clistx                         Assigned : 5232 5237 5240 5246 5253 5255 5261 5263 5267 5273 5276 5283 5290 5292 5298 5300
+                        ...                                       5304 5309 5312 5321 5323 5329 5331 5335
+Variable (in Stem Ref)  clistx                         Reference: 5242 5244 5246 5247 5249 5251 5253 5257 5259 5261 5279 5281 5283 5284 5286 5288
+                        ...                                       5290 5294 5296 5298 5315 5317 5319 5321 5325 5327 5329
+SpecialVar(set no-XREF) rc                              *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(set w/ code) rc                             Assigned : 11
+SpecialVar(used w/rexx) rc                             Reference: 427 663 691 1017 1019 1193 1195 1205 1207 5342 5344 5582 5584 5589 5631 5860
+
+
+  xref (2 of 2) section 2 is for stem variable xreference.
+  ----------------------------------------------------------
+
+Stem-1 BUFFERRECS.ddname                                  Assigned : 5352 5354
+Stem-1 BUFFERRECS.ddname                                  Reference: 1015 5229
+Stem-1 BUFFERRECS.PE$DDNAME                               Reference: 801 807 813 819 825 831 837 843
+Stem-1 BUFFERRECS.rdefddname                              Assigned : 750 756 762 768 774 780 786 792
+Stem-2 BUFFERX.ddname.clistx                              Assigned : 5232 5237 5240 5244 5246 5251 5253 5255 5259 5261 5263 5267 5273 5276 5281
+       ...                                                           5283 5288 5290 5292 5296 5298 5300 5304 5309 5312 5319 5321 5323 5327 5329
+       ...                                                           5331 5335
+Stem-2 BUFFERX.ddname.clistx                              Reference: 5242 5244 5246 5247 5249 5251 5253 5257 5259 5261 5279 5281 5283 5284 5286
+       ...                                                           5288 5290 5294 5296 5298 5315 5317 5319 5321 5325 5327 5329
+Stem-1 CLASSINDX.                                         Assigned : 854
+Stem-1 CLASSINDX.useclass                                 Assigned : 5186
+Stem-1 CLASSINDX.useclass                                 Reference: 5182 5188
+Stem-1 CLASSLIST.classlist                                Assigned : 5185
+Stem-1 CLASSLIST.classnum                                 Reference: 1180 1186
+Stem-1 HDR.#                                              Assigned : 732 733 734 735 736 737 738 848
+Stem-1 HDR.0                                              Assigned : 731
+Stem-1 HDR.hdr                                            Assigned : 741
+
+    Note:  the stem value is evalutated first (all the variables etc to the right of the first period) are resolved to create a stem value.
+    ---------------------------------------------------------------------------------------------------------------------------------------
+
+    The stem variable (everything to left of first period) is always in upper case.
+
+    The variables to the right of the first period (if any) are in upper (or lower case).  If upper case, it was NEVER observed to have been
+    set via an assignment statement (or via a rexx parse statement (arg, parse, pull, etc) or an 'upper' statement, etc..  If lower case, it
+    has been set that way.
+
+    Also, look at HDR.# above.  If a stem HDR.0 is set, it shows up like that in the xref.  But if HDR.1, HDR.2, HDR.3 for example are set
+    and/or refererenced they will all show up as "HDR.#" in the xref (rather than individual line items).
+
+    For CLASSINDX., it was probably set to a default value.  Which is why there is nothing to the right of the 1st period.
+
+    For BUFFERRECS.PE$DDNAME this is unusual.  There are other assignments/references with a lower case variable.  So it is unusual that
+    a reference would occur with an upper case variable as well.
+
+      Note:  therefore, periods inside a variable become part of the stem value and will be used as part of the refence for the stem variable
+         itself.
+                  For example the following stems refer to the same stem variable:
+                         name.Richard.Humphris = 1 (stem value= 'Richard.Humphris')
+                      or name.fullName         = 1 (stem value= 'Richard.Humphris')
+
+                  IF the following variables had the following values:
+                         Richard = 'Richard'
+                    and  Humphris= 'Humphris'
+                    and  fullname= 'Richard.Humphris'
+
+    Note:  the xreference treats the number of (external) periods to generate a "stem-#", but as you know, if a variable to the right of
+        a period contains one or more periods.... the "stem-#" information is meaningless.
+
+    That said, we will order references to the stem variable by it''s "stem-#".  And we will show the variables, if any, to the right of the
+        period as well.  This has nothing to do with the resolved stem value, but is just information we provide in the xref.
+
+    For stem values with a number, we will show "stemVariable.0" being set and/or referenced.  BUT it a series of stem are being set like:
+           stemVariable.0 = 3
+           stemVariable.1 = 'something'
+           stemVariable.2 = 'else'
+           stemVariable.3 = 'all together'
+        then we will show two entries in the xref for stems assignments:
+           stemVariable.0 (assignments/references)
+           stemVariable.# (for stemVariable.1, stemVariable.2, stemVariable.3 assignments/references all combined under "stemVariable.#")
+
+    For stem values with variable we will show the variable (in upper (never set)) or lower case.  To help tell you how the stem was used.
+        And the ple:
+           stemVariable.0 = 3
+           stemVariable.1 = 'something'
+           stemVariable.2 = 'else'
+           stemVariable.3 = 'all together'
+        then we will show two entries in the xref for stems assignments:
+           stemVariable.0 (assignments/references)
+           stemVariable.# (for stemVariable.1, stemVariable.2, stemVariable.3 assignments/references all combined under "stemVariable.#")

@@ -1,0 +1,2410 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(ZEQAJCL)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(ZEQAJCL)
+   -----------------------------------------
+
+READY
+    ZEQAJCL
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH48.REXX.EXEC(ZEQAJCL)"      */
+    Generated scan code/comment:   /*      -------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:              */
+    Generated scan code/comment:   /*     20231217 23:06:56                */
+    Generated scan code/comment:   /*      -------------------------       */
+     1 *-* /* This REXX EQAJCL will invoke the IBM Debug Tool JCL Wizard        */
+     2 *-* /*********************************************************************/
+     3 *-* /*                                                                   */
+     4 *-* /* Licensed Materials - Property of IBM                              */
+     5 *-* /*                                                                   */
+     6 *-* /* 5724-T07: IBM z/OS Debugger                                       */
+     7 *-* /* Copyright IBM Corp. 2015, 2016 All Rights Reserved                */
+     8 *-* /*                                                                   */
+     9 *-* /* US Government Users Restricted Rights - Use, duplication          */
+    10 *-* /* or disclosure restricted by GSA ADP Schedule Contract             */
+    11 *-* /* with IBM Corp.                                                    */
+    12 *-* /*                                                                   */
+    13 *-* /*********************************************************************/
+    14 *-* /* >>> Installation by redirecting the code to other library  <<<    */
+    15 *-* /*********************************************************************/
+    16 *-* /*                                                                   */
+    17 *-* /* This exec member name is EQAJCL and is expected to be found       */
+    18 *-* /* in the TSO logon procedure's SYSEXEC or SYSPROC concatenation.    */
+    19 *-* /* If this is not true, you will need to create a REXX exec in       */
+    20 *-* /* a data set that is in your TSO logon procedure's SYSEXEC or       */
+    21 *-* /* SYSPROC and invoke EQAJCL from there. To do that,                 */
+    22 *-* /* select a command name that you do not currently use (for example, */
+    23 *-* /* DEBUG), and install a REXX exec by that name into an existing     */
+    24 *-* /* data set in your TSO Logon procedure's SYSEXEC or SYSPROC DDs.    */
+    25 *-* /* The REXX exec should look like this (with hlq being changed to    */
+    26 *-* /* the high level qualifier that you use for the Debug Tool          */
+    27 *-* /* libraries):                                                       */
+    28 *-* /*                                                                   */
+    29 *-* /* /* This REXX exec will invoke the Debug Tool EQAJCL ISPF macro */ */
+    30 *-* /* "EX 'hlq.EXEC(EQAJCL)'"                                           */
+    31 *-* /* EXIT                                                              */
+    32 *-* /*                                                                   */
+    33 *-* /*********************************************************************/
+    34 *-* /* >>> Installation Customization <<<                                */
+    35 *-* /*                                                                   */
+    36 *-* /* If you are installing this tool for your site then please change  */
+    37 *-* /* the following variables to indicate the dataset qualifiers and    */
+    38 *-* /* names used for the Debug Tool product.                            */
+    39 *-* /*                                                                   */
+    40 *-* /*                                                                   */
+    41 *-* /* Inst_DT_ShpHLQ  -High-level qualifier for Debug Tool data sets    */
+    42 *-* /* Inst_DT_NATLANG -National language used. Valid values are         */
+    43 *-* /*                   ENU - mixed case English                        */
+    44 *-* /*                   UEN - upper case English                        */
+    45 *-* /*                   JPN - Japanese                                  */
+    46 *-* /*                   KOR - Korean                                    */
+    47 *-* /*   Note: If you use code page 930 (Japanese Katakana-Kanji),       */
+    48 *-* /*         you need to choose UEN language code.                     */
+    49 *-* /*                                                                   */
+    50 *-* /*********************************************************************/
+    51 *-* /* ========== Start of customization section ========================*/
+    52 *-* /* High-Level Qualifier for Debug Tool datasets                      */
+    54 *-* /* ===>> Note1 Note1 Note1 Note1 Note1 Note1 Note1 Note1 Note1  <=== */
+    55 *-* /* High-Level Qualifier for Debug Tool datasets                      */
+    56 *-* /*12@L1D*/
+    57 *-* Inst_DT_SHPHLQ   = 'EQAW'
+       *-* /*@L1A*/
+    58 *-* Inst_DT_NATLANG  = 'ENU'
+       *-* /*@L1A*/
+    59 *-* /*                                                                   */
+    60 *-* /*                                                                   */
+    61 *-* /* ===>> End of Note1 - End of Note1 - End of Note1 - End Note1 <=== */
+    63 *-* /* ===>> Note2 Note2 Note2 Note2 Note2 Note2 Note2 Note2 Note2  <=== */
+    64 *-* /* The variable below should be modified based on the EQAOPTS data   */
+    65 *-* /* If code coverage is not defined in EQAOPTS, set                   */
+    66 *-* /*  CODE_COVERAGE_SETUP = 'YES'                                      */
+    67 *-* /* This will generate the statements below:                          */
+    68 *-* /*  EQAXOPT  CCOUTPUTDSN,'&&USERID.DBGTOOL.CCOUTPUT'                 */
+    69 *-* /*  EQAXOPT  CCOUTPUTDSNALLOC,'MGMTCLAS(STANDARD)                    */
+    70 *-* /*                STORCLAS(DEFAULT) LRECL(255) BLKSIZE(0) RECFM(V,B) */
+    71 *-* /*                DSORG(PS) SPACE(2,2) CYL'                          */
+    72 *-* /*  EQAXOPT  CCPROGSELECTDSN,'&&USERID.DBGTOOL.CCPRGSEL'             */
+    73 *-* /*  EQAXOPT END                                                      */
+    74 *-* CODE_COVERAGE_SETUP = 'YES'
+    75 *-* /* ===>> End of Note2 - End of Note2 - End of Note2 - End Note2 <=== */
+    76 *-* /*********************************************************************/
+    77 *-* /* END OF INSTALLATION CUSTOMIZATION                                 */
+    78 *-* /*                                                                   */
+    79 *-* /* Do not make any more changes after this point.                    */
+    80 *-* /*********************************************************************/
+    81 *-* /*********************************************************************/
+    82 *-* /* $Mod(EQAJCL  ) Comp(DTWZ)     Prod(EQA): JCL Wizard               */
+    83 *-* /*                                                                   */
+    84 *-* /* Flag Reason  Release  Date       Origin    Description            */
+    85 *-* /* ---- ------- -------- ---------- ------    ---------------------- */
+    86 *-* /* $00= f10552  v13r1    2015/02/23 Rice    : JCL Wizard             */
+    87 *-* /* $01= f10552  v13r1    2015/03/18 Rice    : Improve error msg      */
+    88 *-* /* $02= f10552  v13r1    2015/06/15 Rice    : Fix bug with commented */
+    89 *-* /*                                          : PGM=EQANMDBG line (DLN)*/
+    90 *-* /* $L1= f10564  v13r1    2015/07/09 Lin     : NLS support            */
+    91 *-* /* $03= f10552a v13r1    2015/07/31 Young   : Terminology and cleanup*/
+    92 *-* /* $04= f10552b v13r1    2015/09/11 Rice    : extraneous line        */
+    93 *-* /*                                            SET AUTO ON BOTH       */
+    94 *-* /*                                            when Delay Debug       */
+    95 *-* /* $05= f10552c v13r1    2015/09/14 Young   : Source -> Debug        */
+    96 *-* /* $06= f10552d v13r1    2015/09/25 Rice    : More DEBUG -> EQAJCL   */
+    97 *-* /* $07= f10552e v13r1    2015/09/28 Rice    : Non-LE cmt //CEEOPTS   */
+    98 *-* /* $08= r17822  v14r0    2016/10/05 Rice    : DBMDT support          */
+    99 *-* /* $09= r80720  v14r1    2018/10/10 Rice    : Fixed DBMDT for Assem  */
+   100 *-* /* $L2= r82173  v14r0    2019/03/12 Lin     : CONTROL SAVE/RESTORE   */
+   101 *-* /*********************************************************************/
+   104 *-* Address ISPEXEC
+   106 *-* /* x = trace("?r") */
+   108 *-* if Inst_DT_NATLANG /= 'ENU' &,                               /*@L1A*/      Inst_DT_NATLANG /= 'UEN' &,
+             /*@L1A*/      Inst_DT_NATLANG /= 'JPN' &,                               /*@L1A*/      Inst_DT_NATLANG /= 'KOR'
+   111 *-*  then
+       *-*  do                          /*@L1A*/
+   112 *-*   zedsmsg = 'INVALID NATLANG'                                /*@L1A*/
+   113 *-*   zedlmsg = 'THE DEBUG TOOL JCL WIZARD WAS NOT CUSTOMIZED',  /*@L1A*/              'WITH VALID NATIONAL LANGUAGE CODE',
+             /*@L1A*/              '(ENU,JPN,KOR,OR UEN).'                           /*@L1A*/
+   116 *-*   'SETMSG MSG(ISRZ001)'
+   117 *-*   EXIT(1)                                                   /*@L1A*/
+   118 *-*  end                                                          /*@L1A*/
+   120 *-* DT_SEQAEXEC = Inst_DT_ShpHLQ'.SEQAEXEC'
+       *-* /*@L1A*/
+   121 *-* if Inst_DT_NATLANG = 'UEN'
+       *-*  then
+       *-*  do
+   122 *-*   DT_ISPPLIB  = Inst_DT_ShpHLQ'.SEQAP'||'ENP'
+       *-*   /*@L1A*/
+   123 *-*  end
+   124 *-* else
+       *-*  do
+   125 *-*   DT_ISPPLIB  = Inst_DT_ShpHLQ'.SEQAP'||Inst_DT_NATLANG
+       *-*   /*@L1A*/
+   126 *-*  end
+   128 *-* call Initialize
+   129 *-* call Process_input_parm
+   130 *-* if abv_parm <> 'R'
+       *-*  then
+       *-*  do
+   131 *-*   Call Process_popup_Panels
+   132 *-*  end
+   133 *-* Call Remove_old_lines           /* remove old lines unconditionally */
+   134 *-* if abv_parm = 'R'
+       *-*  then
+       *-*  Call Exit_routine /* Exit if Remove requested*/
+   135 *-* call Verify_no_CEEOPTS_EQANMDBG /* Verify no existing Debug DDs */
+   136 *-* rc = Check_Zdest()              /* Check for A/B line command */
+   137 *-* if zdest = 0
+       *-*  then
+       *-*  do            /* No A/B found  */
+   138 *-*   call Table_Program_Name      /* Get all EXEC PGM=xxxx pgm names */
+   139 *-*   call Set_Label_For_Insert_Lines   /* Set labels for insert      */
+   140 *-*  end
+   141 *-* Call Insert_Debug_Lines         /* Insert the Debug statements */
+   142 *-* Call Exit_routine               /* put cursor on home line and exit */
+   144 *-* Initialize:
+   146 *-* "ISPEXEC LIBDEF ISPPLIB DATASET ID ('"DT_ISPPLIB"') STACK"    /*@L1C*/
+   147 *-* eqauser =  sysvar(sysuid)
+   148 *-* DD_Statements = '//CEEOPTS //EQADEBUG //EQACMD //EQANMDBG //INSPLOG'
+   149 *-* "VPUT (EQAUSER) PROFILE"
+   150 *-* 'ISREDIT MACRO (PARM1) NOPROCESS'       /* NOPROCESS needed for A/B */
+   151 *-* "ISREDIT (FIRSTL) = LINENUM .ZFIRST"    /* set variable FIRSTL   */
+   152 *-* if firstl = 0
+       *-*  then
+       *-*  do
+   153 *-*   zedsmsg = 'NO LINES'                                      /*@L1C*/
+   154 *-*   zedlmsg = 'MEMBER IS EMPTY. NO PROCESSING PERMITTED.'     /*@L1C*/
+   155 *-*   'SETMSG MSG(ISRZ001)'
+   156 *-*   Call Exit_Routine
+   157 *-*  end
+   158 *-* "ISREDIT CURSOR = 1 1"
+   159 *-* "ISREDIT (LASTL) = LINENUM .ZLAST"      /* Set variable LASTL */
+   160 *-* "ISREDIT SCAN OFF"
+   161 *-* /* Variables and table for Program selection panel      */
+   162 *-* panelist = 'lcmd Seq Program Stepname linenum'
+   163 *-* 'tbcreate paneltab names(&panelist) nowrite replace'
+   165 *-* /* Variables and table for EQADEBUG library panel      */
+   166 *-* EqaDlist = 'lcmd2 EQAlibr'
+   167 *-* 'tbcreate EqaDltab names(&EqaDlist) nowrite replace'
+   169 *-* /* Variables and table for EQADEBUG library panel      */
+   170 *-* EqaMlist = 'lcmd3 EQAmsg2 eqambr'
+   171 *-* 'tbcreate EqaMltab names(&EqaMlist) nowrite replace'
+   173 *-* 'ISREDIT (CURMEM) = MEMBER'  /* set CURMEM as member name */
+   174 *-* POP_UP = 'NO'
+   175 *-* EQA_Pgms = ''         /* List of all programs for LDD command */
+   176 *-* EQAlibrs = ''   /* List of all libraries for EQADEBUG   */
+   177 *-* Lidx = 0        /* Table index for program entries      */
+   178 *-* sourcedata = '' /* List of program, sourcelib, member entries */
+   179 *-* Num_Eqalibs = 0 /* Number of EQADEBUG libraries */
+   180 *-* ProcStepOverride = ''
+   181 *-* BELOW = '//*!LINES BELOW CREATED BY THE EQAJCL COMMAND FOR PGM '
+   182 *-* ABOVE = '//*!LINES ABOVE CREATED BY THE EQAJCL COMMAND FOR PGM '
+   183 *-* BELOW_OLD = '//*!LINES BELOW CREATED BY THE DEBUG COMMAND FOR PGM '
+   184 *-* ABOVE_OLD = '//*!LINES ABOVE CREATED BY THE DEBUG COMMAND FOR PGM '
+   185 *-* LASTLINE = '//!* THIS LINE IS TEMPORARILY ADDED AND REMOVED'
+   186 *-* /* There are three variables used in this rexx routine for program    */
+   187 *-* /* EQAPGM = Application program name, provided on Input Panel         */
+   188 *-* /*    For non-DB2 and non-IMS, and non-LE, programs, it is the same   */
+   189 *-* /* program = Program name populated in the list of EXEC PGM=xxxxx     */
+   191 *-* MFIC1 = ' COMMENT TO VIEW THE SOURCE OF A SUBPROGRAM',        /*@L1C*/     ' FOLLOW THE STEPS BELOW:;'
+              /*@L1C*/
+   193 *-* MFIC2 = ' COMMENT 1) ENTER A "STEP" COMMAND;'                 /*@L1C*/
+   194 *-* MFIC3 = ' COMMENT 2) ENTER "QUALIFY PROGRAM" PGMNAME;'        /*@L1C*/
+   195 *-* MFIC4 = ' COMMENT 3) IF THE LOAD MODULE NAME IS NOT THE ',    /*@L1C*/     'SAME AS PROGRAM NAME:;'
+              /*@L1C*/
+   197 *-* MFIC5 = ' COMMENT -- ENTER "QUALIFY PROGRAM LOADMOD::>PGMNAME";'
+   199 *-* GUIC1 = ' /* TO VIEW THE SOURCE OF A SUBPROGRAM',             /*@L1C*/     ' FOLLOW THE STEPS BELOW: */'
+              /*@L1C*/
+   201 *-* GUIC2 = ' /* 1) LEFT CLICK THE "STEP INTO" ICON */' /*@L1C*/
+   202 *-* GUIC3 = ' /* 2) IN THE DEBUG TOOL ENGINE COMMAND PANE, ENTER: */'
+   203 *-* GUIC4 = ' /* 3) QUALIFY PROGRAM PGMNAME;  OR */'              /*@L1C*/
+   204 *-* GUIC5 = ' /*    QUALIFY PROGRAM LOADMOD::>PGMNAME',           /*@L1C*/     ' (IF LOADMOD NOT = PGMNAME) */'
+              /*@L1C*/
+   206 *-* GUIC6 = ' /* 4) CLICK ON THE MODULES PANE */'                 /*@L1C*/
+   207 *-* GUIC7 = ' /* 5) DOUBLE CLICK THE SOURCE DATASET(MEMBER)',     /*@L1C*/     'TO VIEW THE SOURCE */'
+              /*@L1C*/
+   209 *-* GUIC8 = ' /* 6) SET THE BREAKPOINT IN THE SUBPROGRAM */'      /*@L1C*/
+   210 *-* GUIC9 = ' /* 7) CLICK ON THE "STEP INTO" ICON TO RETURN TO THE',           'CALLING PROGRAM */'
+              /*@L1C*/
+   212 *-* GUIC10 = ' /* 8) CONTINUE WITH THE DEBUG SESSION */'          /*@L1C*/
+   213 *-* return(0)
+   215 *-* Process_input_parm:
+   216 *-* /* Process the input parameter following the DEBUG command */
+   217 *-* abv_parm = translate(parm1)                                  /*@08c*/
+   218 *-* if abv_parm = ''
+       *-*  then
+       *-*  do     /* Display menu when no parm used     */
+   219 *-*   'addpop column(0) row(0)'
+   220 *-*   POP_UP = 'YES'
+   221 *-*   'display panel(eqajp02)'  /* Get selection menu */
+   222 *-*   if rc = 8
+       *-*    then
+       *-*    do
+   223 *-*     'rempop all'
+   224 *-*     Call Exit_routine
+   225 *-*    end
+   226 *-*   "VGET (EQAMethd) asis"
+   227 *-*   abv_parm = EqaMethd
+   228 *-*  end
+   229 *-* select
+   230 *-*  /* Process remaining parameters */
+   231 *-* when abv_parm = 'G1' | abv_parm = 'G2' | abv_parm = 'T'
+       *-*  then
+       *-*  do
+   232 *-*   EQAMethd = abv_parm
+   233 *-*   Call PopUp_GUI_MFI_TIM
+   234 *-*  End
+   235 *-* when substr(abv_parm,1,1) = 'R'
+       *-*  then
+       *-*  do
+   236 *-*   nop
+   237 *-*  End
+   238 *-* when substr(abv_parm,1,1) = 'C'
+       *-*  then
+       *-*  do
+   239 *-*   EQAMethd = abv_parm
+   240 *-*  End
+   241 *-* when substr(abv_parm,1,1) = 'D'
+       *-*  then
+       *-*  do
+   242 *-*   EQALE = 'YES'
+   243 *-*   EQAMethd = abv_parm
+   244 *-*   call Invoke_DTU_Delay_Debug  /*  invoke DTU for option B */
+   245 *-*  End
+   246 *-* otherwise
+       *-*  do
+   247 *-*   zedsmsg = 'INVALID PARAMETER'                          /*@L1C*/
+   248 *-*   zedlmsg = 'INVALID PARAMETER' parm1'. ENTER G1,G2,T,R,D, OR C',                   ' FOR THE PARAMETER.'
+         /*@08c*/
+   250 *-*   'SETMSG MSG(ISRZ001)'
+   251 *-*   call exit_routine
+   252 *-*  end
+   253 *-* end
+   254 *-* if EQALE = 'NO'
+       *-*  then
+       *-*  do
+   255 *-*   'addpop column(0) row(0)'  /* Get non-LE initial program */
+   256 *-*   POP_UP = 'YES'
+   257 *-*   'display panel(eqajp10)'
+   258 *-*   if rc = 8
+       *-*    then
+       *-*    do
+   259 *-*     'rempop all'
+   260 *-*     Call Exit_routine
+   261 *-*    end
+   262 *-*  end
+   263 *-* else
+       *-*  do
+   264 *-*   EQAPGM = ''  /* Set non-le pgm to null if Language environment */
+   265 *-*  end
+   266 *-* return(0)
+   268 *-* Invoke_DTU_Delay_Debug:
+   269 *-* /*8@L1D*/
+   270 *-* /* Pop-up routine for Delayed Debugging Instructions */
+   271 *-* if POP_UP = 'YES'
+       *-*  then
+       *-*  "rempop all"
+   272 *-* POP_UP = 'NO'
+   273 *-* 'display panel(eqajp13)'
+   274 *-* if rc = 8
+       *-*  then
+       *-*  do
+   275 *-*   Call Exit_routine
+   276 *-*  end
+   277 *-* "ISPEXEC LIBDEF ISPPLIB DATASET ID ('"DT_ISPPLIB"') STACK"     /*@L1C*/
+   278 *-* ADDRESS TSO "EXEC '"DT_SEQAEXEC"(EQASTART)' ",                /*@L1C*/     "'NATLANG("Inst_DT_NATLANG")'"
+              /*@L1A*/
+   280 *-* /* Re-instate the LIBDEF for our panels */
+   281 *-* "ISPEXEC LIBDEF ISPPLIB DATASET ID ('"DT_ISPPLIB"') STACK"     /*@L1C*/
+   282 *-* return(0)
+   284 *-* Process_popup_Panels:
+   285 *-* if EQALIBS = '/'
+       *-*  then
+       *-*  do
+   286 *-*   'addpop column(0) row(0)'  /* Get EQADEBUG libraries */
+   287 *-*   POP_UP = 'YES'
+   288 *-*   'display panel(eqajp03)'
+   289 *-*   if rc = 8
+       *-*    then
+       *-*    do
+   290 *-*     'rempop all'
+   291 *-*     Call Exit_routine
+   292 *-*    end
+   293 *-*  end
+   294 *-*  /* Determine if EQALIB specified is cataloged */
+   295 *-* if EQALIBS = '/'
+       *-*  then
+       *-*  do
+   296 *-*   if Validate_EQALIB(eqalib1) <> 0
+       *-*    then
+       *-*    Call Exit_routine
+   297 *-*   if Validate_EQALIB(eqalib2) <> 0
+       *-*    then
+       *-*    Call Exit_routine
+   298 *-*   if Validate_EQALIB(eqalib3) <> 0
+       *-*    then
+       *-*    Call Exit_routine
+   299 *-*   if Validate_EQALIB(eqalib4) <> 0
+       *-*    then
+       *-*    Call Exit_routine
+   300 *-*   if Validate_EQALIB(eqalib5) <> 0
+       *-*    then
+       *-*    Call Exit_routine
+   301 *-*   if Validate_EQALIB(eqalib6) <> 0
+       *-*    then
+       *-*    Call Exit_routine
+   302 *-*  end
+   303 *-* if EQAPGMS = '/'
+       *-*  then
+       *-*  do      /* Is the LDD Pgms requested? */
+   304 *-*   'addpop column(0) row(0)'  /* Get LDD non-LE programs */
+   305 *-*   POP_UP = 'YES'
+   306 *-*   'display panel(eqajp04)'
+   307 *-*   if rc = 8
+       *-*    then
+       *-*    do
+   308 *-*     'rempop all'
+   309 *-*     Call Exit_routine
+   310 *-*    end
+   311 *-*  end
+   312 *-* if EQAPGMS = '/'
+       *-*  then
+       *-*  do  /* Set EQA_Pgms to all LDD pgm requests */
+   313 *-*   EQA_Pgms = EQAPGM01 EQAPGM02 EQAPGM03 EQAPGM04 EQAPGM05,                           EQAPGM06 EQAPGM07 EQAPGM08 EQAPGM09
+   315 *-*  end
+   316 *-*  /* Is AT ENTRY request specified? */
+   317 *-* if EQAATENT = '/'
+       *-*  then
+       *-*  do
+   318 *-*   'addpop column(0) row(0)'  /* Get LDD non-LE programs */
+   319 *-*   POP_UP = 'YES'
+   320 *-*   /* If the previous member is not the same as the current mbr */
+   321 *-*   /*  then clear the AT ENTRY fields */
+   322 *-*   "VGET (EQAPMEM) ASIS"
+   323 *-*   if EQAPMEM <> curmem
+       *-*    then
+       *-*    do
+   324 *-*     EQALMD01 = ''
+       *-*     EQALMD02 = ''
+       *-*     EQALMD03 = ''
+   325 *-*     EQALMD04 = ''
+       *-*     EQALMD05 = ''
+       *-*     EQALMD06 = ''
+   326 *-*     EQALMD07 = ''
+       *-*     EQALMD08 = ''
+       *-*     EQALMD09 = ''
+   327 *-*     EQALPG01 = ''
+       *-*     EQALPG02 = ''
+       *-*     EQALPG03 = ''
+   328 *-*     EQALPG04 = ''
+       *-*     EQALPG05 = ''
+       *-*     EQALPG06 = ''
+   329 *-*     EQALPG07 = ''
+       *-*     EQALPG08 = ''
+       *-*     EQALPG09 = ''
+   330 *-*     /* If the fields are cleared, populate the program names */
+   331 *-*     /*  with the LDD fields. Omit the first program */
+   333 *-*     mm = 0
+   334 *-*     do epidx = 1 to words(EQA_Pgms)
+   335 *-*      nn = right(epidx,2,0)
+   336 *-*      if EQAPGM <> value('EQAPGM'nn)
+       *-*       then
+       *-*       do
+   337 *-*        mm = mm + 1
+       *-*        mm = right(mm,2,0)
+   338 *-*        interpret 'EQALPG'mm '= EQAPGM'nn
+   339 *-*       end
+   340 *-*     end
+   342 *-*    end
+   343 *-*    /* Display panel for AT ENTRY breakpoints */
+   344 *-*   'display panel(eqajp05)'
+   345 *-*   if rc = 8
+       *-*    then
+       *-*    do
+   346 *-*     'rempop all'
+   347 *-*     Call Exit_routine
+   348 *-*    end
+   349 *-*  end
+   350 *-* if POP_UP = 'YES'
+       *-*  then
+       *-*  "rempop all"
+   351 *-* POP_UP = 'NO'
+   352 *-* if EQALIBS = '/'
+       *-*  then
+       *-*  do
+   353 *-*   /* Verify if the member is found in the EQALIBS */
+   354 *-*   Call Verify_Source_data_found
+   355 *-*  end
+   356 *-* return(0)
+   358 *-* Remove_old_lines:
+   359 *-* /* Remove the comments and all lines in between */
+   360 *-* "ISREDIT FIND '"below"' 1"
+   361 *-* DEBUG_EQAJCL = ''     /* which line was used initially         @06A*/
+   362 *-* if rc = 0
+       *-*  then
+       *-*  do
+   363 *-*   DEBUG_EQAJCL = 'EQAJCL'                                   /*@06A*/
+   364 *-*  end                                                          /*@06A*/
+   365 *-* "ISREDIT FIND '"BELOW_OLD"' 1"   /* look for the old syntax    @06A*/
+   366 *-* if rc = 0
+       *-*  then
+       *-*  do                                            /*@06A*/
+   367 *-*   DEBUG_EQAJCL = 'DEBUG'                                    /*@06A*/
+   368 *-*  end                                                          /*@06A*/
+   369 *-* if DEBUG_EQAJCL <> ''
+       *-*  then
+       *-*  do                                /*@06A*/
+   370 *-*   "ISREDIT (LINE) = LINE .ZCSR"
+   371 *-*   parse value line with 54 PREVPGM .
+   372 *-*   "ISREDIT LABEL .ZCSR = .EQABL  0"
+   373 *-*   If DEBUG_EQAJCL = 'EQAJCL'
+       *-*    then
+       *-*    do                        /*@06A*/
+   374 *-*     "ISREDIT FIND '"above"' 1 "
+   375 *-*    end                                                       /*@06A*/
+   376 *-*   else
+       *-*    do                                                   /*@06A*/
+   377 *-*     "ISREDIT FIND '"ABOVE_OLD"' 1 "                        /*@06A*/
+   378 *-*    end                                                       /*@06A*/
+   379 *-*   if rc = 0
+       *-*    then
+       *-*    do
+   380 *-*     "ISREDIT LABEL .ZCSR = .EQAAB 0"
+   381 *-*     "ISREDIT DELETE .EQABL .EQAAB"
+   382 *-*     /* Double && needed to stop variable substitution */
+   383 *-*     if SUBSTR(PREVPGM,1,1) = '&'
+       *-*      then
+       *-*      PREVPGM = '&'PREVPGM
+   384 *-*     "ISREDIT CHANGE 'PGM=EQANMDBG' 'PGM="PREVPGM"' PREV"
+   385 *-*    end
+   386 *-*   zedsmsg = 'DEBUG STATEMENTS REMOVED'                      /*@L1C*/
+   387 *-*   zedlmsg = 'THE DEBUG STATEMENTS WERE SUCCESSFULLY REMOVED'/*@L1C*/
+   388 *-*   'SETMSG MSG(ISRZ000)'
+   389 *-*  end
+   390 *-* return(0)
+   392 *-* Create_Code_Coverage_Only:
+   393 *-* /* Create code coverage for non-debug session */
+   394 *-* LINE1 = '//'ProcStepOverride'CEEOPTS  DD  *  !INVOCATION FOR'
+   395 *-* LINE2 = 'TEST(ALL,*,PROMPT,MFI:*),ENVAR("EQA_STARTUP_KEY=CC")'
+   396 *-* BELOWX = BELOW || program EQAPGM
+   397 *-* "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (BELOWX)"
+   398 *-* Insert_line# = Insert_line# + 1
+   399 *-* 'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE1)'
+   400 *-* Insert_line# = Insert_line# + 1
+   401 *-* 'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE2)'
+   402 *-* Insert_line# = Insert_line# + 1
+   403 *-* ABOVEX = ABOVE || program EQAPGM
+   404 *-* "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (ABOVEX)"
+   405 *-* "ISREDIT CURSOR = " Insert_line# "1"
+   406 *-* program = Find_or_Change_PGM_name('FIND')
+   407 *-* return(0)
+   409 *-* PopUp_GUI_MFI_TIM:
+   410 *-* /* Panel names end in the same character as the input parm. */
+   411 *-* panel = 'EQAJP'abv_parm
+   412 *-* 'addpop column(0) row(0)'  /* Get info for GUI, MFI, or TIM */
+   413 *-* POP_UP = 'YES'
+   414 *-* 'display panel('panel')'
+   415 *-* if rc = 8
+       *-*  then
+       *-*  do
+   416 *-*   'rempop all'
+   417 *-*   Call Exit_routine
+   418 *-*  end
+   419 *-* return(0)
+   421 *-* Verify_no_CEEOPTS_EQANMDBG:
+   422 *-* /* Verify no other Debug commands are found in the JCL */
+   423 *-* do i = 1 to words(DD_statements)
+   424 *-*  DDNAME = word(DD_statements,i)
+   425 *-*  "ISREDIT FIND FIRST '"DDNAME"' 1 "
+   426 *-*  if rc = 0
+       *-*   then
+       *-*   do
+   427 *-*    zedsmsg = DDNAME 'FOUND'                               /*@L1C*/
+   428 *-*    zedlmsg = 'REMOVE ALL DEBUG COMMANDS BEFORE CREATING NEW ONES'
+   429 *-*    'SETMSG MSG(ISRZ001)'
+   430 *-*    Call Exit_routine /* exit macro, and set cursor to command */
+   431 *-*   end
+   432 *-* end
+   434 *-* "ISREDIT FIND FIRST 'PGM=EQANMDBG'"
+   435 *-* if rc = 0
+       *-*  then
+       *-*  do
+   436 *-*   "ISREDIT (dln,dcol) = CURSOR"
+   437 *-*   "ISREDIT (line) = LINE " dln
+   438 *-*   if substr(line,1,3) <> '//*'
+       *-*    then
+       *-*    do
+   439 *-*     zedsmsg = 'PROGRAM EQANMDBG FOUND'                     /*@L1C*/
+   440 *-*     zedlmsg = 'REMOVE ALL DEBUG COMMANDS BEFORE CREATING NEW ONES'
+   441 *-*     'SETMSG MSG(ISRZ001)'
+   442 *-*     Call Exit_routine /* exit macro, and set cursor to command */
+   443 *-*    end
+   444 *-*  end
+   445 *-* Return(0)
+   447 *-* Table_Program_Name:
+   448 *-* /* Scan JCL lines for PGM=, and table program names */
+   449 *-* "ISREDIT CURSOR = 1 1"
+   450 *-* Call Look_for_programs
+   451 *-* select
+   452 *-* when Lidx = 0
+       *-*  then
+       *-*  do /* Program not found */
+   453 *-*   zedsmsg = 'PROGRAM' EQAPGM 'NOT FOUND'                 /*@L1C*/
+   454 *-*   zedlmsg = 'PROGRAM' EQAPGM 'NOT FOUND IN THIS MEMBER'  /*@L1C*/
+   455 *-*   'SETMSG MSG(ISRZ001)'
+   456 *-*   Call Exit_routine /* exit macro, and set cursor to command */
+   457 *-*  end
+   458 *-* when Lidx > 1
+       *-*  then
+       *-*  do  /* Program found multiple times */
+   459 *-*   rc = Display_PGM_List()
+   460 *-*   if rc = 4
+       *-*    then
+       *-*    do  /* Cancel command issued */
+   461 *-*     "ISREDIT UP MAX"
+   462 *-*     zedsmsg = 'NO PROGRAM SELECTED'                     /*@L1C*/
+   463 *-*     zedlmsg = 'SELECT A PROGRAM TO DEBUG FROM THE PANEL'/*@L1C*/
+   464 *-*     'SETMSG MSG(ISRZ001)'
+   465 *-*     Call Exit_routine /* exit macro, and set cursor to comman */
+   466 *-*    end
+   467 *-*   linenum = word(Sel_Linenums,1)
+   468 *-*  end
+   469 *-* otherwise
+       *-*  nop
+   470 *-* end
+   471 *-* return(0)
+   473 *-* Set_Label_For_Insert_Lines:
+   474 *-* /* Advance to correct line to set the "After" line indicator */
+   475 *-* /* Variable LINENUM is where the program was found */
+   476 *-* "ISREDIT CURSOR = "LINENUM" 1"
+   477 *-* "ISREDIT (linenum,dcol) = CURSOR"
+   478 *-* dln =linenum
+   479 *-* do while dln < lastl
+   480 *-*  dln = dln + 1
+   481 *-*  "ISREDIT CURSOR = "dln"      1"
+   482 *-*  "ISREDIT (line) = LINE " dln
+   483 *-*  if substr(line,1,3) = '// '
+       *-*   then
+       *-*   iterate  /* comment */
+   484 *-*  if substr(line,1,3) = '//*'
+       *-*   then
+       *-*   iterate  /* comment */
+   485 *-*  Insert_line# = dln - 1
+   486 *-*  leave
+   487 *-* end
+   488 *-* if dln = lastl
+       *-*  then
+       *-*  do
+   489 *-*   Insert_line# = dln
+   490 *-*  end
+   491 *-* return(0)
+   493 *-* Verify_Source_data_found:
+   494 *-* /* Verify the LDD member is found in one of the source libraries */
+   495 *-* EQAlibrs = EQAlibrs EQALIB1 EQALIB2 EQALIB3 EQALIB4,                       EQALIB5 EQALIB6
+   497 *-* Eidx = 0
+   498 *-* do I = 1 to words(EQA_Pgms)
+   499 *-*  EQA_pgm = word(EQA_Pgms,i)
+   500 *-*  program = EQA_pgm
+   501 *-*  min_rc = 4
+   502 *-*  do J = 1 to words(EQAlibrs)
+   503 *-*   EQAlibr = word(EQAlibrs,j)
+   504 *-*   'tbadd EqaDltab'
+   505 *-*   Eidx = Eidx + 1
+   506 *-*   tlib = "'"EQAlibr"("EQA_pgm")'"
+   507 *-*   result = sysdsn(tlib)
+   508 *-*   select
+   509 *-*   when result = 'OK'
+       *-*    then
+       *-*    do
+   510 *-*     min_rc = min(min_rc,0)
+   511 *-*    end
+   512 *-*   when result = 'MEMBER NOT FOUND'
+       *-*    then
+       *-*    do
+   513 *-*     min_rc = min(min_rc,4)
+   514 *-*    end
+   515 *-*   otherwise
+       *-*    do
+   516 *-*     zedsmsg = 'DEBUG MEMBER ERROR'                    /*@05C*/
+   517 *-*     zedlmsg = 'FILE ' tlib ' NOT FOUND '              /*@L1C*/
+   518 *-*     'SETMSG MSG(ISRZ001)'
+   519 *-*     Call Exit_routine
+   520 *-*    end
+   521 *-*   end
+   522 *-*  end
+   523 *-*  /* If the member is not located, then display selection lists */
+   524 *-*  if min_rc = 4 & (EQAMethd = 'T')
+       *-*   then
+       *-*   do                  /*@08c*/
+   525 *-*    if Num_Eqalibs = 1
+       *-*     then
+       *-*     do
+   526 *-*      Sourcelib = eqalibr
+   527 *-*     end
+   528 *-*    if Num_Eqalibs > 1
+       *-*     then
+       *-*     do
+   529 *-*      rc = Display_library_selection_list()
+   530 *-*      if rc = 4
+       *-*       then
+       *-*       do  /* Cancel command issued */
+   531 *-*        "ISREDIT UP MAX"
+   532 *-*        zedsmsg = 'REQUEST CANCELED'                     /*@L1C*/
+   533 *-*        zedlmsg = 'DEBUG TOOL WIZARD REQUEST CANCELED'   /*@L1C*/
+   534 *-*        'SETMSG MSG(ISRZ001)'
+   535 *-*        Call Exit_routine /* exit macro, and set cursor to comm */
+   536 *-*       end
+   537 *-*      Sourcelib = word(Sourcelibs,1) /* Get the first one select */
+   538 *-*      /* Delete table entries for next library */
+   539 *-*      'tbtop EqaDltab' /* pointer to top of table       */
+   540 *-*      Do Forever
+   541 *-*       'tbskip EqaDltab number(&ztdtop)'
+   542 *-*       if rc >= 8
+       *-*        then
+       *-*        leave
+   543 *-*       "tbdelete EqaDltab"
+   544 *-*      End
+   545 *-*     end
+   546 *-*    results = Display_member_list("'"Sourcelib"'")
+   547 *-*    parse value results with rc member
+   548 *-*    if member <> ''
+       *-*     then
+       *-*     do
+   549 *-*      sourcedata = sourcedata program Sourcelib member
+   550 *-*     end
+   551 *-*     /* Delete table entries for next set of members */
+   552 *-*    'tbtop EqaMltab' /* pointer to top of table     */
+   553 *-*    Do Forever
+   554 *-*     'tbskip EqaMltab number(&ztdtop)'
+   555 *-*     if rc >= 8
+       *-*      then
+       *-*      leave
+   556 *-*     "tbdelete EqaMltab"
+   557 *-*    End
+   558 *-*   end
+   559 *-* end
+   560 *-* return(0)
+   562 *-* Display_library_selection_list:
+   563 *-* /* Display the EQADEBUG libraries */
+   564 *-* Sourcelibs = ''
+   565 *-* 'tbtop EqaDltab' /* pointer to top of table       */
+   566 *-* cursor2= 'LCMD2' /* initialize cursor row          */
+   567 *-* csrrow = 1      /* initialize cursor row          */
+   568 *-* /* ----------------------------- */
+   569 *-* /* Display table                 */
+   570 *-* /* ----------------------------- */
+   571 *-* Do Forever
+   572 *-*  'tbdispl EQADltab Panel(eqajp11) autosel(NO)',                          'position(crp) csrrow(&csrrow) cursor(&cursor2)
+'
+   574 *-*  If Rc >= 8
+       *-*   Then
+       *-*   Do
+   575 *-*    zedsmsg = 'NO LIBRARY SELECTED'                        /*@L1C*/
+   576 *-*    zedlmsg = 'SELECT A LIBRARY OR CANCEL BEFORE CONTINUING'/*@L1C*/
+   577 *-*    'SETMSG MSG(ISRZ001)'
+   578 *-*   end
+   579 *-*  If Substr(zcmd,1,3) = 'CAN'
+       *-*   Then
+       *-*   Return(4)
+   580 *-*   /* -------------------------- */
+   581 *-*   /* select                     */
+   582 *-*   /* -------------------------- */
+   583 *-*  Do while ztdsels > 0
+   584 *-*   'control display save'
+   585 *-*   Select
+   586 *-*   when lcmd2 = 'S' | lcmd2 = 's'
+       *-*    Then
+       *-*    do
+   587 *-*     lcmd2 = ' '
+   588 *-*     Sourcelibs = Sourcelibs eqalibr
+   589 *-*     if words(Sourcelibs) > 1
+       *-*      then
+       *-*      do
+   590 *-*       zedsmsg = 'SELECT 1 LIBRARY'                    /*@L1C*/
+   591 *-*       zedlmsg = 'SELECT ONE LIBRARY BEFORE CONTINUING'/*@L1C*/
+   592 *-*       'SETMSG MSG(ISRZ000)'
+   593 *-*      end
+   594 *-*     "tbput EqaDltab"
+   595 *-*     'control display restore'                          /*@L2A*/
+   596 *-*     return(0)  /* this line allows Enter key to process */
+   597 *-*    end
+   598 *-*   Otherwise
+   599 *-*   end
+   600 *-*   csrrow  = crp
+   601 *-*   If ztdsels > 1
+       *-*    Then
+       *-*    do
+   602 *-*     "tbput EqaDltab"
+   603 *-*     'control display restore'
+   604 *-*     'tbdispl EqaDltab position(crp)'
+   605 *-*    end
+   606 *-*   Else
+   607 *-*    ztdsels = 0
+   608 *-*  End
+   609 *-*  'tbtop EqaDltab'                    /* position the table */
+   610 *-*  'tbskip EqaDltab number(&ztdtop)'   /* as the user last saw it */
+   611 *-* end
+   612 *-* Return(0)
+   614 *-* Display_member_list:
+   615 *-* /* Display members of the EQADEBUG libraries */
+   616 *-* /* User selects corresponding member         */
+   617 *-* arg langxlib
+   618 *-* members = Get_Members(langxlib) /* routine to get members from dsn */
+   619 *-* if word(members,1) > 0
+       *-*  then
+       *-*  do
+   620 *-*   do m = 2 to words(members)
+   621 *-*    eqambr = word(members,m)
+   622 *-*    "tbadd EqaMltab"
+   623 *-*   end
+   624 *-*  end
+   625 *-* 'tbtop EqaMltab' /* pointer to top of table       */
+   626 *-* cursor2= 'LCMD3' /* initialize cursor row          */
+   627 *-* csrrow = 1      /* initialize cursor row          */
+   628 *-* Sel_members = ''
+   629 *-* if words(members) = 1
+       *-*  then
+       *-*  do  /* no members */
+   630 *-*   zedsmsg = 'NO MEMBERS. PF3 TO EXIT'                       /*@L1C*/
+   631 *-*   zedlmsg = 'NO MEMBERS WERE FOUND IN' langxlib'. PF3 TO EXIT.'
+   632 *-*   'SETMSG MSG(ISRZ001)'
+   633 *-*  end
+   634 *-* Do Forever
+   635 *-*  'tbdispl EQAMltab Panel(eqajp14) autosel(NO)',                          'position(crp) csrrow(&csrrow) cursor(&cursor2)
+'
+   637 *-*  eqamsg1 = ''
+   638 *-*  if rc = 4
+       *-*   then
+       *-*   do
+   639 *-*    zedsmsg = 'TWO OR MORE MEMBERS SELECTED'              /*@L1C*/
+   640 *-*    zedlmsg = 'SELECT ONLY ONE MEMBER. "S" IS A TOGGLE.'  /*@L1C*/
+   641 *-*    'SETMSG MSG(ISRZ001)'
+   642 *-*   end
+   643 *-*  if rc = 8
+       *-*   then
+       *-*   do
+   644 *-*    select
+   645 *-*    when words(members) = 1
+       *-*     then
+       *-*     do /* No members */
+   646 *-*      return(0)
+   647 *-*     end
+   648 *-*    when words(Sel_members) = 0
+       *-*     then
+       *-*     do
+   649 *-*      zedsmsg = 'NO MEMBER SELECTED'                  /*@L1C*/
+   650 *-*      zedlmsg = 'SELECT A MEMBER OR CANCEL BEFORE CONTINUING'
+   651 *-*      'SETMSG MSG(ISRZ001)'
+   652 *-*     end
+   653 *-*    when words(Sel_members) > 1
+       *-*     then
+       *-*     do
+   654 *-*      zedsmsg = 'TWO OR MORE MEMBERS SELECTED'        /*@L1C*/
+   655 *-*      zedlmsg = 'SELECT ONLY ONE MEMBER. "S" IS A TOGGLE.'
+   656 *-*      'SETMSG MSG(ISRZ001)'
+   657 *-*     end
+   658 *-*    otherwise
+       *-*     do
+   659 *-*      return('0' Sel_members)
+   660 *-*     end
+   661 *-*    end
+   662 *-*   end
+   663 *-*  If Substr(zcmd,1,3) = 'CAN'
+       *-*   Then
+       *-*   do
+   664 *-*    "ISREDIT UP MAX"
+   665 *-*    zedsmsg = 'REQUEST CANCELED'                           /*@L1C*/
+   666 *-*    zedlmsg = 'DEBUG TOOL WIZARD REQUEST CANCELED'         /*@L1C*/
+   667 *-*    'SETMSG MSG(ISRZ001)'
+   668 *-*    Call Exit_routine /* exit macro, and set cursor to command */
+   669 *-*   end
+   670 *-*  Do while ztdsels > 0
+   671 *-*   'control display save'
+   672 *-*   Select
+   673 *-*   When translate(lcmd3) = 'S'
+       *-*    Then
+       *-*    do  /* Select a member*/
+   674 *-*     if Eqamsg2 <> '*Selected'
+       *-*      then
+       *-*      do
+   675 *-*       lcmd3 = '*'
+   676 *-*       Eqamsg2 = '*Selected'
+   677 *-*       Sel_members = Sel_members eqambr
+   678 *-*       langxlibnq = strip(translate(langxlib," ","'"))
+   679 *-*       eqamsg1 = 'SET SOURCE ON("'program'")',                                       langxlibnq'('eqambr')'
+   681 *-*       "tbput EqaMltab"
+   682 *-*      end
+   683 *-*     else
+       *-*      do    /* Deselect a member */
+   684 *-*       lcmd3 = '*'
+   685 *-*       x = wordpos(eqambr,Sel_members)
+   686 *-*       if x > 0
+       *-*        then
+       *-*        Sel_members = delword(Sel_members,x)
+   687 *-*       Eqamsg2 = '*DeSelect'
+   688 *-*       "tbput EqaMltab"
+   689 *-*      end
+   690 *-*    end
+   691 *-*   when translate(lcmd3) = 'B'
+       *-*    then
+       *-*    do
+   692 *-*     langxlibnq = strip(translate(langxlib," ","'"))
+   693 *-*     "Browse dataset('"langxlibnq"("eqambr")'"
+   694 *-*    end
+   695 *-*   Otherwise
+   696 *-*   end
+   697 *-*   csrrow  = crp
+   698 *-*   If ztdsels > 1
+       *-*    Then
+       *-*    do
+   699 *-*     "tbput EqaMltab"
+   700 *-*     'control display restore'
+   701 *-*     'tbdispl EqaMltab position(crp)'
+   702 *-*    end
+   703 *-*   Else
+   704 *-*    ztdsels = 0
+   705 *-*  End
+   706 *-*  'tbtop EqaMltab'                    /* position the table */
+   707 *-*  'tbskip EqaMltab number(&ztdtop)'   /* as the user last saw it */
+   708 *-* end
+   709 *-* Return(0)
+   711 *-* Display_PGM_List:
+   712 *-* /* Display list of programs where the statements will be inserted */
+   713 *-* if POP_UP = 'YES'
+       *-*  then
+       *-*  do
+   714 *-*   'rempop all'
+   715 *-*  end
+   716 *-* Sel_linenums = ''
+   717 *-* 'tbtop paneltab' /* pointer to top of table       */
+   718 *-* cursor1= 'LCMD' /* initialize cursor row          */
+   719 *-* csrrow = 1      /* initialize cursor row          */
+   720 *-* /* ----------------------------- */
+   721 *-* /* Display table                 */
+   722 *-* /* ----------------------------- */
+   723 *-* Do Forever
+   724 *-*  'tbdispl paneltab Panel(EQAJP08) autosel(NO)',                          'position(crp) csrrow(&csrrow) cursor(&cursor1)
+'
+   726 *-*  If Rc >= 8
+       *-*   Then
+       *-*   Do
+   727 *-*    zedsmsg = 'NO PROGRAM SELECTED'                        /*@L1C*/
+   728 *-*    zedlmsg = 'SELECT A PROGRAM OR CANCEL BEFORE CONTINUING'/*@L1C*/
+   729 *-*    'SETMSG MSG(ISRZ001)'
+   730 *-*   end
+   731 *-*  If Substr(zcmd,1,3) = 'CAN'
+       *-*   Then
+       *-*   Return(4)
+   732 *-*   /* -------------------------- */
+   733 *-*   /* select                     */
+   734 *-*   /* -------------------------- */
+   735 *-*  Do while ztdsels > 0
+   736 *-*   'control display save'
+   737 *-*   Select
+   738 *-*   When lcmd = 'S' | lcmd = 's'
+       *-*    Then
+       *-*    do
+   739 *-*     lcmd = '*'
+   740 *-*     Sel_linenums = Sel_linenums linenum
+   741 *-*     if words(sel_linenums) > 1
+       *-*      then
+       *-*      do
+   742 *-*       zedsmsg = 'FIRST PROGRAM USED'                   /*@L1C*/
+   743 *-*       zedlmsg = 'THE FIRST PROGRAM SELECTED WILL BE ', /*@L1C*/                  'WHERE THE DEBUG TOOL STATEMENTS ARE IN
+SERTED'/*@L1C*/
+   745 *-*       'SETMSG MSG(ISRZ000)'
+   746 *-*      end
+   747 *-*     "tbput paneltab"
+   748 *-*     'control display restore'                           /*@L2A*/
+   749 *-*     return(0)  /* this line allows Enter key to process */
+   750 *-*    end
+   751 *-*   When lcmd = '*'
+       *-*    Then
+       *-*    nop
+   752 *-*   Otherwise
+   753 *-*   End
+   754 *-*   csrrow  = crp
+   755 *-*   If ztdsels > 1
+       *-*    Then
+       *-*    do
+   756 *-*     "tbput paneltab"
+   757 *-*     'control display restore'
+   758 *-*     'tbdispl paneltab position(crp)'
+   759 *-*    end
+   760 *-*   Else
+   761 *-*    ztdsels = 0
+   762 *-*  End
+   763 *-*  'tbtop paneltab'                    /* position the table */
+   764 *-*  'tbskip paneltab number(&ztdtop)'   /* as the user last saw it */
+   765 *-* end
+   766 *-* Return(0)
+   768 *-* Look_for_programs:
+   769 *-* /* Issue FIND to locate programs in the JCL or procedure or include */
+   770 *-* do forever
+   771 *-*  "ISREDIT FIND PGM= 1 72"
+   772 *-*  if rc = 0
+       *-*   then
+       *-*   do
+   773 *-*    "ISREDIT (dln,dcol) = CURSOR"
+   774 *-*    "ISREDIT (line) = LINE " dln
+   775 *-*    parse value line with label operator operand
+   776 *-*    if substr(label,1,3) <> '//*' & operator = 'EXEC'
+       *-*     then
+       *-*     do
+   777 *-*      program = Get_PGMNAME_from_line()
+   778 *-*      stepname = substr(word(line,1),3)
+   779 *-*      linenum = right(strip(dln,'L','0'),8,' ')
+   780 *-*      Lidx = Lidx + 1
+   781 *-*      seq = Lidx
+   782 *-*      'tbadd paneltab'
+   783 *-*     end
+   784 *-*   end
+   785 *-*  else
+       *-*   do
+   786 *-*    leave
+   787 *-*   end
+   788 *-* end
+   789 *-* return(0)
+   791 *-* Get_PGMNAME_from_line:
+   792 *-* /* Get the program name from the line where EXEC PGM= is found */
+   793 *-* x = pos(',',line,dcol + 4)
+   794 *-* if x = 0
+       *-*  then
+       *-*  x = pos(' ',line,dcol+4)
+   795 *-* if x > 0
+       *-*  then
+       *-*  do
+   796 *-*   program = substr(line,dcol+4,x - dcol - 4)
+   797 *-*  end
+   798 *-* return(program)
+   800 *-* Check_Zdest:
+   801 *-* /* If the A/B line command is found, set LINENUM to the line where */
+   802 *-* /* the code is to be inserted. The same variable is used when pgm  */
+   803 *-* /* selection is used to identify where the lines are inserted      */
+   804 *-* zdest = 0
+   805 *-* 'ISREDIT PROCESS DEST'
+   806 *-* Select
+   807 *-* When rc = 0
+       *-*  Then
+       *-*  do
+   808 *-*   'ISREDIT (zdest) = LINENUM .ZDEST'
+   809 *-*   /* For LE programs, display panel for Procedure override var */
+   810 *-*   if EQALE = 'YES'
+       *-*    then
+       *-*    do
+   811 *-*     'addpop column(0) row(0)'
+   812 *-*     POP_UP = 'YES'
+   813 *-*     'display panel(eqajp06)'
+   814 *-*     if rc = 8
+       *-*      then
+       *-*      do
+   815 *-*       'rempop all'
+   816 *-*       Call Exit_routine
+   817 *-*      end
+   818 *-*     if EQAPROCO <> ''
+       *-*      then
+       *-*      do
+   819 *-*       ProcStepOverride = EQAPROCO'.'
+   820 *-*      end
+   821 *-*    end
+   822 *-*  end
+   823 *-* When rc <= 8
+       *-*  Then /* No A or B entered */
+   824 *-*  return(4)
+   825 *-* When rc < 20
+       *-*  Then /* Conflicting line commands - edit sets messa */
+   826 *-*  Exit 12
+   827 *-* When rc = 20
+       *-*  Then
+   828 *-*  zdest = 0
+   829 *-* Otherwise
+   830 *-*  Exit 12
+   831 *-* End
+   832 *-* return(0)
+   834 *-* Insert_Debug_Lines:
+   835 *-* /* Insert_line# is the line before all the JCL is inserted */
+   836 *-* if zdest > 0
+       *-*  then
+       *-*  do
+   837 *-*   Insert_line# = zdest  /* Set to insert line DD */
+   838 *-*   "ISREDIT CURSOR = " Insert_Line# " 1"
+   839 *-*  end
+   840 *-*  /* Send instructions for Non-LE DB2 program invocation */
+   841 *-* program = Find_or_Change_PGM_name('FIND')
+   842 *-* if EQALE = 'NO' & program = 'IKJEFT01'
+       *-*  then
+       *-*  do
+   843 *-*   'Addpop column(0) row(0)'  /* Get error panel */
+   844 *-*   POP_UP = 'YES'
+   845 *-*   'display panel(eqajp09)'
+   846 *-*   if rc = 8
+       *-*    then
+       *-*    do
+   847 *-*     'rempop all'
+   848 *-*     Call Exit_routine
+   849 *-*    end
+   850 *-*   zedsmsg = 'NON-LE AND DB2 UNSUPPORTED'                    /*@L1C*/
+   851 *-*   zedlmsg = 'DEBUG TOOL WIZARD DOES NOT SUPPORT NON-LE' || ,/*@L1C*/                ' AND DB2 PROGRAM INVOCATION'
+   853 *-*   'SETMSG MSG(ISRZ000)'
+   854 *-*   "ISREDIT LOCATE 0"
+   855 *-*   Call Exit_routine
+   856 *-*  end
+   857 *-* if EQAMethd = 'C'
+       *-*  then
+       *-*  do
+   858 *-*   call Create_Code_Coverage_only
+   859 *-*   Call Create_Code_Coverage_statements
+   860 *-*  end
+   861 *-* else
+       *-*  do
+   862 *-*   if EQALE = 'YES'
+       *-*    then
+       *-*    do
+   863 *-*     call Insert_CEEOPTS_data
+   864 *-*    end
+   865 *-*   else
+       *-*    do
+   866 *-*     call Insert_EQANMDBG_data
+   867 *-*    end
+   868 *-*  end
+   869 *-* zedsmsg = 'DT STATEMENTS ADDED'                              /*@L1C*/
+   870 *-* zedlmsg = 'DEBUG TOOL STATEMENTS ADDED'                      /*@L1C*/
+   871 *-* 'SETMSG MSG(ISRZ000)'
+   872 *-* return(0)
+   874 *-* Insert_CEEOPTS_data:
+   875 *-* /* Insert CEEOPTS (LE) statements to invoke Debug Tool */
+   876 *-* LINE1 = '//'ProcStepOverride'CEEOPTS  DD  *  !INVOCATION FOR'
+   877 *-* select
+   878 *-* when EQAMethd = 'G1'
+       *-*  then
+       *-*  do   /* Remote GUI */            /*@08c*/
+   879 *-*   LINE1 = LINE1 'REMOTE GUI'
+   880 *-*   LINE2 = 'TEST(,EQACMD,,TCPIP&'EQAIPADR'%'EQAPORT':)'
+   881 *-*  end
+   882 *-* when EQAMethd = 'G2'
+       *-*  then
+       *-*  do   /* Remote GUI */            /*@08a*/
+   883 *-*   LINE1 = LINE1 'REMOTE GUI'                               /*@08a*/
+   884 *-*   LINE2 = 'TEST(,EQACMD,,DBMDT%'EQAUSER':)'                /*@08a*/
+   885 *-*  end                                                        /*@08a*/
+   886 *-*  /*8@08d*/
+   887 *-* when EQAMethd = 'T'
+       *-*  then
+       *-*  do   /* Terminal Interface Mgr */
+   888 *-*   LINE1 = LINE1 'TERMINAL INTERFACE MANAGER'
+   889 *-*   LINE2 = 'TEST(,EQACMD,,VTAM%'EQAUSER':)'
+   890 *-*  end
+   891 *-* when EQAMethd = 'D'
+       *-*  then
+       *-*  do   /* Delayed Debug */
+   892 *-*   LINE1 = LINE1 'DELAYED DEBUG INVOCATION'
+   893 *-*   LINE2 = 'TEST'
+   894 *-*  end
+   895 *-* otherwise
+       *-*  nop
+   896 *-* end
+   897 *-* BELOWX = BELOW || program EQAPGM
+   898 *-* "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (BELOWX)"
+   899 *-* Insert_line# = Insert_line# + 1
+   900 *-* 'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE1)'
+   901 *-* Insert_line# = Insert_line# + 1
+   902 *-* if EQACC = '/'
+       *-*  then
+       *-*  do
+   903 *-*   LINE2 = LINE2 || ','
+   904 *-*  end
+   905 *-* 'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE2)'
+   906 *-* Insert_line# = Insert_line# + 1
+   907 *-* if EQACC = '/'
+       *-*  then
+       *-*  do
+   908 *-*   LINE2A = 'ENVAR("EQA_STARTUP_KEY=DCC")'
+   909 *-*   'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE2A)'
+   910 *-*   Insert_line# = Insert_line# + 1
+   911 *-*  end
+   912 *-* if EQAMethd <> 'D'
+       *-*  then
+       *-*  do  /* not for Delayed Debug */
+   913 *-*   line3 = '//'ProcStepOverride'EQACMD   DD *'
+   914 *-*   'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE3)'
+   915 *-*   Insert_line# = Insert_line# + 1
+   916 *-*   if EQAMethd <> 'G1' & EQAMethd <> 'G2'
+       *-*    then
+       *-*    do            /*@08c*/
+   917 *-*     if EQADTLOG = '/'
+       *-*      then
+       *-*      do
+   918 *-*       line3a = ' SET LOG ON FILE INSPLOG;'
+   919 *-*       'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE3A)'
+   920 *-*       Insert_line# = Insert_line# + 1
+   921 *-*      end
+   922 *-*     else
+       *-*      do
+   923 *-*       line3a = ' SET LOG OFF;'
+   924 *-*       'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE3A)'
+   925 *-*       Insert_line# = Insert_line# + 1
+   926 *-*      end
+   927 *-*    end
+   928 *-*   if EQAAUTOM = '/'
+       *-*    then
+       *-*    do  /* Automonitor needed */
+   929 *-*     line4 = ' SET AUTO ON BOTH;'
+   930 *-*     'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE4)'
+   931 *-*     Insert_line# = Insert_line# + 1
+   932 *-*    end
+   933 *-*   else
+       *-*    do
+   934 *-*     line4 = ' SET AUTO OFF;'
+   935 *-*     'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE4)'
+   936 *-*     Insert_line# = Insert_line# + 1
+   937 *-*    end
+   938 *-*   if EQACC = '/'
+       *-*    then
+       *-*    do
+   939 *-*     Call Create_Code_Coverage_statements
+   940 *-*    end
+   941 *-*  end
+   942 *-* if EQAMethd <> 'D'
+       *-*  then
+       *-*  do  /* not for Delayed Debug */    /* @04A */
+   943 *-*   if EQAWARN = '/'
+       *-*    then
+       *-*    do
+   944 *-*     line3x = ' SET WARN ON;'
+   945 *-*    end
+   946 *-*   else
+       *-*    do
+   947 *-*     line3x = ' SET WARN OFF;'
+   948 *-*    end
+   949 *-*   'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE3X)'
+   950 *-*   Insert_line# = Insert_line# + 1
+   951 *-*   call Add_LDD_for_Subprograms
+   952 *-*  end                                                        /* @04A */
+   953 *-* call Add_AT_Entry_lines
+   954 *-* if words(sourcedata) > 0
+       *-*  then
+       *-*  do
+   955 *-*   do k = 1 to words(sourcedata) by 3
+   956 *-*    line = ' SET SOURCE ON ("'word(sourcedata,k)'")'
+   957 *-*    'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+   958 *-*    Insert_line# = Insert_line# + 1
+   959 *-*    line = '     'word(sourcedata,k+1)'('word(sourcedata,k+2)');'
+   960 *-*    'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+   961 *-*    Insert_line# = Insert_line# + 1
+   962 *-*   end
+   963 *-*  end
+   964 *-* call Insert_comments
+   965 *-* if EQALIBS = '/'
+       *-*  then
+       *-*  do
+   966 *-*   call Add_EQADEBUG_Libraries
+   967 *-*  end
+   968 *-* if EQAMethd <> 'G1' & EQAMethd <> 'G2' & EQADTLOG = '/'
+       *-*  then
+       *-*  do
+   969 *-*   line5 = '//'ProcStepOverride'INSPLOG  DD SYSOUT=*'
+   970 *-*   'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE5)'
+   971 *-*   Insert_line# = Insert_line# + 1
+   972 *-*  end
+   973 *-* ABOVEX = ABOVE || program EQAPGM
+   974 *-* "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (ABOVEX)"
+   975 *-* "ISREDIT CURSOR = " Insert_line# "1"
+   976 *-* program = Find_or_Change_PGM_name('FIND')
+   977 *-* return(0)
+   979 *-* Insert_EQANMDBG_data:
+   980 *-* /* Insert Non-LE Debug invocation statements. */
+   981 *-* /* The name of the program is changed to EQANMDBG */
+   982 *-* LINE1 = '//'ProcStepOverride'EQANMDBG DD  *  !INVOCATION FOR'
+   983 *-* select
+   984 *-* when EQAMethd = 'G1'
+       *-*  then
+       *-*  do                             /*@09c*/
+   985 *-*   LINE1 = LINE1 'REMOTE GUI'
+   986 *-*   LINE2 = EQAPGM',TEST(,EQACMD,,TCPIP&'EQAIPADR'%'EQAPORT':)'
+   987 *-*  end
+   989 *-* when EQAMethd = 'G2'
+       *-*  then
+       *-*  do                             /*@09a*/
+   990 *-*   LINE1 = LINE1 'REMOTE GUI'                             /*@09a*/
+   991 *-*   LINE2 = EQAPGM',TEST(,EQACMD,,DBMDT%'EQAUSER':)'       /*@09a*/
+   992 *-*  end
+   993 *-*  /*8@08d*/
+   994 *-* when EQAMethd = 'T'
+       *-*  then
+       *-*  do
+   995 *-*   LINE1 = LINE1 'TERMINAL INTERFACE MANAGER'
+   996 *-*   LINE2 = EQAPGM',TEST(,EQACMD,,VTAM%'EQAUSER':)'
+   997 *-*  end
+   998 *-* otherwise
+       *-*  nop
+   999 *-* end
+  1000 *-* /* Add Debug Tool statements to the JCL or procedure  */
+  1001 *-* BELOWX = BELOW || program EQAPGM
+  1002 *-* "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (BELOWX)"
+  1003 *-* Insert_line# = Insert_line# + 1
+  1004 *-* 'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE1)'
+  1005 *-* Insert_line# = Insert_line# + 1
+  1006 *-* 'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE2)'
+  1007 *-* Insert_line# = Insert_line# + 1
+  1008 *-* line3 = '//'ProcStepOverride'EQACMD   DD *'
+  1009 *-* 'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE3)'
+  1010 *-* Insert_line# = Insert_line# + 1
+  1011 *-* if EQAMethd <> 'G1' & EQAMethd <> 'G2'
+       *-*  then
+       *-*  do               /*@08c*/
+  1012 *-*   if EQADTLOG = '/'
+       *-*    then
+       *-*    do
+  1013 *-*     line3a = ' SET LOG ON FILE INSPLOG;'
+  1014 *-*     'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE3A)'
+  1015 *-*     Insert_line# = Insert_line# + 1
+  1016 *-*    end
+  1017 *-*   else
+       *-*    do
+  1018 *-*     line3a = ' SET LOG OFF;'
+  1019 *-*     'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE3A)'
+  1020 *-*     Insert_line# = Insert_line# + 1
+  1021 *-*    end
+  1022 *-*  end
+  1023 *-* if EQAAUTOM = '/'
+       *-*  then
+       *-*  do  /* Automonitor needed */
+  1024 *-*   line4 = ' SET AUTO ON BOTH;'
+  1025 *-*   'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE4)'
+  1026 *-*   Insert_line# = Insert_line# + 1
+  1027 *-*  end
+  1028 *-* else
+       *-*  do
+  1029 *-*   line4 = ' SET AUTO OFF;'
+  1030 *-*   'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE4)'
+  1031 *-*   Insert_line# = Insert_line# + 1
+  1032 *-*  end
+  1033 *-* call Add_LDD_for_Subprograms
+  1034 *-* call Add_AT_Entry_lines
+  1035 *-* if words(sourcedata) > 0
+       *-*  then
+       *-*  do
+  1036 *-*   do k = 1 to words(sourcedata) by 3
+  1037 *-*    line = ' SET SOURCE ON ("'word(sourcedata,k)'")'
+  1038 *-*    'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1039 *-*    Insert_line# = Insert_line# + 1
+  1040 *-*    line = '     'word(sourcedata,k+1)'('word(sourcedata,k+2)');'
+  1041 *-*    'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1042 *-*    Insert_line# = Insert_line# + 1
+  1043 *-*   end
+  1044 *-*  end
+  1045 *-* call Insert_comments
+  1046 *-* if EQALIBS = '/'
+       *-*  then
+       *-*  do
+  1047 *-*   call Add_EQADEBUG_Libraries
+  1048 *-*  end
+  1049 *-* if EQAMethd <> 'G1' & EQAMethd <> 'G2' & EQADTLOG = '/'
+       *-*  then
+       *-*  do
+  1050 *-*   line5 = '//'ProcStepOverride'INSPLOG  DD SYSOUT=*'
+  1051 *-*   'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE5)'
+  1052 *-*   Insert_line# = Insert_line# + 1
+  1053 *-*  end
+  1054 *-* LINE = '//*!UNCOMMENT THE TWO LINES BELOW IF YOU WANT TO DEBUG AN'
+  1055 *-* LINE = LINE 'LE SUBPROGRAM'
+  1056 *-* 'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1057 *-* Insert_line# = Insert_line# + 1
+  1058 *-* LINE  = '//* //'PROCSTEPOVERRIDE'CEEOPTS DD  *'
+  1059 *-* LINE = LINE '!REQUIRED ONLY FOR LE SUBPROGRAM DEBUGGING'
+  1060 *-* 'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1061 *-* Insert_line# = Insert_line# + 1
+  1062 *-* LINE = '//* TEST'
+  1063 *-* 'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1064 *-* Insert_line# = Insert_line# + 1
+  1065 *-* ABOVEX = ABOVE || program EQAPGM
+  1066 *-* "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (ABOVEX)"
+  1068 *-* "ISREDIT CURSOR = " Insert_line# "1"
+  1069 *-* program = Find_or_Change_PGM_name('CHANGE EQANMDBG')
+  1070 *-* return(0)
+  1072 *-* Create_Code_Coverage_statements:
+  1073 *-* /* Create statements to invoke Code Coverage when debugging */
+  1074 *-* line = '//'ProcStepOverride'EQAOPTS DD *'
+  1075 *-* 'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1076 *-* Insert_line# = Insert_line# + 1
+  1077 *-* if CODE_COVERAGE_SETUP = 'YES'
+       *-*  then
+       *-*  do
+  1078 *-*   line = " EQAXOPT  CCPROGSELECTDSN,'&&USERID.DBGTOOL.CCPRGSEL'"
+  1079 *-*   'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1080 *-*   Insert_line# = Insert_line# + 1
+  1081 *-*   line = " EQAXOPT  CCOUTPUTDSN,'&&USERID.DBGTOOL.CCOUTPUT'"
+  1082 *-*   'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1083 *-*   Insert_line# = Insert_line# + 1
+  1084 *-*   line = " EQAXOPT  CCOUTPUTDSNALLOC,'MGMTCLAS(STANDARD)",                      copies(' ',24)"+"
+  1086 *-*   'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1087 *-*   Insert_line# = Insert_line# + 1
+  1088 *-*   line = copies(' ',15),                                                        "STORCLAS(DEFAULT) LRECL(255) BLKSIZE(0)
+ RECFM(V,B)",                    copies(' ',4)"+"
+  1091 *-*   'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1092 *-*   Insert_line# = Insert_line# + 1
+  1093 *-*   line = "            DSORG(PS) SPACE(2,2) CYL'"
+  1094 *-*   'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1095 *-*   Insert_line# = Insert_line# + 1
+  1096 *-*   line = " EQAXOPT END"
+  1097 *-*   'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1098 *-*   Insert_line# = Insert_line# + 1
+  1099 *-*  end
+  1100 *-* return(0)
+  1102 *-* Find_or_Change_PGM_name:
+  1103 *-* /* Subprogram to locate a program in JCL, procedure or include */
+  1104 *-* /* Optionally change program name to EQANMDBG */
+  1105 *-* arg action Tpgm
+  1106 *-* program = ''
+  1107 *-* if zdest > 0
+       *-*  then
+       *-*  do
+  1108 *-*   "ISREDIT (dln,dcol) = CURSOR"
+  1109 *-*   if dln < lastl
+       *-*    then
+       *-*    do
+  1110 *-*     dln = dln + 1
+  1111 *-*     "ISREDIT CURSOR = "dln" 1"
+  1112 *-*    end
+  1113 *-*  end
+  1114 *-* do forever
+  1115 *-*  "ISREDIT FIND WORD EXEC PREV"
+  1116 *-*  if rc > 0
+       *-*   then
+       *-*   leave
+  1117 *-*  "ISREDIT (dln,dcol) = CURSOR"
+  1118 *-*  "ISREDIT (line) = LINE " dln
+  1119 *-*  if substr(line,1,3) = '//*'
+       *-*   then
+       *-*   iterate
+  1120 *-*  x = pos('EXEC',line)
+  1121 *-*  dcol = pos('PGM=',line,x)  /* reposition to PGM= */
+  1122 *-*  if dcol > 0
+       *-*   then
+       *-*   do
+  1123 *-*    program = Get_pgmname_from_line()
+  1124 *-*    if action = 'CHANGE'
+       *-*     then
+       *-*     do
+  1125 *-*      Spgm = program
+  1126 *-*      /* Double && needed to stop variable substitution */
+  1127 *-*      if SUBSTR(Spgm,1,1) = '&'
+       *-*       then
+       *-*       Spgm = '&'Spgm
+  1128 *-*      "ISREDIT CHANGE PGM="Spgm" PGM="Tpgm
+  1129 *-*     end
+  1130 *-*    leave
+  1131 *-*   end
+  1132 *-*  else
+       *-*   leave
+  1133 *-* end
+  1134 *-* return(program)
+  1136 *-* Add_EQADEBUG_Libraries:
+  1137 *-* /* Add EQADEBUG DD Statements */
+  1138 *-* if EQALIB1 = '' & EQALIB2 = '' & EQALIB3 = '' & ,                          EQALIB4 = '' & EQALIB5 = '' & EQALIb6 = ''
+  1139 *-*  then
+       *-*  nop
+  1140 *-* else
+       *-*  do
+  1141 *-*   EQADEBUG_prefix = '//'ProcStepOverride'EQADEBUG DD'
+  1142 *-*   call Process_EQALIB(eqalib1)
+  1143 *-*   call Process_EQALIB(eqalib2)
+  1144 *-*   call Process_EQALIB(eqalib3)
+  1145 *-*   call Process_EQALIB(eqalib4)
+  1146 *-*   call Process_EQALIB(eqalib5)
+  1147 *-*   call Process_EQALIB(eqalib6)
+  1148 *-*  end
+  1149 *-* return(0)
+  1151 *-* Validate_EQALIB:
+  1152 *-* /* Validate the EQADEBUG library is cataloged */
+  1153 *-* arg eqalib
+  1154 *-* if EQALIB <> ''
+       *-*  then
+       *-*  do
+  1155 *-*   if sysdsn("'"eqalib"'") ¬= OK
+       *-*    then
+       *-*    do
+  1156 *-*     zedsmsg = 'INVALID DT LIB - PF1'                       /*@L1C*/
+  1157 *-*     zedlmsg = 'DEBUG TOOL DEBUG LIBRARY' eqalib 'NOT FOUND'/*@05C*/
+  1158 *-*     'SETMSG MSG(ISRZ000)'
+  1159 *-*     return(8)
+  1160 *-*    end
+  1161 *-*   Num_Eqalibs = Num_Eqalibs + 1
+  1162 *-*  end
+  1163 *-* return(0)
+  1165 *-* Process_EQALIB:
+  1166 *-* /* Subroutine to insert the EQADEBUG statement */
+  1167 *-* arg eqalib
+  1168 *-* if EQALIB <> ''
+       *-*  then
+       *-*  do
+  1169 *-*   line = EQADEBUG_prefix 'DISP=SHR,DSN='EQALIB
+  1170 *-*   EQADEBUG_prefix = '//         DD'
+  1171 *-*   'ISREDIT LINE_AFTER ' Insert_line# '  = DATALINE (LINE)'
+  1172 *-*   Insert_line# = Insert_line# + 1
+  1173 *-*   Num_Eqalibs = Num_Eqalibs + 1
+  1174 *-*  end
+  1175 *-* return(0)
+  1177 *-* Add_LDD_for_Subprograms:
+  1178 *-* /* Insert LDD statements */
+  1179 *-* if EQA_Pgms <> ''
+       *-*  then
+       *-*  do
+  1180 *-*   line = ' SET LDD ALL;'
+  1181 *-*   'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE)'
+  1182 *-*   Insert_line# = Insert_line# + 1
+  1183 *-*   if wordpos(EQAPGM,EQA_pgms) = 0
+       *-*    then
+       *-*    do
+  1184 *-*     call Add_LDD_line(EQAPGM)
+  1185 *-*    end
+  1186 *-*   do Pidx = 1 to words(EQA_pgms)
+  1187 *-*    call Add_LDD_line(word(EQA_pgms,Pidx))
+  1188 *-*   end
+  1189 *-*  end
+  1190 *-* return(0)
+  1192 *-* Add_LDD_Line:
+  1193 *-* /* Add LDD line subroutine */
+  1194 *-* arg pgm
+  1195 *-* if pgm <> ''
+       *-*  then
+       *-*  do
+  1196 *-*   line = ' LDD' pgm';'
+  1197 *-*   'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE)'
+  1198 *-*   Insert_line# = Insert_line# + 1
+  1199 *-*  end
+  1200 *-* return(0)
+  1202 *-* Add_AT_Entry_lines:
+  1203 *-* /* Add AT ENTRY line subprogram */
+  1204 *-* if EQAATENT = '/'
+       *-*  then
+       *-*  do
+  1205 *-*   if EQAATENC = '/'
+       *-*    then
+       *-*    do
+  1206 *-*     line = ' CLEAR AT ENTRY;'
+  1207 *-*     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1208 *-*     Insert_line# = Insert_line# + 1
+  1209 *-*    end
+  1210 *-*   do nn = 1 to 9
+  1211 *-*    nn = right(nn,2,0)
+  1212 *-*    EQALMD = value("EQALMD"nn)
+  1213 *-*    if EQALMD = ''
+       *-*     then
+       *-*     EQALMD = '¬'
+  1214 *-*    EQALPG = value("EQALPG"nn)
+  1215 *-*    if EQALPG <> ''
+       *-*     then
+       *-*     rc = Create_AT_Entry_Cmd(EQALMD,EQALPG)
+  1216 *-*   end
+  1217 *-*  end
+  1218 *-* return(0)
+  1220 *-* Create_AT_Entry_Cmd:
+  1221 *-* /* Determine which format to use for AT ENTRY command, create line */
+  1222 *-* arg EQALMD,EQALPG
+  1223 *-* if EQALMD = '¬'
+       *-*  then
+       *-*  do
+  1224 *-*   line = " AT ENTRY" EQALPG";"  /* No loadmod defined */
+  1225 *-*   'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1226 *-*   Insert_line# = Insert_line# + 1
+  1227 *-*  end
+  1228 *-* else
+       *-*  do
+  1229 *-*   line = " AT ENTRY" EQALMD"::>"EQALPG";"
+  1230 *-*   'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  1231 *-*   Insert_line# = Insert_line# + 1
+  1232 *-*  end
+  1233 *-* return(0)
+  1235 *-* Insert_comments:
+  1236 *-* /* Insert GUI or MFI/TIM comments on how to locate source program */
+  1237 *-* /*  and set a breakpoint prior to invocation */
+  1238 *-* If EQASHOWC = '/'
+       *-*  then
+       *-*  do
+  1239 *-*   /* TIM/MFI shows comments with COMMENT in col 1 */
+  1240 *-*   /*8@08d*/
+  1241 *-*   /* GUI recognizes comments differently */
+  1242 *-*   if EqaMethd = 'G1' | EQAMethd = 'G2'
+       *-*    then
+       *-*    do              /*@08c*/
+  1243 *-*     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC1)'
+  1244 *-*     Insert_line# = Insert_line# + 1
+  1245 *-*     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC2)'
+  1246 *-*     Insert_line# = Insert_line# + 1
+  1247 *-*     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC3)'
+  1248 *-*     Insert_line# = Insert_line# + 1
+  1249 *-*     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC4)'
+  1250 *-*     Insert_line# = Insert_line# + 1
+  1251 *-*     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC5)'
+  1252 *-*     Insert_line# = Insert_line# + 1
+  1253 *-*     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC6)'
+  1254 *-*     Insert_line# = Insert_line# + 1
+  1255 *-*     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC7)'
+  1256 *-*     Insert_line# = Insert_line# + 1
+  1257 *-*     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC8)'
+  1258 *-*     Insert_line# = Insert_line# + 1
+  1259 *-*     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC9)'
+  1260 *-*     Insert_line# = Insert_line# + 1
+  1261 *-*     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC10)'
+  1262 *-*     Insert_line# = Insert_line# + 1
+  1263 *-*    end
+  1264 *-*  end
+  1265 *-* return(0)
+  1267 *-* Get_Members:
+  1268 *-* /* rexx routine to return members of a PDS */
+  1269 *-* arg orgdsn
+  1270 *-* address ispexec
+  1271 *-* "lminit dataid(ddvar) dataset(&orgdsn) enq(shr)"
+  1272 *-* if  rc ¬= 0
+       *-*  then
+       *-*  do
+  1273 *-*   "setmsg msg(isru213)"   /* init   error      */
+  1274 *-*   Call Exit_routine
+  1275 *-*  end
+  1276 *-* "lmopen  dataid(&ddvar) option(input) org(orgvar)"
+  1277 *-* if  rc ¬= 0
+       *-*  then
+       *-*  do
+  1278 *-*   "lmfree dataid(&ddvar)"
+  1279 *-*   "setmsg msg(isru213)"   /* open   error      */
+  1280 *-*  end
+  1281 *-* member_list = ''
+  1282 *-* memb = ''
+  1283 *-* idx = 0
+  1284 *-* do forever
+  1285 *-*  "lmmlist dataid(&ddvar) option(list) member(memb) stats(no)"
+  1286 *-*  select
+  1287 *-*  when rc = 0
+       *-*   then
+       *-*   do
+  1288 *-*    idx = idx + 1
+  1289 *-*    member_list = member_list memb
+  1290 *-*   end
+  1291 *-*  when rc = 4
+       *-*   then
+       *-*   do
+  1292 *-*    call Get_mem_dataset_close
+  1293 *-*    return(0)
+  1294 *-*   end
+  1295 *-*  when rc = 8
+       *-*   then
+       *-*   leave
+  1296 *-*  otherwise
+       *-*   do
+  1297 *-*    call Get_mem_dataset_close
+  1298 *-*    "setmsg msg(isru213)"   /* severe error      */
+  1299 *-*    Call Exit_routine
+  1300 *-*   end
+  1301 *-*  end
+  1302 *-* end
+  1303 *-* call Get_mem_dataset_close
+  1304 *-* return(idx member_list)
+  1306 *-* Get_mem_dataset_close:
+  1307 *-* /* Close data sets */
+  1308 *-* "lmmlist dataid(&ddvar) option(free)"
+  1309 *-* "lmclose dataid(&ddvar)"
+  1310 *-* "lmfree dataid(&ddvar)"
+  1311 *-* return(0)
+  1313 *-* Exit_routine:
+  1314 *-* /* All exits should route through this routine */
+  1315 *-* EQAPMEM = curmem  /* Current member name */
+  1316 *-* "VPUT (EQAPMEM) PROFILE"
+  1317 *-* 'tbend paneltab'
+  1318 *-* 'tbend EqaDltab'
+  1319 *-* 'tbend EqaMltab'
+  1320 *-* "ISPEXEC LIBDEF ISPPLIB"
+  1321 *-* Exit(1)
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Variable (set w/rexx)   above                                Assigned : 182
+Variable (used in/rexx) above                                Reference: 374 403 973 1065
+
+Variable (set w/rexx)   abovex                               Assigned : 403 973 1065
+Variable (NEVER USED)   abovex                               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   above_old                            Assigned : 184
+Variable (used in/rexx) above_old                            Reference: 377
+
+Variable (set w/rexx)   abv_parm                             Assigned : 217 227
+Variable (used in/rexx) abv_parm                             Reference: 130 134 218 231 232 235 238 239 241 243 411
+
+Variable (set w/rexx)   action                               Assigned : 1105
+Variable (used in/rexx) action                               Reference: 1124
+
+Address Envir.Constant: ADDRESS 'ISPEXEC'                    Reference: 104 1270
+
+Address Envir.Constant: ADDRESS 'TSO' <cmd>                  Reference: 278
+
+Label (internal label)  ADD_AT_ENTRY_LINES                   Defined  : 1202
+Label (int. label ref)  ADD_AT_ENTRY_LINES                   Reference: C(953) C(1034)
+
+Label (internal label)  ADD_EQADEBUG_LIBRARIES               Defined  : 1136
+Label (int. label ref)  ADD_EQADEBUG_LIBRARIES               Reference: C(966) C(1047)
+
+Label (internal label)  ADD_LDD_FOR_SUBPROGRAMS              Defined  : 1177
+Label (int. label ref)  ADD_LDD_FOR_SUBPROGRAMS              Reference: C(951) C(1033)
+
+Label (internal label)  ADD_LDD_LINE                         Defined  : 1192
+Label (int. label ref)  ADD_LDD_LINE                         Reference: C(1184) C(1187)
+
+Variable (set w/rexx)   below                                Assigned : 181
+Variable (used in/rexx) below                                Reference: 360 396 897 1001
+
+Variable (set w/rexx)   belowx                               Assigned : 396 897 1001
+Variable (NEVER USED)   belowx                               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   below_old                            Assigned : 183
+Variable (used in/rexx) below_old                            Reference: 365
+
+Label (internal label)  CHECK_ZDEST                          Defined  : 800
+Label (int. label ref)  CHECK_ZDEST                          Reference: F(136)
+
+Variable (set w/rexx)   code_coverage_setup                  Assigned : 74
+Variable (used in/rexx) code_coverage_setup                  Reference: 1077
+
+Built-In+/External use  COPIES                               Reference: F(1084) F(1088)
+
+Label (internal label)  CREATE_AT_ENTRY_CMD                  Defined  : 1220
+Label (int. label ref)  CREATE_AT_ENTRY_CMD                  Reference: F(1215)
+
+Label (internal label)  CREATE_CODE_COVERAGE_ONLY            Defined  : 392
+Label (int. label ref)  CREATE_CODE_COVERAGE_ONLY            Reference: C(858)
+
+Label (internal label)  CREATE_CODE_COVERAGE_STATEMENTS      Defined  : 1072
+Label (int. label ref)  CREATE_CODE_COVERAGE_STATEMENTS      Reference: C(859) C(939)
+
+Variable (NEVER SET)    CRP                                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) CRP                                  Reference: 600 697 754
+
+Variable (set w/rexx)   csrrow                               Assigned : 567 600 627 697 719 754
+Variable (NEVER USED)   csrrow                               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (NEVER SET)    CURMEM                               Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) CURMEM                               Reference: 323 1315
+
+Variable (set w/rexx)   cursor1                              Assigned : 718
+Variable (NEVER USED)   cursor1                              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   cursor2                              Assigned : 566 626
+Variable (NEVER USED)   cursor2                              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dcol                                 Assigned : 1121
+Variable (used in/rexx) dcol                                 Reference: 793 794 796 1122
+
+Variable (set w/rexx)   ddname                               Assigned : 424
+Variable (used in/rexx) ddname                               Reference: 425 427
+
+Variable (set w/rexx)   dd_statements                        Assigned : 148
+Variable (used in/rexx) dd_statements                        Reference: 423 424
+
+Variable (set w/rexx)   debug_eqajcl                         Assigned : 361 363 367
+Variable (used in/rexx) debug_eqajcl                         Reference: 369 373
+
+Built-In+/External use  DELWORD                              Reference: F(686)
+
+Label (internal label)  DISPLAY_LIBRARY_SELECTION_LIST       Defined  : 562
+Label (int. label ref)  DISPLAY_LIBRARY_SELECTION_LIST       Reference: F(529)
+
+Label (internal label)  DISPLAY_MEMBER_LIST                  Defined  : 614
+Label (int. label ref)  DISPLAY_MEMBER_LIST                  Reference: F(546)
+
+Label (internal label)  DISPLAY_PGM_LIST                     Defined  : 711
+Label (int. label ref)  DISPLAY_PGM_LIST                     Reference: F(459)
+
+Variable (set w/rexx)   dln                                  Assigned : 478 480 1110
+Variable (used in/rexx) dln                                  Reference: 437 479 480 481 482 485 488 489 774 779 1109 1110 1111 1118
+
+Variable (set w/rexx)   dt_ispplib                           Assigned : 122 125
+Variable (used in/rexx) dt_ispplib                           Reference: 146 277 281
+
+Variable (set w/rexx)   dt_seqaexec                          Assigned : 120
+Variable (used in/rexx) dt_seqaexec                          Reference: 278
+
+Variable (set w/rexx)   eidx                                 Assigned : 497 505
+Variable (used in/rexx) eidx                                 Reference: 505
+
+Variable (set w/rexx)   epidx                                Assigned : 334
+Variable (used in/rexx) epidx                                Reference: 335
+
+Variable (NEVER SET)    EQAATENC                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAATENC                             Reference: 1205
+
+Variable (NEVER SET)    EQAATENT                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAATENT                             Reference: 317 1204
+
+Variable (NEVER SET)    EQAAUTOM                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAAUTOM                             Reference: 928 1023
+
+Variable (NEVER SET)    EQACC                                Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQACC                                Reference: 902 907 938
+
+Variable (set w/rexx)   eqadebug_prefix                      Assigned : 1141 1170
+Variable (used in/rexx) eqadebug_prefix                      Reference: 1169
+
+Variable (set w/rexx)   eqadlist                             Assigned : 166
+Variable (NEVER USED)   eqadlist                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (NEVER SET)    EQADTLOG                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQADTLOG                             Reference: 917 968 1012 1049
+
+Variable (NEVER SET)    EQAIPADR                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAIPADR                             Reference: 880 986
+
+Variable (set w/rexx)   eqale                                Assigned : 242
+Variable (used in/rexx) eqale                                Reference: 254 810 842 862
+
+Variable (set w/rexx)   eqalib                               Assigned : 1153 1167
+Variable (used in/rexx) eqalib                               Reference: 1154 1155 1157 1168 1169
+
+Variable (NEVER SET)    EQALIB1                              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQALIB1                              Reference: 296 495 1138 1142
+
+Variable (NEVER SET)    EQALIB2                              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQALIB2                              Reference: 297 495 1138 1143
+
+Variable (NEVER SET)    EQALIB3                              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQALIB3                              Reference: 298 495 1138 1144
+
+Variable (NEVER SET)    EQALIB4                              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQALIB4                              Reference: 299 495 1138 1145
+
+Variable (NEVER SET)    EQALIB5                              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQALIB5                              Reference: 300 495 1138 1146
+
+Variable (NEVER SET)    EQALIB6                              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQALIB6                              Reference: 301 495 1138 1147
+
+Variable (set w/rexx)   eqalibr                              Assigned : 503
+Variable (used in/rexx) eqalibr                              Reference: 506 526 588
+
+Variable (set w/rexx)   eqalibrs                             Assigned : 176 495
+Variable (used in/rexx) eqalibrs                             Reference: 495 502 503
+
+Variable (NEVER SET)    EQALIBS                              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQALIBS                              Reference: 285 295 352 965 1046
+
+Variable (set w/rexx)   eqalmd                               Assigned : 1212 1213 1222
+Variable (used in/rexx) eqalmd                               Reference: 1213 1215 1223 1229
+
+Variable (set w/rexx)   eqalmd01                             Assigned : 324
+Variable (NEVER USED)   eqalmd01                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalmd02                             Assigned : 324
+Variable (NEVER USED)   eqalmd02                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalmd03                             Assigned : 324
+Variable (NEVER USED)   eqalmd03                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalmd04                             Assigned : 325
+Variable (NEVER USED)   eqalmd04                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalmd05                             Assigned : 325
+Variable (NEVER USED)   eqalmd05                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalmd06                             Assigned : 325
+Variable (NEVER USED)   eqalmd06                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalmd07                             Assigned : 326
+Variable (NEVER USED)   eqalmd07                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalmd08                             Assigned : 326
+Variable (NEVER USED)   eqalmd08                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalmd09                             Assigned : 326
+Variable (NEVER USED)   eqalmd09                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalpg                               Assigned : 1214 1222
+Variable (used in/rexx) eqalpg                               Reference: 1215 1224 1229
+
+Variable (set w/rexx)   eqalpg01                             Assigned : 327
+Variable (NEVER USED)   eqalpg01                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalpg02                             Assigned : 327
+Variable (NEVER USED)   eqalpg02                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalpg03                             Assigned : 327
+Variable (NEVER USED)   eqalpg03                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalpg04                             Assigned : 328
+Variable (NEVER USED)   eqalpg04                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalpg05                             Assigned : 328
+Variable (NEVER USED)   eqalpg05                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalpg06                             Assigned : 328
+Variable (NEVER USED)   eqalpg06                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalpg07                             Assigned : 329
+Variable (NEVER USED)   eqalpg07                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalpg08                             Assigned : 329
+Variable (NEVER USED)   eqalpg08                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqalpg09                             Assigned : 329
+Variable (NEVER USED)   eqalpg09                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqambr                               Assigned : 621
+Variable (used in/rexx) eqambr                               Reference: 677 679 685 693
+
+Variable (set w/rexx)   eqamethd                             Assigned : 232 239 243
+Variable (used in/rexx) eqamethd                             Reference: 227 524 857 878 882 887 891 912 916 942 968 984 989 994 1011 1049 1242
+
+Variable (set w/rexx)   eqamlist                             Assigned : 170
+Variable (NEVER USED)   eqamlist                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqamsg1                              Assigned : 637 679
+Variable (NEVER USED)   eqamsg1                              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   eqamsg2                              Assigned : 676 687
+Variable (used in/rexx) eqamsg2                              Reference: 674
+
+Variable (set w/rexx)   eqapgm                               Assigned : 264
+Variable (used in/rexx) eqapgm                               Reference: 336 396 403 453 454 897 973 986 991 996 1001 1065 1183 1184
+
+Variable (NEVER SET)    EQAPGM01                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPGM01                             Reference: 313
+
+Variable (NEVER SET)    EQAPGM02                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPGM02                             Reference: 313
+
+Variable (NEVER SET)    EQAPGM03                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPGM03                             Reference: 313
+
+Variable (NEVER SET)    EQAPGM04                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPGM04                             Reference: 313
+
+Variable (NEVER SET)    EQAPGM05                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPGM05                             Reference: 313
+
+Variable (NEVER SET)    EQAPGM06                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPGM06                             Reference: 313
+
+Variable (NEVER SET)    EQAPGM07                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPGM07                             Reference: 313
+
+Variable (NEVER SET)    EQAPGM08                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPGM08                             Reference: 313
+
+Variable (NEVER SET)    EQAPGM09                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPGM09                             Reference: 313
+
+Variable (NEVER SET)    EQAPGMS                              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPGMS                              Reference: 303 312
+
+Variable (set w/rexx)   eqapmem                              Assigned : 1315
+Variable (used in/rexx) eqapmem                              Reference: 323
+
+Variable (NEVER SET)    EQAPORT                              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPORT                              Reference: 880 986
+
+Variable (NEVER SET)    EQAPROCO                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAPROCO                             Reference: 818 819
+
+Variable (NEVER SET)    EQASHOWC                             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQASHOWC                             Reference: 1238
+
+Variable (set w/rexx)   eqauser                              Assigned : 147
+Variable (used in/rexx) eqauser                              Reference: 884 889 991 996
+
+Variable (NEVER SET)    EQAWARN                              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) EQAWARN                              Reference: 943
+
+Variable (set w/rexx)   eqa_pgm                              Assigned : 499
+Variable (used in/rexx) eqa_pgm                              Reference: 500 506
+
+Variable (set w/rexx)   eqa_pgms                             Assigned : 175 313
+Variable (used in/rexx) eqa_pgms                             Reference: 334 498 499 1179 1183 1186 1187
+
+Label (internal label)  EXIT_ROUTINE                         Defined  : 1313
+Label (int. label ref)  EXIT_ROUTINE                         Reference: C(134) C(142) C(156) C(224) C(251) C(260) C(275) C(291) C(296) C(297)
+                        ...                                             C(298) C(299) C(300) C(301) C(309) C(347) C(417) C(430) C(442) C(456)
+                        ...                                             C(465) C(519) C(535) C(668) C(816) C(848) C(855) C(1274) C(1299)
+
+Label (internal label)  FIND_OR_CHANGE_PGM_NAME              Defined  : 1102
+Label (int. label ref)  FIND_OR_CHANGE_PGM_NAME              Reference: F(406) F(841) F(976) F(1069)
+
+Variable (NEVER SET)    FIRSTL                               Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) FIRSTL                               Reference: 152
+
+Label (internal label)  GET_MEMBERS                          Defined  : 1267
+Label (int. label ref)  GET_MEMBERS                          Reference: F(618)
+
+Label (internal label)  GET_MEM_DATASET_CLOSE                Defined  : 1306
+Label (int. label ref)  GET_MEM_DATASET_CLOSE                Reference: C(1292) C(1297) C(1303)
+
+Label (internal label)  GET_PGMNAME_FROM_LINE                Defined  : 791
+Label (int. label ref)  GET_PGMNAME_FROM_LINE                Reference: F(777) F(1123)
+
+Variable (set w/rexx)   guic1                                Assigned : 199
+Variable (NEVER USED)   guic1                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   guic10                               Assigned : 212
+Variable (NEVER USED)   guic10                               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   guic2                                Assigned : 201
+Variable (NEVER USED)   guic2                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   guic3                                Assigned : 202
+Variable (NEVER USED)   guic3                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   guic4                                Assigned : 203
+Variable (NEVER USED)   guic4                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   guic5                                Assigned : 204
+Variable (NEVER USED)   guic5                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   guic6                                Assigned : 206
+Variable (NEVER USED)   guic6                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   guic7                                Assigned : 207
+Variable (NEVER USED)   guic7                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   guic8                                Assigned : 209
+Variable (NEVER USED)   guic8                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   guic9                                Assigned : 210
+Variable (NEVER USED)   guic9                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   i                                    Assigned : 423 498
+Variable (used in/rexx) i                                    Reference: 424 499
+
+Variable (set w/rexx)   idx                                  Assigned : 1283 1288
+Variable (used in/rexx) idx                                  Reference: 1288
+
+Label (internal label)  INITIALIZE                           Defined  : 144
+Label (int. label ref)  INITIALIZE                           Reference: C(128)
+
+Label (internal label)  INSERT_CEEOPTS_DATA                  Defined  : 874
+Label (int. label ref)  INSERT_CEEOPTS_DATA                  Reference: C(863)
+
+Label (internal label)  INSERT_COMMENTS                      Defined  : 1235
+Label (int. label ref)  INSERT_COMMENTS                      Reference: C(964) C(1045)
+
+Label (internal label)  INSERT_DEBUG_LINES                   Defined  : 834
+Label (int. label ref)  INSERT_DEBUG_LINES                   Reference: C(141)
+
+Label (internal label)  INSERT_EQANMDBG_DATA                 Defined  : 979
+Label (int. label ref)  INSERT_EQANMDBG_DATA                 Reference: C(866)
+
+Variable (set w/rexx)   insert_line#                         Assigned : 398 400 402 485 489 837 899 901 906 910 915 920 925 931 936 950 958 961
+                        ...                                             971 1003 1005 1007 1010 1015 1020 1026 1031 1039 1042 1052 1057 1061 1064
+                        ...                                             1076 1080 1083 1087 1092 1095 1098 1172 1182 1198 1208 1226 1231 1244 1246
+                        ...                                             1248 1250 1252 1254 1256 1258 1260 1262
+Variable (used in/rexx) insert_line#                         Reference: 397 398 399 400 401 402 404 405 838 898 899 900 901 905 906 909 910 914
+                        ...                                             915 919 920 924 925 930 931 935 936 949 950 957 958 960 961 970 971 974
+                        ...                                             975 1002 1003 1004 1005 1006 1007 1009 1010 1014 1015 1019 1020 1025 1026
+                        ...                                             1030 1031 1038 1039 1041 1042 1051 1052 1056 1057 1060 1061 1063 1064 1066
+                        ...                                             1068 1075 1076 1079 1080 1082 1083 1086 1087 1091 1092 1094 1095 1097 1098
+                        ...                                             1171 1172 1181 1182 1197 1198 1207 1208 1225 1226 1230 1231 1243 1244 1245
+                        ...                                             1246 1247 1248 1249 1250 1251 1252 1253 1254 1255 1256 1257 1258 1259 1260
+                        ...                                             1261 1262
+
+Variable (set w/rexx)   inst_dt_natlang                      Assigned : 58
+Variable (used in/rexx) inst_dt_natlang                      Reference: 108 121 125 278
+
+Variable (set w/rexx)   inst_dt_shphlq                       Assigned : 57
+Variable (used in/rexx) inst_dt_shphlq                       Reference: 120 122 125
+
+Label (internal label)  INVOKE_DTU_DELAY_DEBUG               Defined  : 268
+Label (int. label ref)  INVOKE_DTU_DELAY_DEBUG               Reference: C(244)
+
+Variable (set w/rexx)   j                                    Assigned : 502
+Variable (used in/rexx) j                                    Reference: 503
+
+Variable (set w/rexx)   k                                    Assigned : 955 1036
+Variable (used in/rexx) k                                    Reference: 956 959 1037 1040
+
+Variable (set w/rexx)   label                                Assigned : 775
+Variable (used in/rexx) label                                Reference: 776
+
+Variable (set w/rexx)   langxlib                             Assigned : 617
+Variable (used in/rexx) langxlib                             Reference: 618 631 678 692
+
+Variable (set w/rexx)   langxlibnq                           Assigned : 678 692
+Variable (used in/rexx) langxlibnq                           Reference: 679 693
+
+Variable (NEVER SET)    LASTL                                Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) LASTL                                Reference: 479 488 1109
+
+Variable (set w/rexx)   lastline                             Assigned : 185
+Variable (NEVER USED)   lastline                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   lcmd                                 Assigned : 739
+Variable (used in/rexx) lcmd                                 Reference: 738 751
+
+Variable (set w/rexx)   lcmd2                                Assigned : 587
+Variable (used in/rexx) lcmd2                                Reference: 586
+
+Variable (set w/rexx)   lcmd3                                Assigned : 675 684
+Variable (used in/rexx) lcmd3                                Reference: 673 691
+
+Variable (set w/rexx)   lidx                                 Assigned : 177 780
+Variable (used in/rexx) lidx                                 Reference: 452 458 780 781
+
+Variable (set w/rexx)   line                                 Assigned : 956 959 1037 1040 1054 1055 1058 1059 1062 1074 1078 1081 1084 1088 1093
+                        ...                                             1096 1169 1180 1196 1206 1224 1229
+Variable (used in/rexx) line                                 Reference: 371 438 483 484 775 778 793 794 796 1055 1059 1119 1120 1121
+
+Variable (set w/rexx)   line1                                Assigned : 394 876 879 883 888 892 982 985 990 995
+Variable (used in/rexx) line1                                Reference: 879 883 888 892 985 990 995
+
+Variable (set w/rexx)   line2                                Assigned : 395 880 884 889 893 903 986 991 996
+Variable (used in/rexx) line2                                Reference: 903
+
+Variable (set w/rexx)   line2a                               Assigned : 908
+Variable (NEVER USED)   line2a                               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   line3                                Assigned : 913 1008
+Variable (NEVER USED)   line3                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   line3a                               Assigned : 918 923 1013 1018
+Variable (NEVER USED)   line3a                               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   line3x                               Assigned : 944 947
+Variable (NEVER USED)   line3x                               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   line4                                Assigned : 929 934 1024 1029
+Variable (NEVER USED)   line4                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   line5                                Assigned : 969 1050
+Variable (NEVER USED)   line5                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   linenum                              Assigned : 467 779
+Variable (used in/rexx) linenum                              Reference: 476 478 740
+
+Label (internal label)  LOOK_FOR_PROGRAMS                    Defined  : 768
+Label (int. label ref)  LOOK_FOR_PROGRAMS                    Reference: C(450)
+
+Variable (set w/rexx)   m                                    Assigned : 620
+Variable (used in/rexx) m                                    Reference: 621
+
+Variable (set w/rexx)   memb                                 Assigned : 1282
+Variable (used in/rexx) memb                                 Reference: 1289
+
+Variable (set w/rexx)   member                               Assigned : 547
+Variable (used in/rexx) member                               Reference: 548 549
+
+Variable (set w/rexx)   members                              Assigned : 618
+Variable (used in/rexx) members                              Reference: 619 620 621 629 645
+
+Variable (set w/rexx)   member_list                          Assigned : 1281 1289
+Variable (used in/rexx) member_list                          Reference: 1289 1304
+
+Variable (set w/rexx)   mfic1                                Assigned : 191
+Variable (NEVER USED)   mfic1                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   mfic2                                Assigned : 193
+Variable (NEVER USED)   mfic2                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   mfic3                                Assigned : 194
+Variable (NEVER USED)   mfic3                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   mfic4                                Assigned : 195
+Variable (NEVER USED)   mfic4                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   mfic5                                Assigned : 197
+Variable (NEVER USED)   mfic5                                No Ref.  : If actually referenced, it must be via a cmd.
+
+Built-In+/External use  MIN                                  Reference: F(510) F(513)
+
+Variable (set w/rexx)   min_rc                               Assigned : 501 510 513
+Variable (used in/rexx) min_rc                               Reference: 510 513 524
+
+Variable (set w/rexx)   mm                                   Assigned : 333 337
+Variable (used in/rexx) mm                                   Reference: 337 338
+
+Variable (set w/rexx)   nn                                   Assigned : 335 1210 1211
+Variable (used in/rexx) nn                                   Reference: 336 338 1211 1212 1214
+
+Variable (set w/rexx)   num_eqalibs                          Assigned : 179 1161 1173
+Variable (used in/rexx) num_eqalibs                          Reference: 525 528 1161 1173
+
+Variable (NEVER SET)    OK                                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) OK                                   Reference: 1155
+
+Variable (set w/rexx)   operand                              Assigned : 775
+Variable (NEVER USED)   operand                              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   operator                             Assigned : 775
+Variable (used in/rexx) operator                             Reference: 776
+
+Variable (set w/rexx)   orgdsn                               Assigned : 1269
+Variable (NEVER USED)   orgdsn                               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   panel                                Assigned : 411
+Variable (used in/rexx) panel                                Reference: 414
+
+Variable (set w/rexx)   panelist                             Assigned : 162
+Variable (NEVER USED)   panelist                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (NEVER SET)    PARM1                                Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) PARM1                                Reference: 217 248
+
+Variable (set w/rexx)   pgm                                  Assigned : 1194
+Variable (used in/rexx) pgm                                  Reference: 1195 1196
+
+Variable (set w/rexx)   pidx                                 Assigned : 1186
+Variable (used in/rexx) pidx                                 Reference: 1187
+
+Label (internal label)  POPUP_GUI_MFI_TIM                    Defined  : 409
+Label (int. label ref)  POPUP_GUI_MFI_TIM                    Reference: C(233)
+
+Variable (set w/rexx)   pop_up                               Assigned : 174 220 256 272 287 305 319 351 413 812 844
+Variable (used in/rexx) pop_up                               Reference: 271 350 713
+
+Built-In+/External use  POS                                  Reference: F(793) F(794) F(1120) F(1121)
+
+Variable (set w/rexx)   prevpgm                              Assigned : 371 383
+Variable (used in/rexx) prevpgm                              Reference: 383 384
+
+Label (internal label)  PROCESS_EQALIB                       Defined  : 1165
+Label (int. label ref)  PROCESS_EQALIB                       Reference: C(1142) C(1143) C(1144) C(1145) C(1146) C(1147)
+
+Label (internal label)  PROCESS_INPUT_PARM                   Defined  : 215
+Label (int. label ref)  PROCESS_INPUT_PARM                   Reference: C(129)
+
+Label (internal label)  PROCESS_POPUP_PANELS                 Defined  : 284
+Label (int. label ref)  PROCESS_POPUP_PANELS                 Reference: C(131)
+
+Variable (set w/rexx)   procstepoverride                     Assigned : 180 819
+Variable (used in/rexx) procstepoverride                     Reference: 394 876 913 969 982 1008 1050 1058 1074 1141
+
+Variable (set w/rexx)   program                              Assigned : 406 500 777 796 841 976 1069 1106 1123
+Variable (used in/rexx) program                              Reference: 396 403 549 679 842 897 973 1001 1065 1125
+
+SpecialVar(set no-XREF) rc                                    *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(set w/ code) rc                                   Assigned : 136 459 529 547 1215
+SpecialVar(used w/rexx) rc                                   Reference: 222 258 274 289 307 345 362 366 379 415 426 435 460 530 542 555 574 638
+                        ...                                             643 726 772 807 814 823 825 827 846 1116 1272 1277 1287 1291 1295
+
+Label (internal label)  REMOVE_OLD_LINES                     Defined  : 358
+Label (int. label ref)  REMOVE_OLD_LINES                     Reference: C(133)
+
+SpecialVar(set no-XREF) result                                *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(set w/ code) result                               Assigned : 507
+SpecialVar(used w/rexx) result                               Reference: 509 512
+
+Variable (set w/rexx)   results                              Assigned : 546
+Variable (used in/rexx) results                              Reference: 547
+
+Built-In+/External use  RIGHT                                Reference: F(335) F(337) F(779) F(1211)
+
+Variable (set w/rexx)   sel_linenums                         Assigned : 716 740
+Variable (used in/rexx) sel_linenums                         Reference: 467 740 741
+
+Variable (set w/rexx)   sel_members                          Assigned : 628 677 686
+Variable (used in/rexx) sel_members                          Reference: 648 653 659 677 685 686
+
+Variable (set w/rexx)   seq                                  Assigned : 781
+Variable (NEVER USED)   seq                                  No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  SET_LABEL_FOR_INSERT_LINES           Defined  : 473
+Label (int. label ref)  SET_LABEL_FOR_INSERT_LINES           Reference: C(139)
+
+Variable (set w/rexx)   sourcedata                           Assigned : 178 549
+Variable (used in/rexx) sourcedata                           Reference: 549 954 955 956 959 1035 1036 1037 1040
+
+Variable (set w/rexx)   sourcelib                            Assigned : 526 537
+Variable (used in/rexx) sourcelib                            Reference: 546 549
+
+Variable (set w/rexx)   sourcelibs                           Assigned : 564 588
+Variable (used in/rexx) sourcelibs                           Reference: 537 588 589
+
+Variable (set w/rexx)   spgm                                 Assigned : 1125 1127
+Variable (used in/rexx) spgm                                 Reference: 1127 1128
+
+Variable (set w/rexx)   stepname                             Assigned : 778
+Variable (NEVER USED)   stepname                             No Ref.  : If actually referenced, it must be via a cmd.
+
+Built-In+/External use  STRIP                                Reference: F(678) F(692) F(779)
+
+Built-In+/External use  SUBSTR                               Reference: F(235) F(238) F(241) F(383) F(438) F(483) F(484) F(579) F(663) F(731)
+                        ...                                             F(776) F(778) F(796) F(1119) F(1127)
+
+Built-In+/External use  SYSDSN                               Reference: F(507) F(1155)
+
+Variable (NEVER SET)    SYSUID                               Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSUID                               Reference: 147
+
+Built-In+/External use  SYSVAR                               Reference: F(147)
+
+Label (internal label)  TABLE_PROGRAM_NAME                   Defined  : 447
+Label (int. label ref)  TABLE_PROGRAM_NAME                   Reference: C(138)
+
+Variable (set w/rexx)   tlib                                 Assigned : 506
+Variable (used in/rexx) tlib                                 Reference: 507 517
+
+Variable (set w/rexx)   tpgm                                 Assigned : 1105
+Variable (used in/rexx) tpgm                                 Reference: 1128
+
+Built-In+/External use  TRANSLATE                            Reference: F(217) F(673) F(678) F(691) F(692)
+
+Label (internal label)  VALIDATE_EQALIB                      Defined  : 1151
+Label (int. label ref)  VALIDATE_EQALIB                      Reference: F(296) F(297) F(298) F(299) F(300) F(301)
+
+Built-In+/External use  VALUE                                Reference: F(336) F(1212) F(1214)
+
+Label (internal label)  VERIFY_NO_CEEOPTS_EQANMDBG           Defined  : 421
+Label (int. label ref)  VERIFY_NO_CEEOPTS_EQANMDBG           Reference: C(135)
+
+Label (internal label)  VERIFY_SOURCE_DATA_FOUND             Defined  : 493
+Label (int. label ref)  VERIFY_SOURCE_DATA_FOUND             Reference: C(354)
+
+Built-In+/External use  WORD                                 Reference: F(424) F(467) F(499) F(503) F(537) F(619) F(621) F(778) F(956) F(959)
+                        ...                                             F(1037) F(1040) F(1187)
+
+Built-In+/External use  WORDPOS                              Reference: F(685) F(1183)
+
+Built-In+/External use  WORDS                                Reference: F(334) F(423) F(498) F(502) F(589) F(620) F(629) F(645) F(648) F(653)
+                        ...                                             F(741) F(954) F(955) F(1035) F(1036) F(1186)
+
+Variable (set w/rexx)   x                                    Assigned : 685 793 794 1120
+Variable (used in/rexx) x                                    Reference: 686 794 795 796 1121
+
+Variable (NEVER SET)    ZCMD                                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ZCMD                                 Reference: 579 663 731
+
+Variable (set w/rexx)   zdest                                Assigned : 804 828
+Variable (used in/rexx) zdest                                Reference: 137 836 837 1107
+
+Variable (set w/rexx)   zedlmsg                              Assigned : 113 154 248 387 428 440 454 463 517 533 576 591 631 640 650 655 666 728
+                        ...                                             743 851 870 1157
+Variable (NEVER USED)   zedlmsg                              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   zedsmsg                              Assigned : 112 153 247 386 427 439 453 462 516 532 575 590 630 639 649 654 665 727
+                        ...                                             742 850 869 1156
+Variable (NEVER USED)   zedsmsg                              No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   ztdsels                              Assigned : 607 704 761
+Variable (used in/rexx) ztdsels                              Reference: 583 601 670 698 735 755
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

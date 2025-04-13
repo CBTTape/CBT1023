@@ -1,0 +1,319 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(FULLSHUT)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(FULLSHUT)
+   -----------------------------------------
+
+READY
+    FULLSHUT
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.CNTL.DB2(FULLSHUT)"      */
+    Generated scan code/comment:   /*      -------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:              */
+    Generated scan code/comment:   /*     20231217 23:02:30                */
+    Generated scan code/comment:   /*      -------------------------       */
+     1 *-* /***************************** REXX **********************************           ***************************************
+******************************           *                                                                   *           *  Name:
+FULLSHUT                                                  *           *
+       *           *  Description:  full shutdown.                                     *           *
+                                    *           *********************************************************************           *
+                                                                 *           * CHG#  DATE     WHO               DESCRIPTION
+              *           * ----+--------+-------+------------------------------------------- *           *      06/13/18 SFRH66
+Set global variable to indicate need for a *           *                    FULLSHUT process.  But then start the PARTSHUT *
+    *                    process, when it finishes PARTSHUT, it will    *           *                    see we wanted a FULLSHUT p
+rocess and then it   *           *                    will stop all processes controlled by AF/op    *           *
+                                                  *           *                        PARTSHUT is two rules:                     *
+           *                          PARTSHUT (cmd) and                       *           *                          SHUTPROC (tod
+)                           *           *      08/18/22 SFRH66                                              *           *
+          If cancel for FULLSHUT, also disable SHUTTCAS  *           **************************************************************
+*******/
+    24 *-* trace r
+    25 *-* parse upper arg cmd .
+    27 *-* x = SHARVGET('SYSTEM','GLOBAL.KPRESHUT.') /* get info on PRESHUT  */
+    28 *-* x = SHARVGET('SYSTEM','GLOBAL.KPARTSHUT.') /* get info on PARTSHUT */
+    29 *-* x = SHARVGET('SYSTEM','GLOBAL.KFULLSHUT.') /* get info on FULLSHUT */
+    31 *-* if cmd = 'CANCEL' /* allow FULLSHUT cancel */
+    32 *-*  then
+       *-*  do /* also cancel's fullshut, if active */
+    33 *-*   'TRAP DISABLE(SHUTWTOR)' /* end this from firing */
+    34 *-*   'TRAP DISABLE(SHUTPROC)' /* end this from firing */
+    35 *-*   'TRAP DISABLE(SHUTTCAS)' /* end this from firing */
+    36 *-*   /* dom any highlighted wto's now */
+    37 *-*   parse var global.Kpreshut.Kpreshut001 dom1 .
+    38 *-*   parse var global.Kpreshut.Kpreshut002 dom2 .
+    39 *-*   parse var global.Kpreshut.Kpreshut003 dom3 .
+    40 *-*   parse var global.Kpreshut.Kpreshut004 dom4 .
+    41 *-*   if dom1 <> '' & datatype(dom1,'W')
+       *-*    then
+       *-*    'DOM' dom1
+    42 *-*   if dom2 <> '' & datatype(dom2,'W')
+       *-*    then
+       *-*    'DOM' dom2
+    43 *-*   if dom3 <> '' & datatype(dom3,'W')
+       *-*    then
+       *-*    'DOM' dom3
+    44 *-*   if dom4 <> '' & datatype(dom4,'W')
+       *-*    then
+       *-*    'DOM' dom4
+    46 *-*    /* reinit global variables and exit */
+    47 *-*   GLOBAL.KPRESHUT.KPRESHUT001 = ''
+    48 *-*   GLOBAL.KPRESHUT.KPRESHUT002 = ''
+    49 *-*   GLOBAL.KPRESHUT.KPRESHUT003 = ''
+    50 *-*   "WTO 'FULLSHUT cancel completed'" ,                                                "ROUT(2) DESC(2)" ,
+                                             "MSGID(FULLSH04) WTONO(GETDOM)"
+    53 *-*   x = glbvget('GETDOM')
+    54 *-*   global.Kpreshut.Kpreshut004 = GETDOM date('b') time('s')
+    55 *-*   GLOBAL.KPRESHUT.KACTIVE   = 0
+    56 *-*   GLOBAL.KPARTSHUT.KACTIVE  = 0
+    57 *-*   GLOBAL.KFULLSHUT.KACTIVE  = 0
+    58 *-*   x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT001')
+    59 *-*   x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT002')
+    60 *-*   x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT003')
+    61 *-*   x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT004')
+    62 *-*   x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KACTIVE')
+    63 *-*   x = sharvput('SYSTEM','GLOBAL.KPARTSHUT.KACTIVE')
+    64 *-*   x = sharvput('SYSTEM','GLOBAL.KFULLSHUT.KACTIVE')
+    65 *-*   return
+    66 *-*  end
+    68 *-* if GLOBAL.KPRESHUT.KACTIVE   = 1 ,                                               | GLOBAL.KPARTSHUT.KACTIVE  = 1
+    70 *-*  then
+       *-*  do
+    71 *-*   parse var global.Kpreshut.Kpreshut004 dom4 .
+    73 *-*   if dom4 <> '' & datatype(dom4,'W')
+    74 *-*    then
+       *-*    'DOM' dom4 /* unhighlight any outstanding wto's */
+    76 *-*   msg = 'FULLSHUT process already in effect; cmd ignored'
+    77 *-*   if global.KFULLSHUT.KACTIVE <> 1
+    78 *-*    then
+       *-*    msg = 'FULLSHUT process started, PARTSHUT still running'
+    80 *-*   GLOBAL.KFULLSHUT.KACTIVE = 1 /* full shut active, if not before*/
+    81 *-*   "WTO '"msg"'" ,                                                                     "MSGID(FULLSH04) WTONO(GETDOM)"
+    83 *-*   x = glbvget('GETDOM')
+    84 *-*   GLOBAL.KPRESHUT.KPRESHUT004 = GETDOM date('b') time('s')
+    85 *-*   x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT004')
+    86 *-*   x = sharvput('SYSTEM','GLOBAL.KFULLSHUT.KACTIVE')
+    87 *-*   return
+    88 *-*  end
+    90 *-*  /* start the FULLSHUT down process */
+    91 *-*  /* ------------------------------- */
+    92 *-* GLOBAL.KFULLSHUT.KACTIVE = 1 /* full shut active */
+    93 *-* x = sharvput('SYSTEM','GLOBAL.KFULLSHUT.KACTIVE') /* update global*/
+    94 *-* "EXEC PARTSHUT"      /* invoke the partshut process, to do fullshut*/
+    95 *-* return
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Variable (set w/rexx)   cmd              Assigned : 25
+Variable (used in/rexx) cmd              Reference: 31
+
+Built-In+/External use  DATATYPE         Reference: F(41) F(42) F(43) F(44) F(73)
+
+Built-In+/External use  DATE             Reference: F(54) F(84)
+
+Variable (set w/rexx)   dom1             Assigned : 37
+Variable (used in/rexx) dom1             Reference: 41
+
+Variable (set w/rexx)   dom2             Assigned : 38
+Variable (used in/rexx) dom2             Reference: 42
+
+Variable (set w/rexx)   dom3             Assigned : 39
+Variable (used in/rexx) dom3             Reference: 43
+
+Variable (set w/rexx)   dom4             Assigned : 40 71
+Variable (used in/rexx) dom4             Reference: 44 73 74
+
+Variable (NEVER SET)    GETDOM           Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) GETDOM           Reference: 54 84
+
+Built-In+/External use  GLBVGET          Reference: F(53) F(83)
+
+Variable (NEVER SET)    KACTIVE          Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  KACTIVE          Assigned : 55 56 57 80 92
+Variable (in Stem Ref)  KACTIVE          Reference: 68 77
+
+Variable (NEVER SET)    KFULLSHUT        Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  KFULLSHUT        Assigned : 57 80 92
+Variable (in Stem Ref)  KFULLSHUT        Reference: 77
+
+Variable (NEVER SET)    KPARTSHUT        Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  KPARTSHUT        Assigned : 56
+Variable (in Stem Ref)  KPARTSHUT        Reference: 68
+
+Variable (NEVER SET)    KPRESHUT         Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  KPRESHUT         Assigned : 47 48 49 54 55 84
+Variable (in Stem Ref)  KPRESHUT         Reference: 37 38 39 40 68 71
+
+Variable (NEVER SET)    KPRESHUT001      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  KPRESHUT001      Assigned : 47
+Variable (in Stem Ref)  KPRESHUT001      Reference: 37
+
+Variable (NEVER SET)    KPRESHUT002      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  KPRESHUT002      Assigned : 48
+Variable (in Stem Ref)  KPRESHUT002      Reference: 38
+
+Variable (NEVER SET)    KPRESHUT003      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  KPRESHUT003      Assigned : 49
+Variable (in Stem Ref)  KPRESHUT003      Reference: 39
+
+Variable (NEVER SET)    KPRESHUT004      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  KPRESHUT004      Assigned : 54 84
+Variable (in Stem Ref)  KPRESHUT004      Reference: 40 71
+
+Variable (set w/rexx)   msg              Assigned : 76 78
+Variable (used in/rexx) msg              Reference: 81
+
+Built-In+/External use  SHARVGET         Reference: F(27) F(28) F(29)
+
+Built-In+/External use  SHARVPUT         Reference: F(58) F(59) F(60) F(61) F(62) F(63) F(64) F(85) F(86) F(93)
+
+Built-In+/External use  TIME             Reference: F(54) F(84)
+
+Variable (set w/rexx)   x                Assigned : 27 28 29 53 58 59 60 61 62 63 64 83 85 86 93
+Variable (NEVER USED)   x                No Ref.  : If actually referenced, it must be via a cmd.
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-2 GLOBAL.KFULLSHUT.KACTIVE         Assigned : 57 80 92
+Stem-2 GLOBAL.KFULLSHUT.KACTIVE         Reference: 77
+Stem-2 GLOBAL.KPARTSHUT.KACTIVE         Assigned : 56
+Stem-2 GLOBAL.KPARTSHUT.KACTIVE         Reference: 68
+Stem-2 GLOBAL.KPRESHUT.KACTIVE          Assigned : 55
+Stem-2 GLOBAL.KPRESHUT.KACTIVE          Reference: 68
+Stem-2 GLOBAL.KPRESHUT.KPRESHUT001      Assigned : 47
+Stem-2 GLOBAL.KPRESHUT.KPRESHUT001      Reference: 37
+Stem-2 GLOBAL.KPRESHUT.KPRESHUT002      Assigned : 48
+Stem-2 GLOBAL.KPRESHUT.KPRESHUT002      Reference: 38
+Stem-2 GLOBAL.KPRESHUT.KPRESHUT003      Assigned : 49
+Stem-2 GLOBAL.KPRESHUT.KPRESHUT003      Reference: 39
+Stem-2 GLOBAL.KPRESHUT.KPRESHUT004      Assigned : 54 84
+Stem-2 GLOBAL.KPRESHUT.KPRESHUT004      Reference: 40 71
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

@@ -1,0 +1,37 @@
+//SFRH66RX JOB 0,RHUMPHRIS@IOT.IN.GOV,MSGCLASS=S,CLASS=S,NOTIFY=SFRH66
+//*              ---------------------
+//* For my use only (OR for anyone who wants to update this code for
+//* ---------------     the cbt tape).
+//*
+//*
+//*   *internal job*  not for normal CBT user use.
+//*
+//* Note:  run *internal job*, PACKAGE, first to update XMI* members
+//*       in hlq.$PACKAGE ... this will have all the XMI pds's that
+//*       the job $EXPAND will need to update your system.
+//*
+//* Note:  THEN run THIS *internal job,FINALPKG to take this pds
+//*       and turn it into a hlq.$PACKAGE.XMI dataset for shipping
+//*       to the CBT admins.  For CBT tape distribution.
+//*
+//*
+//DELETE   EXEC PGM=IEFBR14   delete existing XMI first
+//XMIPACKG DD  DISP=(MOD,DELETE),
+//             DSN=SFRH66.PUBLIC.REXXXREF.$PACKAGE.XMI,
+//             UNIT=SYSDA,DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120),
+//             SPACE=(CYL,(1,1))
+//*
+//FINALPKG EXEC PGM=IKJEFT01,DYNAMNBR=20 create new XMI
+//SYSTSPRT DD  SYSOUT=*
+//SYSPRINT DD  SYSOUT=*
+//INPACKGE DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.$PACKAGE
+//*
+//XMIPACKG DD  DISP=(NEW,CATLG),
+//             DSN=SFRH66.PUBLIC.REXXXREF.$PACKAGE.XMI,
+//             UNIT=SYSDA,DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120),
+//             SPACE=(CYL,(1,1))
+//*
+//SYSTSIN  DD  *,SYMBOLS=JCLONLY create xmi for cbt tape
+TSOEXEC XMIT JUNKNODE.USER DDNAME(INPACKGE)   +
+                           NOLOG NONOTIFY PDS +
+                           OUTFILE(XMIPACKG)

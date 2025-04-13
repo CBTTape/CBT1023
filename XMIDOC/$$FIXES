@@ -1,0 +1,96 @@
+v1.02
+    1)  added feature, now a xreference for "ADDRESS" commands.
+        a)  address command setting a address environment for future commands:
+            ------------------------------------------------------------------
+             - address environment
+             - address 'environment'
+            Note:  rexx treats both as if they were in quotes.  "Environment" is not treated as a variable.
+
+            Therefore, in the cross reference, to avoid confusion, they both appear as if they were in quotes.  In this case as:
+                ADDRESS 'ENVIRORNMENT'  (for:  address environment)
+                ADDRESS 'environment'   (for:  address 'environment', because whatever case is inside a literal will be used in xref)
+
+        b)  address command setting a address enviornment, one time, for running a command.  For example:
+            ---------------------------------------------------------------------------------------------
+             - address tso     'EXECIO * DISKR INPUT (STEM INPUT. OPEN FINIS'
+             - address 'TSO'   'EXECIO * DISKR INPUT (STEM INPUT. OPEN FINIS'
+             - address 'TSO EXECIO * DISKR INPUT (STEM INPUT. OPEN FINIS'
+             - address 'strange EXECIO * DISKR INPUT (STEM INPUT. OPEN FINIS'
+
+            In the cross reference, to avoid confusion, they both appear as if they were in quotes.  In this case as:
+                ADDRESS 'TSO' <cmd>       (for examples 1, 2 and 3; the actual cmd will not appear'
+                ADDRESS 'strange' <cmd>   (for example 4 'strange' will appear in lower case (as it was inside quotes as lower case)
+
+                note:  if part of the cmd are "variables" outside of quotes, those variables will appear in the cross reference
+                       for those variables.
+
+        c)  address command where text after it is an expression (with variables) and NO command can be entered after the expression
+            ------------------------------------------------------------------------------------------------------------------------
+             - address value t || s || o   (note:  if T, S and O are undefined, this is equivelent to: address TSO
+             - address (t || s || o )      (note:  parens will be stripped, but this is also a "address value" instruction.
+                                               and if T, S and O are undefined, this is equivelent to: address TSO
+             - address (t || s ) || o      (this is strange, but also legal, and will result in:  address TSO
+
+            In the cross reference, it will mention that this is an address "expression".  And expression will appear as written
+                - address value t || s || o   (note: since we don't know what this might be at run time, it's just an expression)
+                - address (t || s || o )      (note: since we don't know what this might be at run time, it's just an expression)
+                - address (t || s ) || o      (note: since we don't know what this might be at run time, it's just an expression)
+
+                note:  if part of the cmd are "variables" outside of quotes, those variables will appear in the cross reference
+                       for those variables.  I.e. the variables T, S and O will appear in the xreference.
+
+   2)  fixed some problems.
+        a)  If variable/stem started with an "@" as left hand side of an assignment statement, it did not appear in the cross reference.
+           This has been fixed.
+        b)  If statement didn't ever start until multiple lines later (example:  a label:  on one line (comma)
+                                                                                      followed by statement on next line, this confused the parser)
+           This has been fixed.
+
+Examples of a "address" xreference are in some of the xref listings in:  hlq.REXXXREF.SAMPLE.XREF(*)  but I'll provide an example here:
+---------------------------------------------------------------------------------------------------------------------------------------
+
+Address Envir.ValueExp: ADDRESS ('TSO') X                                  Reference: 4
+
+Address Envir.ValueExp: ADDRESS VALUE   TSO3 'EXECIO * DISKR WHAT (STEM X. FINIS'
+                        ...                                                Reference: 54
+
+Address Envir.ValueExp: ADDRESS VALUE TSO3 'EXECIO * DISKR WHAT (STEM X. FINIS'
+                        ...                                                Reference: 55
+
+Address Envir.Constant: ADDRESS 'DSNREXX' <cmd>        Reference: 888 1574 1664 1704 1780 1797 1877 1904 1933 1953 1995 2011 2093 2104 2154 2206
+                        ...                                       2333 2396 2478 2606 2701 2835 2974 3082 3632 3656 3684 3704 3763 3785 3881 3882
+                        ...                                       3906 3928 3929 3949 3988 3990 4014 4093 4147 4228 4249 4389 4486 4517 4539 4601
+                        ...                                       4622 4667 4681 4755 4791 4877 4931 5022 5040 5068 5074 5134 5156 5220 5256 5302
+                        ...                                       5321 5386 5422 5468 5486 5554 5590 5640 5661 5737 5758 5802 5820 5836 5850 5889
+                        ...                                       5906 5941 5960 5996 6012 6115 6134 6227 6279 6383 6402 6419 6563 6567
+
+Address Envir.Constant: ADDRESS 'TSO'                  Reference: 887
+
+Address Envir.Constant: ADDRESS 'TSO' <cmd>            Reference: 558 870 898 960 966 972 978 984 990 996 1002 1011 1017 1023 1029 1035 1041 1047
+                        ...                                       1053 1057 1288 1465 1515 1553 1566 3286 6482 6684 6934 7220 7225 7269 7501 7504
+
+
+Variable (NEVER SET)    TSO3                                               Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) TSO3                                               Reference: 54 55
+
+Variable (NEVER SET)    X                                                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) X                                                  Reference: 4 5
+
+
+notes:
+------
+note:  the address ('TSO') X example is silly, because the expression will resolve to:  address 'TSO X', if x is undefined.
+
+note:  the TSO3 examples are silly, and the EXECIO statement is NOT a command (but part of the expression).
+
+note:  the 1st 3 examples are identified as "Address Envir.ValueExp:" expressions.  They are expressions because of the "VALUE" keyword and/or
+    the left paren that appears immediately after "address".  And since expressions are resolved at run time, we show the entire expression.
+    Also a command cannot appear as part of a "value" expression.  So the xreference will never add a <cmd> to the end of a value expression.
+
+note:  TSO3 and X ... as they were used in an expression, will also show up in the cross reference.
+
+note:  the address DSNREXX and address TSO commands are hard coded environments, so they appear in the xreference as "Address Envir.Constant:'
+   To make it clear the environment is hard coded, it will appear in the xreference in quotes, requardless of how it was coded.  If an optional
+   command was coded, we will add '<cmd>" to the xreference, for example:  address 'TSO' <cmd>
+       If the command had some variables, in addition to any literals, those variable will appear in the xreference to point back to each
+   address command that referenced those variables.

@@ -1,0 +1,105 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.CNTL.DB2(FULLSHUT)"      */
+/*      -------------------------       */
+/*  date/time of XREF was:              */
+/*     20231217 23:02:30                */
+/*      -------------------------       */
+
+/***************************** REXX **********************************
+ *********************************************************************
+ *                                                                   *
+ *  Name:  FULLSHUT                                                  *
+ *                                                                   *
+ *  Description:  full shutdown.                                     *
+ *                                                                   *
+ *********************************************************************
+ *                                                                   *
+ * CHG#  DATE     WHO               DESCRIPTION                      *
+ * ----+--------+-------+------------------------------------------- *
+ *      06/13/18 SFRH66   Set global variable to indicate need for a *
+ *                    FULLSHUT process.  But then start the PARTSHUT *
+ *                    process, when it finishes PARTSHUT, it will    *
+ *                    see we wanted a FULLSHUT process and then it   *
+ *                    will stop all processes controlled by AF/op    *
+ *                                                                   *
+ *                        PARTSHUT is two rules:                     *
+ *                          PARTSHUT (cmd) and                       *
+ *                          SHUTPROC (tod)                           *
+ *      08/18/22 SFRH66                                              *
+ *                    If cancel for FULLSHUT, also disable SHUTTCAS  *
+ *********************************************************************/
+ trace r
+ parse upper arg cmd .
+
+ x = SHARVGET('SYSTEM','GLOBAL.KPRESHUT.') /* get info on PRESHUT  */
+ x = SHARVGET('SYSTEM','GLOBAL.KPARTSHUT.') /* get info on PARTSHUT */
+ x = SHARVGET('SYSTEM','GLOBAL.KFULLSHUT.') /* get info on FULLSHUT */
+
+ if cmd = 'CANCEL' /* allow FULLSHUT cancel */
+ then do /* also cancel's fullshut, if active */
+    'TRAP DISABLE(SHUTWTOR)' /* end this from firing */
+    'TRAP DISABLE(SHUTPROC)' /* end this from firing */
+    'TRAP DISABLE(SHUTTCAS)' /* end this from firing */
+    /* dom any highlighted wto's now */
+    parse var global.Kpreshut.Kpreshut001 dom1 .
+    parse var global.Kpreshut.Kpreshut002 dom2 .
+    parse var global.Kpreshut.Kpreshut003 dom3 .
+    parse var global.Kpreshut.Kpreshut004 dom4 .
+    if dom1 <> '' & datatype(dom1,'W') then 'DOM' dom1
+    if dom2 <> '' & datatype(dom2,'W') then 'DOM' dom2
+    if dom3 <> '' & datatype(dom3,'W') then 'DOM' dom3
+    if dom4 <> '' & datatype(dom4,'W') then 'DOM' dom4
+
+    /* reinit global variables and exit */
+    GLOBAL.KPRESHUT.KPRESHUT001 = ''
+    GLOBAL.KPRESHUT.KPRESHUT002 = ''
+    GLOBAL.KPRESHUT.KPRESHUT003 = ''
+    "WTO 'FULLSHUT cancel completed'" ,
+       "ROUT(2) DESC(2)" ,
+       "MSGID(FULLSH04) WTONO(GETDOM)"
+    x = glbvget('GETDOM')
+    global.Kpreshut.Kpreshut004 = GETDOM date('b') time('s')
+    GLOBAL.KPRESHUT.KACTIVE   = 0
+    GLOBAL.KPARTSHUT.KACTIVE  = 0
+    GLOBAL.KFULLSHUT.KACTIVE  = 0
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT001')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT002')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT003')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT004')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KACTIVE')
+    x = sharvput('SYSTEM','GLOBAL.KPARTSHUT.KACTIVE')
+    x = sharvput('SYSTEM','GLOBAL.KFULLSHUT.KACTIVE')
+    return
+ end
+
+ if GLOBAL.KPRESHUT.KACTIVE   = 1 ,
+  | GLOBAL.KPARTSHUT.KACTIVE  = 1
+ then do
+    parse var global.Kpreshut.Kpreshut004 dom4 .
+
+    if dom4 <> '' & datatype(dom4,'W')
+    then 'DOM' dom4 /* unhighlight any outstanding wto's */
+
+    msg = 'FULLSHUT process already in effect; cmd ignored'
+    if global.KFULLSHUT.KACTIVE <> 1
+    then msg = 'FULLSHUT process started, PARTSHUT still running'
+
+    GLOBAL.KFULLSHUT.KACTIVE = 1 /* full shut active, if not before*/
+    "WTO '"msg"'" ,
+        "MSGID(FULLSH04) WTONO(GETDOM)"
+    x = glbvget('GETDOM')
+    GLOBAL.KPRESHUT.KPRESHUT004 = GETDOM date('b') time('s')
+    x = sharvput('SYSTEM','GLOBAL.KPRESHUT.KPRESHUT004')
+    x = sharvput('SYSTEM','GLOBAL.KFULLSHUT.KACTIVE')
+    return
+ end
+
+ /* start the FULLSHUT down process */
+ /* ------------------------------- */
+ GLOBAL.KFULLSHUT.KACTIVE = 1 /* full shut active */
+ x = sharvput('SYSTEM','GLOBAL.KFULLSHUT.KACTIVE') /* update global*/
+ "EXEC PARTSHUT"      /* invoke the partshut process, to do fullshut*/
+ return

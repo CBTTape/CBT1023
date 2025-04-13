@@ -1,0 +1,63 @@
+This contains additional xmi members to create multiple pds's.
+
+-  This is the CBT distribution PDS for the REXX XREF code.
+
+-  This pds is only here to set up the other PDS's supporting
+  the REXX cross reference "code".
+
+-  Modifying/running $EXPAND is the only thing you really need
+  to use in this PDS>
+
+
+
+Member in this pds for you to modify + submit
+--------------------
+$EXPAND  - Modify / submit this job to create pds's for this offering.
+         -   Note:  uses XMI* members, below, will be used to create pds's:
+                hlq.REXXXREF.DOC
+                hlq.REXXXREF.JCL
+                hlq.REXXXREF.REXX
+                hlq.REXXXREF.SAMPLE.SCAN
+                hlq.REXXXREF.SAMPLE.XREF
+         - you need to modify and submit this job.
+
+         - then browse pds(s) above for more information.
+
+
+   The following members are used by the $EXPAND job.
+   --------------------------------------------------
+
+XMIDOC   - pds/library for hlq.REXXXREF.DOC
+         -   contains documentation on how to use and analyze output
+
+XMIJCL   - pds/library for hlq.REXXXREF.JCL
+         -   contains jcl + documentation on how to run a xreference.
+
+XMIREXX  - pds/library for hlq.REXXXREF.REXX with code for running the
+          code to create a xref.
+         -   contains actual code for creating xreference.
+
+XMISCAN  - pds/library for hlq.REXXXREF.SAMPLE.SCAN
+         -   contain sample rexx scan exec w/information on 'modified'
+            rexx members that have been converted to an exec with a
+            new 'prolog' and a trace 's' instruction, etc
+         =   note:  original rexx exec's were left "untouched".  These
+            are created as part of the xref process.
+
+XMIXREF  - pds/library for hlq.REXXXREF.SAMPLE.XREF
+         -   sample rexx scan output w/ actual xreference output.
+
+
+
+   The following member was used by Rich Humphris, to create the
+   XMI members above.
+   -------------------------------------------------------------
+PACKAGE  - used by me to create XMI members above.
+         - You can ignore this member.
+
+FINALPKG - used by me to create the final XMI dataset for downloading
+          from the CBT distribution tape.
+         - You can ignore this member.
+
+TEST$EXP - used by me to test $EXPAND on my system.
+         - You can ignore this member.

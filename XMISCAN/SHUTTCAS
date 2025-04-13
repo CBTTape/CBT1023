@@ -1,0 +1,51 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.CNTL.DB2(SHUTTCAS)"      */
+/*      -------------------------       */
+/*  date/time of XREF was:              */
+/*     20231217 23:02:09                */
+/*      -------------------------       */
+
+/***************************** REXX **********************************
+ *********************************************************************
+ *                                                                   *
+ *  Name:  SHUTTCAS                                                  *
+ *                                                                   *
+ *  Description:  Enabled as part of the PARTSHUT command (which     *
+ *    may have been invoked during FULLSHUT as well).                *
+ *                In either case, PARTSHUT enables us so that if     *
+ *    TSO is being brought down and we see message from TSO asking   *
+ *    if it can continue to come down (or we want a dump) that we    *
+ *    we reply 'U'.                                                  *
+ *                                                                   *
+ *                Note:  if O340 EX PARTSHUT CANCEL                  *
+ *                       or O340 EX FULLSHUT CANCEL                  *
+ *                    is executed, then this rule will be disabled.  *
+ *                                                                   *
+ *                Note:  when PARTSHUT command completes (and it     *
+ *                    is NOT running as part of FULLSHUT) then it    *
+ *                    will disable this rule at that time.           *
+ *                                                                   *
+ *  example WTOR:                                                    *
+ *                                                                   *
+ *  *70 IKT012D TCAS TERMINATION IN PROGRESS - SPECIFY 'U' or 'DUMP' *
+ *                                                                   *
+ *********************************************************************
+ *                                                                   *
+ * CHG#  DATE     WHO               DESCRIPTION                      *
+ * ----+--------+-------+------------------------------------------- *
+ *      08/18/22 SFRH66   Added support to allow TSO to come down    *
+ *                    quickly (and automatically) when shutting down *
+ *                    the system and this message appears.           *
+ *                                                                   *
+ *********************************************************************/
+ trace r
+
+ RET=GLBVGET('SYSTEM','AOREPID')     /* PULL reply #  */
+ RET=GLBVGET('SYSTEM','AOTEXT')      /* PULL MSG TEXT*/
+
+ if pos('TCAS TERMINAION IN',aotext) > 0 /* let tso come down please*/
+ then "OPER 'R" aorepid",U'"             /* reply U during shutdown */
+return

@@ -1,0 +1,449 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRCICDS.AFO340.RKANCMD($$OGINIT)"      */
+/*      ---------------------------------       */
+/*  date/time of XREF was:                      */
+/*     20231217 23:07:18                        */
+/*      ---------------------------------       */
+
+/****************************REXX*************************************
+ *                                                                   *
+ *                      CANDLE CORPORATION                           *
+ *                   COPYRIGHT (C) 1993-2001                         *
+ *                            U.S.A.                                 *
+ *      ALL RIGHTS RESERVED. USE PERMISSIBLE BY LICENSE ONLY.        *
+ *                                                                   *
+ *********************************************************************
+ *                                                                   *
+ *   NAME        $$OGINIT                            CUSTOMIZER      *
+ *                                                                   *
+ *   TITLE       INSTALLATION VERIFICATION REXX TEST EXEC            *
+ *                                                                   *
+ *   FUNCTION    EXECUTES WHEN THE AO/MVS COMES UP FOR               *
+ *               THE FIRST TIME.                                     *
+ *                                                                   *
+ * IOT Change LOG:                                                   *
+ *                                                                   *
+ * Date       Person     Comments                                    *
+ * ---------- ---------- ------------------------------------------- *
+ * 2020-06-27 RWSUHR     Changed the STARTLOG TRAP to                *
+ *                        'OPER '' S STARTLOG'' ***'                 *
+ * 2021-01-21 RWSUHR     Deleted the DDCMD TRAP (TOD)                *
+ *                                                                   *
+ *                                                                   *
+ *                                                                   *
+ *********************************************************************/
+
+/****************************************************************@11*/
+/*  AF/OPERATOR (RSM) STARTUP                                    @11*/
+/****************************************************************@11*/
+  /* START RSM */
+  "AF AUTOREF QUIET"
+  "AF MATINFO"
+  /* START RCF */
+  call KAORSTRT'SFRCICDS.AFO340.RKANISP','RCF','PROF0'
+  /* set up ommvs/afoperator communication link ommvs1 and omvs2 */
+  EX COMMVS
+/***** TOD TRAPS ******/
+  /* start NJE lines if VTAM is active */
+/* "TRAP ADD(VTAMINI3)",  */
+/* "TOD(*)",             */
+/* "ACT('EX VTAMINI3')", */
+/* "ENABLE"              */
+
+  "TRAP ADD(TCS80DST) TOD(04:00:00) ACT('EX TCS80DST')",
+    "INTERVAL(24:00:00) ENABLE"
+
+
+  /* TOD TRAP TO do SMF switch at 00:00:01 daily         */
+  "TRAP ADD(SMFSWCH) TOD(00:00:01)",
+   "ACT('OPER ''I SMF'' console(11)')",
+   "INTERVAL(24:00:00)",
+   "NOLOG",
+   "ENABLE"
+
+  /* TOD TRAP TO test NJE nodes active on Friday at 05:45 */
+  "TRAP ADD(NJECHK2) TOD(05:45:00)",
+   "DAYS(FRI)",
+   "INTERVAL(24:00:00)",
+   "ACT('EX NJECHECK')",
+   "NOLOG",
+   "ENABLE"
+
+  /* TOD TRAP TO ISSUE START IMSPROD AT 06:30 MON-FRI */
+/*"TRAP ADD(IMSPRDST) TOD(06:30:00) DAYS(WEEKDAYS)",  */
+/* "ACT('OPER ''S IMSPROD'' console(11)')",           */
+/* "INTERVAL(24:00:00)",                              */
+/* "NOLOG",                                           */
+/* "ENABLE"                                           */
+
+  /* TOD TRAP TO ISSUE START IMSPROD AT 07:00 ON SAT */
+/*"TRAP ADD(IMSPRDSA) TOD(07:00:00) DAYS(SAT)", */
+/* "ACT('OPER ''S IMSPROD'' console(11)')",     */
+/* "INTERVAL(24:00:00)",                        */
+/* "NOLOG",                                     */
+/* "DISABLE"                                    */
+
+  /* TOD TRAP TO ISSUE START IMSPROD AT 08:00 ON SUN */
+/*"TRAP ADD(IMSPRDSU) TOD(08:00:00) DAYS(SUN)", */
+/* "ACT('OPER ''S IMSPROD'' console(11)')",     */
+/* "INTERVAL(24:00:00)",                        */
+/* "NOLOG",                                     */
+/* "ENABLE"                                     */
+
+  /* TOD TRAP TO ISSUE START IMSTRNG AT 06:30 MON-FRI */
+/*"TRAP ADD(IMSTRGST) TOD(06:30:00) DAYS(WEEKDAYS)",  */
+/* "ACT('OPER ''S IMSTRNG'' console(11)')",           */
+/* "INTERVAL(24:00:00)",                              */
+/* "NOLOG",                                           */
+/* "ENABLE"                                           */
+
+  /* TOD TRAP TO ISSUE START IMSSYST AT 04:30 DAILY */
+/*"TRAP ADD(IMSSYSST) TOD(04:30:00)",               */
+/* "ACT('OPER ''S IMSSYST'' console(11)')",         */
+/* "INTERVAL(24:00:00)",                            */
+/* "NOLOG",                                         */
+/* "ENABLE"                                         */
+
+  /* TOD TRAP TO ISSUE START IMSREFM AT 06:30 DAILY */
+  /*"TRAP ADD(IMSRFMST) TOD(06:30:00)",       */
+  /*"ACT('OPER ''S IMSREFM'' console(11)')", */
+  /*"INTERVAL(24:00:00)",                    */
+  /*"NOLOG",                                 */
+  /*"ENABLE"                                 */
+
+  /* TOD TRAP TO Verify correct initiator status daily @ 07:00 */
+  "TRAP ADD(RESET) TOD(07:00:00)",
+   "INTERVAL(24:00:00)",
+   "ACT('OPER ''S RESET'' console(11) ')",
+   "NOLOG",
+   "ENABLE"
+
+  /* TOD TRAP TO test NJE nodes active at 7:30    */
+  "TRAP ADD(NJECHK) TOD(07:30:00)",
+   "INTERVAL(24:00:00)",
+   "ACT('EX NJECHECK')",
+   "NOLOG",
+   "ENABLE"
+
+  /* TOD TRAP TO test NJE nodes active at 7:30    */
+  "TRAP ADD(NJECHK) TOD(07:30:00)",
+   "INTERVAL(24:00:00)",
+   "ACT('EX NJECHECK')",
+   "NOLOG",
+   "ENABLE"
+
+  /* TOD TRAP TO check for CMF every morning at 8  */
+/*"TRAP ADD(CMFCHECK) TOD(08:00:00)", */
+/* "INTERVAL(24:00:00)",              */
+/* "ACT('EX CMFCHECK')",              */
+/* "NOLOG",                           */
+/* "ENABLE"                           */
+
+  /* TOD TRAP TO do expirebv at 13:00:00 daily         */
+  "TRAP ADD(EXPIREBV) TOD(13:00:00)",
+   "ACT('OPER ''F DFHSM,EXPIREBV EXEC",
+   "NONSMSVERSIONS(UNCATALOGEDDATA(30)) SYSOUT RESUME'' console(11)')",
+   "INTERVAL(24:00:00)",
+   "NOLOG",
+   "ENABLE"
+
+  /* TOD TRAP TO startlog      at 17:00:00 daily         */
+  "TRAP ADD(STARTLOG) TOD(17:00:00)",
+   "ACT('EX STARTLOG')",   /* EX STARTLOG REXX           */
+   "INTERVAL(24:00:00)",
+   "NOLOG",
+   "ENABLE"
+
+  /* TOD TRAP TO ISSUE STOP IMSSYST AT 19:00 DAILY   */
+/*"TRAP ADD(IMSSYSSP) TOD(19:00:00)",                */
+/* "ACT('EX IMSSYSSP')",                             */
+/* "INTERVAL(24:00:00)",                             */
+/* "NOLOG",                                          */
+/* "ENABLE"                                          */
+
+  /* TOD TRAP TO ISSUE STOP IMSREFM AT 19:00 DAILY   */
+  /*"TRAP ADD(IMSRFMSP) TOD(19:00:00)", */
+  /*ACT('EX IMSRFMSP')",                */
+  /*INTERVAL(24:00:00)",                */
+  /*NOLOG",                             */
+  /*ENABLE"                             */
+
+  /* TOD TRAP TO do HSM tapecopy at 1800 daily           */
+  /*"TRAP ADD(HSM1800) TOD(18:00:00)", */
+  /* "ACT('OPER ''F DFHSM,TAPECOPY ALL'' console(11)')", */
+  /* "INTERVAL(24:00:00)", */
+  /* "NOLOG", */
+  /* "ENABLE" */
+
+  /* TOD TRAP TO issue dbrdummy at 18:00   mon-fri       */
+  /*   2019-05-02 RWSUHR changed time to 17:30 on request*/
+  /*                     by Bill Kiesle                  */
+  "TRAP ADD(DBRDUMMY) TOD(17:30:00) DAYS(WEEKDAYS)",
+   "ACT('EX DBRDUMMY')",
+   "INTERVAL(24:00:00)",
+   "NOLOG",
+   "ENABLE"
+
+  /* TOD TRAP TO ISSUE STOP IMSTRNG AT 19:00 MON-FRI */
+/*"TRAP ADD(IMSTRGSP) TOD(19:00:00) DAYS(WEEKDAYS)", */
+/* "ACT('EX IMSTRGSP')",                             */
+/* "INTERVAL(24:00:00)",                             */
+/* "NOLOG",                                          */
+/* "ENABLE"                                          */
+
+  /* TOD TRAP TO ISSUE STOP IMSPROD AT 20:00 MON-FRI */
+/*"TRAP ADD(IMSPRDSP) TOD(20:00:00) DAYS(WEEKDAYS)",  */
+/* "ACT('EX IMSPRDSP')",                              */
+/* "INTERVAL(24:00:00)",                             */
+/* "NOLOG",                                          */
+/* "ENABLE"                                          */
+
+  /* TOD TRAP TO ISSUE STOP IMSPROD AT 19:00 ON SAT */
+/*"TRAP ADD(IMSPRDSZ) TOD(19:00:00) DAYS(SAT)",     */
+/* "ACT('EX IMSPRDSP')",                            */
+/* "INTERVAL(24:00:00)",                            */
+/* "NOLOG",                                         */
+/* "ENABLE"                                         */
+
+  /* TOD TRAP TO ISSUE STOP IMSPROD AT 16:00 ON SUN */
+/*  "TRAP ADD(IMSPRDSY) TOD(16:00:00) DAYS(SUN)",   */
+/*   "ACT('EX IMSPRDSP')",                          */
+/*   "INTERVAL(24:00:00)",                          */
+/*   "NOLOG",                                       */
+/*   "ENABLE"                                       */
+
+/***** CMD TRAPS ******/
+   /* TRAP FOR JB9 command added 4/27/04                         */
+   "TRAP ADD(JB9) CMD('JB9 *W2')",
+   "SUPPRESS",
+   "NOLOG",
+   "ACT('EX JB9 ''&&W2''')",
+   "ENABLE"
+
+   /* TRAP FOR DSPLB command added 4/28/04                       */
+   "TRAP ADD(DSPLB) CMD('DSPLB *W2')",
+   "SUPPRESS",
+   "NOLOG",
+   "ACT('EX DSPLB ''&&W2''')",
+   "ENABLE"
+
+   /* TRAP FOR JCMD command added 5/05/04                       */
+   "TRAP ADD(JCMDB) CMD('JCMD *W2')",
+   "SUPPRESS",
+   "NOLOG",
+   "ACT('EX JCMD ''&&W2''')",
+   "ENABLE"
+
+   /* TRAP FOR BBCMD command added 5/05/04                       */
+   "TRAP ADD(BBCMD) CMD('BBCMD *W2')",
+   "SUPPRESS",
+   "NOLOG",
+   "ACT('EX BBCMD ''&&W2''')",
+   "ENABLE"
+
+/***** WTO TRAPS ******/
+  "TRAP ADD(TCS80DEN) WTO('$HASP395*') JOBNAME(TCS80D)",
+    "ACT('EX TCS80DEN') ENABLE"
+
+  "TRAP ADD(TCS80END) WTO('$HASP395*') JOBNAME(TCS80)",
+    "ACT('EX TCS80END') ENABLE"
+
+  "TRAP ADD(TCS24END) WTO('$HASP395*') JOBNAME(TCS24)",
+    "ACT('EX TCS24END') ENABLE"
+
+  "TRAP ADD(TCS24EN2) WTO('IEF450I*') JOBNAME(TCS24)",
+    "ACT('EX TCS24END') ENABLE"
+
+  /* ACTIVATE CICSVTAM CICS1 ACTIVE */
+  "TRAP ADD(ACTCICSV) WTO('+DFHSI1517*') JOBNAME(CICS1)",
+    "ACT('EX ACTCICSV') ENABLE"
+
+  /* ACTIVATE ANYNET on CICS60 ACTIVE */
+  "TRAP ADD(ACTANYNT) WTO('+DFHSI1517*') JOBNAME(CICS60)",
+    "ACT('EX ACTANYNT') DISABLE"
+
+  /* open CICSVTAM acb on CICSVTAM ACTIVE */
+  "TRAP ADD(OPENCICV) WTO('IST093I CICSVTAM ACTIVE*') JOBNAME(VTAM)",
+    "ACT('EX OPENCICV') ENABLE"
+
+  /* Watch for omegmvs startup - START OMMVS1 and            */
+  /*                                   OMMVS2 connection and */
+  /*                                   enable       scndoc15 */
+  /* fix message to trap on.  Applid changed from APPLM2RC */
+  /*                                         to   K0PM2RC  */
+  /*                          fixed 1/14/2021 Rich Humphris*/
+  "TRAP ADD(OMEGMACT) WTO('OMV002I  APPL K0PM2RC OPENED*')",
+    "JOBNAME(CANSM2RC) ACT('EX COMMVS2') ENABLE"
+
+  /* watch for omegmvs closedown - disable scndoc15 */
+  "TRAP ADD(OMEGMSTP) WTO('$HASP395*')",
+    "JOBNAME(CANSM2RC) ACT('EX DISDOC') ENABLE"
+
+  "TRAP ADD(IDMSGP1) WTO('KAO01000*') JOBNAME(CANSAFO)",
+    "ACT('EX TRAPGRPS') ENABLE"
+
+  /* TRAP FOR BATCH OPEN/CLOSE TRIGGER MESSAGE                 */
+  "TRAP ADD(IMSOCTRP) WTO('+AF/OPERATOR *SORTCNTL *MBR *USR *')",
+   "ACT('EX IMSROUTE ''&&SORTCNTL,&&MBR,&&USR'' ')",
+   "SUPPRESS",
+   "NOLOG",
+   "ENABLE",
+
+  /* TRAP FOR DFS0488I DBCTL OPEN/CLOSE REPLY MESSAGE          */
+  "TRAP ADD(DFS0488I) WTO('DFS0488I*')",
+   "ACT('EX DFS0488I')",
+   "DESC(5)",
+   "NOLOG",
+   "ENABLE"
+
+  /* TRAP FOR DFS0618A IMS NON-ABNORMALLY TERMINATED MESSAGE   */
+  "TRAP ADD(DFS0618A) WTO('DFS0618A* SYSTEM MUST*')",
+   "ACT('EX DFS0618A')",
+   "ENABLE SUPPRESS"
+
+  /* TRAP FOR DFS554A IMS PROGRAM ABEND                        */
+  "TRAP ADD(DFS554A) WTO('DFS554A*')",
+   "ACT('EX DFS554A')",
+   "JOBNAME(IMSP*)",
+   "ENABLE SUPPRESS"
+
+  /* TRAP FOR IEE362A SMF DUMP REQUEST MESSAGE                 */
+  /*"TRAP ADD(IEE362A) WTO('IEE362A*')",                       */
+  /* "ACT('EX IEE362A')",                                      */
+  /* "NOLOG",                                                  */
+  /* "ENABLE"                                                  */
+
+  /* TRAP FOR IEE391A SMF DUMP REQUEST MESSAGE                 */
+  "TRAP ADD(IEE391A) WTO('IEE391A*')",
+   "ACT('EX IEE391A')",
+   "LOG",
+   "ENABLE"
+
+  /* TRAP FOR IEE852I periodic display of system dump datasets */
+  /* "TRAP ADD(IEE852I) WTO('IEE852I*')",                      */
+  /*  "ACT('EX DUMPCHK')",                                     */
+  /*  "NOLOG",                                                 */
+  /*  "ENABLE"                                                 */
+
+  /* TRAP FOR IEA911E system dump message to do a notify       */
+  "TRAP ADD(IEA911E) WTO('IEA911E*')",
+   "ACT('EX IEA911E')",
+   "NOLOG",
+   "ENABLE"
+
+  /* WTO TRAP TO IEA405E to issure flush of wto buffers  */
+  "TRAP ADD(IEA405E) WTO('IEA405E*')",
+   "ACT('EX KQ')",
+   "NOLOG",
+   "ENABLE"
+
+  /* WTO TRAP CBR3778I                                         */
+  "TRAP ADD(CBR3778I) WTO('CBR3778I*')",
+   "ACT('EX CBR3778I')",
+   "NOLOG",
+   "ENABLE"
+
+  /* TRAP FOR BATCH LLA update trigger message                 */
+  "TRAP ADD(AFOLLA) WTO('+AF/OPERLLA *PARM *userid')",
+   "ACT('EX &&PARM')",
+   "SUPPRESS",
+   "NOLOG",
+   "ENABLE"
+
+  /* TRAP FOR +IEF404I from KLS at closedown                   */
+  "TRAP ADD(KLSBACK) WTO('IEF404I*')",
+   "JOBNAME(KLS)",
+   "DAYS(MON)",
+   "ACT('EX KLSBACK')",
+   "NOLOG",
+   "ENABLE"
+
+  /* TRAP FOR IEA480E to notify dasd guys                      */
+  "TRAP ADD(IEA480E) WTO('IEA480E*')",
+   "ACT('EX IEA480E')",
+   "NEWDESC(1,2,11)",
+   "NOLOG",
+   "ENABLE"
+
+ /* //////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\       */
+ /* Begin Traps to page operations support when
+    datacenter not manned (normally enabled manually)         */
+ /* //////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\       */
+
+ /* TRAP FOR U11-607 ca/7 abend to do a notify                */
+ "TRAP ADD(U11607) WTO('U11-607*')",
+  "ACT('EX U11607')",
+  "NOLOG",
+  "DISABLE"
+
+ /* TRAP FOR OP0055 vts free storage threshold crossed        */
+ "TRAP ADD(OP0055) WTO('OP0055*')",
+  "ACT('EX OP0055')",
+  "NOLOG",
+  "DISABLE"
+
+ /* TRAP FOR SLS0665E HSM Degraded                            */
+ "TRAP ADD(SLS0665) WTO('SLS0665E*')",
+  "ACT('EX SLS0665')",
+  "NOLOG",
+  "DISABLE"
+
+ /* TRAP FOR SLS2402E HSM Scratch Warning                     */
+ "TRAP ADD(SLS2402) WTO('SLS2402E*')",
+  "ACT('EX SLS2402')",
+  "NOLOG",
+  "DISABLE"
+
+ /* TRAP FOR IOS162A CHIPD Alert                              */
+ "TRAP ADD(IOS162A) WTO('IOS162A*')",
+  "ACT('EX IOS162A')",
+  "NOLOG",
+  "DISABLE"
+
+ /* TRAP FOR CBR3762E VTS Intervention                        */
+ "TRAP ADD(CBR3762E) WTO('CBR3762E*')",
+  "ACT('EX CBR3762E')",
+  "NOLOG",
+  "DISABLE"
+
+ /* TRAP FOR $HASP050 JES2 Shortage of TGS                    */
+ "TRAP ADD($HASP050) WTO('$HASP050*')",
+  "ACT('EX $HASP050')",
+  "NOLOG",
+  "DISABLE"
+
+ /* TRAP FOR CBR3660A VTS Scratch Shortage                    */
+ "TRAP ADD(CBR3660A) WTO('CBR3660A*')",
+  "ACT('EX CBR3660A')",
+  "NOLOG",
+  "DISABLE"
+
+ /* TRAP FOR IEA911E  DUMP REQ. (ignore car85)               */
+ "TRAP ADD(IEA911P) WTO('IEA911E*')",
+  "ACT('EX IEA911P')",
+  "NOLOG",
+  "DISABLE"
+
+ /* //////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\       */
+ /* End   Traps to page operations support when
+    datacenter not manned                                     */
+ /* //////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\       */
+
+  /* ACTIVATE JES TRAPS                                        */
+  EX JESTRAPS
+
+  /* ACTIVATE HSM TRAPS                                        */
+  EX HSMTRAPS
+
+  /* ACTIVATE message suppression traps                        */
+  EX SUPTRAPS
+
+say '***************************************************************'
+say 'The Initialization Procedure for '
+say 'AO/MVS has ended..........'
+say '***************************************************************'
+
+exit(0);

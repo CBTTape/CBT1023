@@ -1,0 +1,517 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(MEMLIST)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(MEMLIST)
+   -----------------------------------------
+
+READY
+    MEMLIST
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH48.CBT.REXXEXEC.PDS(MEMLIST)"      */
+    Generated scan code/comment:   /*      --------------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                     */
+    Generated scan code/comment:   /*     20231217 23:06:39                       */
+    Generated scan code/comment:   /*      --------------------------------       */
+     1 *-* /* MEMLIST   ************************************************* Rexx */
+     2 *-* /*   Created by: IAPPINI,R.                                         */
+     3 *-* /*   When: 12/15/92                                                 */
+     4 *-* /*   What: MEMLIST, a Rexx EXEC,                                    */
+     5 *-* /*                                                                  */
+     6 *-* /* MEMLIST   ************************************************* Rexx */
+     7 *-* Address 'TSO'
+     8 *-* Arg p1
+     9 *-* Call Initialize
+    10 *-* Call Process_main
+    11 *-* Call Eoj
+    12 *-* Exit
+    14 *-* Process_main:
+    15 *-* Do i_dsn = 1 To Words(dataset)
+    16 *-*  Call Process_dsn Word(dataset,i_dsn)
+    17 *-* End i_dsn
+    18 *-* Return
+    19 *-* /*                                                                       SYSDSNAME              Data set name
+                         SYSVOLUME              Volume serial number                             SYSUNIT                Device type
+ for volume                           SYSDSORG               Data set's organization                          SYSRECFM
+  Data set's record format                         SYSLRECL               Data set's logical record length                 SYSBLKSI
+ZE             Data set's block size                            SYSKEYLEN              Data set's key length
+     SYSALLOC               Space allocation quantity                        SYSUSED                Space used quantity
+                  SYSPRIMARY             Primary allocation quantity                      SYSSECONDS             Secondary allocati
+on quantity                    SYSUNITS               Space units (CYLINDER, TRACK, BLOCK)             SYSEXTENTS             Numbe
+r of DASD extents used                      SYSCREATE              Data set's creation date yyyy/ddd                SYSREFDATE
+        Data set's last ref. date yyyy/ddd               SYSEXDATE              Data set's expiration date yyyy/ddd              SY
+SPASSWORD            Password protection status - NONE,                                      READ, or WRITE
+           SYSRACFA               RACF indication - NONE, GENERIC, or                                     DISCRETE
+                        SYSUPDATED             Data set change indicator (YES or NO)            SYSTRKSCYL             Tracks per c
+ylinder for unit the data                                   set is allocated on                              SYSBLKSTRK
+ Directory blocks per track for unit                                     the data set is allocated on                     SYSADIRBL
+K             Directory blocks allocated - PDS only            SYSUDIRBLK             Directory blocks used - PDS only
+    SYSMEMBERS             Number of members - PDS only                     SYSMSGLVL1             1st level message if error
+                 SYSMSGLVL2             2nd level message if error                      */
+    52 *-* Process_dsn:
+    53 *-* Arg dsn
+    54 *-* say_cnt = 0
+    55 *-* xx = Listdsi(dsn directory)
+    56 *-* x_dsn = Sysdsname
+    57 *-* Call Say_msg dsn
+    58 *-* Call Say_msg "directory blocks("sysadirblk","sysudirblk")",                          "members("sysmembers")"
+    60 *-* xx = Outtrap(tso.)
+    61 *-* "LISTD "dsn "M"
+    62 *-* xx = Outtrap("OFF")
+    63 *-* Do i_tso = 1 To tso.0
+    64 *-*  t_msg = tso.i_tso
+    65 *-*  Select
+    66 *-*  When "--MEMBERS--" = Left(t_msg,11)
+       *-*   Then
+       *-*   Call Get_members
+    67 *-*  Otherwise
+       *-*   Nop
+    68 *-*  End /* End of Select ... */
+    69 *-* End i_tso
+    70 *-* If fullscreen
+       *-*  Then,
+    71 *-*  Call Stemdisp "BROWSE","SAY.",,,dsn "member list"
+    72 *-* If print | disk
+       *-*  Then
+       *-*  Do
+    73 *-*   Address "TSO"
+    74 *-*   "DELETE "x_dsn".LIST"
+    75 *-*   "ALLOC  FI(MEMOUT) DA("x_dsn".LIST) SP(1 1) TRA DSO(PS)",                   "LRECL(80) BLK(6160) RECFM(F B) REUSE"
+    77 *-*   "EXECIO * DISKW MEMOUT (STEM SAY. FINIS)"
+    78 *-*   "FREE FI(MEMOUT)"
+    79 *-*   If print
+       *-*    Then
+       *-*    "QPRT "x_dsn".LIST"
+    80 *-*   If ¬disk
+       *-*    Then
+       *-*    "DELETE "x_dsn".LIST"
+    81 *-*  End
+    82 *-* Return
+    84 *-* Get_members:
+    85 *-* memlist. = ""
+    86 *-* mem_ndx  = 1
+    87 *-* membrs   = 0
+    88 *-* Do i_tso = i_tso + 1 To tso.0
+    89 *-*  t_msg = tso.i_tso
+    90 *-*  Select
+    91 *-*  When Wordpos("EXIST WITHOUT TRUE",t_msg) > 0
+       *-*   Then,
+    92 *-*   Call Hanging_alias
+    93 *-*  Otherwise
+       *-*   Do
+    94 *-*    Call Add_mem_tolist " "Left(Word(t_msg,1),9)
+    95 *-*    Call Process_alias Word(t_msg,2)
+    96 *-*   End
+    97 *-*  End /* End of Select ... */
+    98 *-* End i_tso
+    99 *-* If Words(memlist.mem_ndx) > 0
+       *-*  Then,
+   100 *-*  Call Say_msg memlist.mem_ndx /* get last line of members */
+   101 *-* If fullscreen
+       *-*  Then,
+   102 *-*  Call Stemdisp "BROWSE","MEMLIST.",,,dsn "contains "membrs" members"
+   103 *-* Return
+   105 *-* Hanging_alias:
+   106 *-* If Words(memlist.mem_ndx) > 0
+       *-*  Then,
+   107 *-*  Call Say_msg memlist.mem_ndx /* get last line of members */
+   108 *-* mem_ndx = mem_ndx + 1
+   109 *-* prev_membrs = membrs
+   110 *-* membrs = 0
+   111 *-* Call Say_msg t_msg
+   112 *-* Call Add_mem_tolist " -------- "
+   113 *-* Do i_tso = i_tso+1 To tso.0
+   114 *-*  t_msg = tso.i_tso
+   115 *-*  Call Process_alias Strip(t_msg,"B")
+   116 *-* End i_tso
+   117 *-* membrs = membrs + prev_membrs
+   118 *-* Return
+   120 *-* Process_alias:
+   121 *-* Arg alias_msg
+   122 *-* Select
+   123 *-* When Left(alias_msg,6) = "ALIAS("
+       *-*  Then
+       *-*  Do
+   124 *-*   Parse Var t_msg "ALIAS(" alias ")" .
+   125 *-*   Do more_alias = i_tso+1 By 1 While Right(alias,1) = ","
+   126 *-*    t_msg = tso.more_alias
+   127 *-*    Select
+   128 *-*    When Right(t_msg,1) = ","
+       *-*     Then,
+   129 *-*     alias = alias t_msg
+   130 *-*    Otherwise
+       *-*     Do /* Gets last of multiline alias */
+   131 *-*      aliad = alias t_msg
+   132 *-*      i_tso = more_alias
+   133 *-*      Leave more_alias
+   134 *-*     End
+   135 *-*    End /* End of Select ... */
+   136 *-*   End more_alias
+   137 *-*   alias = Space(Translate(alias,"",",)"))
+   138 *-*   Do i_a = 1 To Words(alias)
+   139 *-*    Call Add_mem_tolist "*"Left(Word(alias,i_a),9)
+   140 *-*   End i_a
+   141 *-*  End
+   142 *-* Otherwise
+       *-*  Nop
+   143 *-* End /* End of Select ... */
+   144 *-* Return
+   146 *-* Add_mem_tolist:
+   147 *-* Arg add_mem
+   148 *-* membrs = membrs + 1
+   149 *-* memlist.mem_ndx = memlist.mem_ndx || add_mem
+   150 *-* If membrs // 7 = 0
+       *-*  Then
+       *-*  Do
+   151 *-*   Call Say_msg memlist.mem_ndx
+   152 *-*   mem_ndx = mem_ndx + 1
+   153 *-*  End
+   154 *-* Return
+   156 *-* Say_msg:
+   157 *-* Parse Arg msg
+   158 *-* If ¬fullscreen & ¬nodisplay
+       *-*  Then
+       *-*  Say msg
+   159 *-* say_cnt = say_cnt + 1
+   160 *-* say.say_cnt = msg
+   161 *-* Return
+   163 *-* Eoj:
+   164 *-* Return
+   166 *-* Initialize:
+   167 *-* Parse Source environment . exec_name .
+   168 *-* If Sysvar(sysispf) ¬= "ACTIVE"
+       *-*  Then
+       *-*  Do
+   169 *-*   "ISPF CMD(%"exec_name p1")"
+   170 *-*   Exit
+   171 *-*  End
+   172 *-* proc_stmt = "PROC 1 DATASET FULLSCREEN NODISPLAY PRINT DISK"
+   173 *-* Call Proctso p1,proc_stmt
+   174 *-* Interpret result
+   175 *-* If fullscreen = ""
+       *-*  Then
+       *-*  fullscreen = 0
+   176 *-* Else
+       *-*  fullscreen = 1
+   177 *-* If nodisplay = ""
+       *-*  Then
+       *-*  nodisplay = 0
+   178 *-* Else
+       *-*  nodisplay = 1
+   179 *-* If print = ""
+       *-*  Then
+       *-*  print = 0
+   180 *-* Else
+       *-*  print = 1
+   181 *-* If disk = ""
+       *-*  Then
+       *-*  disk = 0
+   182 *-* Else
+       *-*  disk = 1
+   183 *-* dataset = Translate(dataset,"","()") /* possible list processing */
+   184 *-* Return
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Address Envir.Constant: ADDRESS "TSO"       Reference: 73
+
+Address Envir.Constant: ADDRESS 'TSO'       Reference: 7
+
+Variable (set w/rexx)   add_mem             Assigned : 147
+Variable (used in/rexx) add_mem             Reference: 149
+
+Label (internal label)  ADD_MEM_TOLIST      Defined  : 146
+Label (int. label ref)  ADD_MEM_TOLIST      Reference: C(94) C(112) C(139)
+
+Variable (set w/rexx)   aliad               Assigned : 131
+Variable (NEVER USED)   aliad               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   alias               Assigned : 124 129 137
+Variable (used in/rexx) alias               Reference: 125 129 131 137 138 139
+
+Variable (set w/rexx)   alias_msg           Assigned : 121
+Variable (used in/rexx) alias_msg           Reference: 123
+
+Variable (set w/rexx)   dataset             Assigned : 183
+Variable (used in/rexx) dataset             Reference: 15 16 183
+
+Variable (NEVER SET)    DIRECTORY           Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) DIRECTORY           Reference: 55
+
+Variable (set w/rexx)   disk                Assigned : 181 182
+Variable (used in/rexx) disk                Reference: 72 80 181
+
+Variable (set w/rexx)   dsn                 Assigned : 53
+Variable (used in/rexx) dsn                 Reference: 55 57 61 71 102
+
+Variable (set w/rexx)   environment         Assigned : 167
+Variable (NEVER USED)   environment         No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  EOJ                 Defined  : 163
+Label (int. label ref)  EOJ                 Reference: C(11)
+
+Variable (set w/rexx)   exec_name           Assigned : 167
+Variable (used in/rexx) exec_name           Reference: 169
+
+Variable (set w/rexx)   fullscreen          Assigned : 175 176
+Variable (used in/rexx) fullscreen          Reference: 70 101 158 175
+
+Label (internal label)  GET_MEMBERS         Defined  : 84
+Label (int. label ref)  GET_MEMBERS         Reference: C(66)
+
+Label (internal label)  HANGING_ALIAS       Defined  : 105
+Label (int. label ref)  HANGING_ALIAS       Reference: C(92)
+
+Label (internal label)  INITIALIZE          Defined  : 166
+Label (int. label ref)  INITIALIZE          Reference: C(9)
+
+Variable (set w/rexx)   i_a                 Assigned : 138
+Variable (used in/rexx) i_a                 Reference: 139 140
+
+Variable (set w/rexx)   i_dsn               Assigned : 15
+Variable (used in/rexx) i_dsn               Reference: 16 17
+
+Variable (set w/rexx)   i_tso               Assigned : 63 88 113 132
+Variable (used in/rexx) i_tso               Reference: 69 88 98 113 116 125
+Variable (in Stem Ref)  i_tso               Reference: 64 89 114
+
+Built-In+/External use  LEFT                Reference: F(66) F(94) F(123) F(139)
+
+Built-In+/External use  LISTDSI             Reference: F(55)
+
+Variable (set w/rexx)   membrs              Assigned : 87 110 117 148
+Variable (used in/rexx) membrs              Reference: 102 109 117 148 150
+
+Variable (set w/rexx)   mem_ndx             Assigned : 86 108 152
+Variable (used in/rexx) mem_ndx             Reference: 108 152
+Variable (in Stem Set)  mem_ndx             Assigned : 149
+Variable (in Stem Ref)  mem_ndx             Reference: 99 100 106 107 149 151
+
+Variable (set w/rexx)   more_alias          Assigned : 125
+Variable (used in/rexx) more_alias          Reference: 132 133 136
+Variable (in Stem Ref)  more_alias          Reference: 126
+
+Variable (set w/rexx)   msg                 Assigned : 157
+Variable (used in/rexx) msg                 Reference: 158 160
+
+Variable (set w/rexx)   nodisplay           Assigned : 177 178
+Variable (used in/rexx) nodisplay           Reference: 158 177
+
+Built-In+/External use  OUTTRAP             Reference: F(60) F(62)
+
+Variable (set w/rexx)   p1                  Assigned : 8
+Variable (used in/rexx) p1                  Reference: 169 173
+
+Variable (set w/rexx)   prev_membrs         Assigned : 109
+Variable (used in/rexx) prev_membrs         Reference: 117
+
+Variable (set w/rexx)   print               Assigned : 179 180
+Variable (used in/rexx) print               Reference: 72 79 179
+
+Label (internal label)  PROCESS_ALIAS       Defined  : 120
+Label (int. label ref)  PROCESS_ALIAS       Reference: C(95) C(115)
+
+Label (internal label)  PROCESS_DSN         Defined  : 52
+Label (int. label ref)  PROCESS_DSN         Reference: C(16)
+
+Label (internal label)  PROCESS_MAIN        Defined  : 14
+Label (int. label ref)  PROCESS_MAIN        Reference: C(10)
+
+Built-In+/External use  PROCTSO             Reference: C(173)
+
+Variable (set w/rexx)   proc_stmt           Assigned : 172
+Variable (used in/rexx) proc_stmt           Reference: 173
+
+SpecialVar(set no-XREF) RESULT               *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RESULT              Reference: 174
+
+Built-In+/External use  RIGHT               Reference: F(125) F(128)
+
+Variable (set w/rexx)   say_cnt             Assigned : 54 159
+Variable (used in/rexx) say_cnt             Reference: 159
+Variable (in Stem Set)  say_cnt             Assigned : 160
+
+Label (internal label)  SAY_MSG             Defined  : 156
+Label (int. label ref)  SAY_MSG             Reference: C(57) C(58) C(100) C(107) C(111) C(151)
+
+Built-In+/External use  SPACE               Reference: F(137)
+
+Built-In+/External use  STEMDISP            Reference: C(71) C(102)
+
+Built-In+/External use  STRIP               Reference: F(115)
+
+Variable (NEVER SET)    SYSADIRBLK          Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSADIRBLK          Reference: 58
+
+Variable (NEVER SET)    SYSDSNAME           Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSDSNAME           Reference: 56
+
+Variable (NEVER SET)    SYSISPF             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSISPF             Reference: 168
+
+Variable (NEVER SET)    SYSMEMBERS          Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSMEMBERS          Reference: 58
+
+Variable (NEVER SET)    SYSUDIRBLK          Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSUDIRBLK          Reference: 58
+
+Built-In+/External use  SYSVAR              Reference: F(168)
+
+Built-In+/External use  TRANSLATE           Reference: F(137) F(183)
+
+Variable (set w/rexx)   t_msg               Assigned : 64 89 114 126
+Variable (used in/rexx) t_msg               Reference: 66 91 94 95 111 115 124 128 129 131
+
+Built-In+/External use  WORD                Reference: F(16) F(94) F(95) F(139)
+
+Built-In+/External use  WORDPOS             Reference: F(91)
+
+Built-In+/External use  WORDS               Reference: F(15) F(99) F(106) F(138)
+
+Variable (set w/rexx)   xx                  Assigned : 55 60 62
+Variable (NEVER USED)   xx                  No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   x_dsn               Assigned : 56
+Variable (used in/rexx) x_dsn               Reference: 74 75 79 80
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 MEMLIST.             Assigned : 85
+Stem-1 MEMLIST.mem_ndx      Assigned : 149
+Stem-1 MEMLIST.mem_ndx      Reference: 99 100 106 107 149 151
+
+Stem-1 SAY.say_cnt          Assigned : 160
+
+Stem-1 TSO.                 Reference: 60
+Stem-1 TSO.0                Reference: 63 88 113
+Stem-1 TSO.i_tso            Reference: 64 89 114
+Stem-1 TSO.more_alias       Reference: 126
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

@@ -1,0 +1,550 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(SCNDOC15)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(SCNDOC15)
+   -----------------------------------------
+
+READY
+    SCNDOC15
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRCICDS.AFO340.RKANCMD(SCNDOC15)"      */
+    Generated scan code/comment:   /*      ---------------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                      */
+    Generated scan code/comment:   /*     20231217 23:07:41                        */
+    Generated scan code/comment:   /*      ---------------------------------       */
+     1 *-* /************ REXX ***************************************                      PROGRAM: MVSCMND
+                                AUTHOR: BURNS                                                           PURPOSE: Use omegmon/mvs af
+/operator interface to ask                            if any IDMS* tasks are above 15% cpu utilization.
+                                                                   more cpu checking:
+        ...add support to also check C2RSER24
+      DATE      PROGRMR            REASON                                     10/28/03  BURNS             INITIAL
+                                                                                           10/31/03  EARL              -PICKUP ACTU
+AL % FOR NOTIFY MESSAGE                                     -CALL ALERT FOR EPAGE NOTIFY
+ -CHECK FOR ALL IDMS CVS                                                 -change command from 15 to 75               1/20/04   earl
+              - submit batch job to kill runaway                                        adso task only for idmtstxx idmdocxx      4
+/06/04   earl              - because Bob B. wants nolog specified                                    program needs changed to notif
+y if                                      omvs comm bridge is down                  4/21/04   earl           - need to write mem to
+                                                  'SFRDBMDS.IDMS.RESULTS' with last good                                       exec
+ date time                            1/05/06   EARL           - CHECK for CSMSALVE ovr 75%                   8/15/06   earl
+    - changed from scpu75 to scpu70                                           due to machine having less work              7/17/07
+  earl           - changed from scpu70 to scpu50                                           due to machine having less work
+     6/10/20   r.humphris     - just return for now                                                     until we decide to restart
+the rule.         1/14/21   r.humphris     - trap OMEGMACT (defined in $$OGINIT)                           fixed to fire on the cor
+rected message.  So                             that we logon to a console... That this rule                            actually us
+es.  Now that the console exists                             this rule can actually work.
+          - In addition change SCPU50 to SCPU30                           as this processor only has 3 engines.  And
+               10*3 equals 30 (not 50 was when we had 5 engines).                              - Remove "return" as this rule can n
+ow                          work again.  It was disabled before as it was                           unuseable in it's prior state.
+                                                 - don't update parm dataset when no                             problems exist.
+                                     5/13/21   r.humphris     - change error message
+     from this:                                                  SCNDOC15    OMVS MAY NOT BE ACTIVE.
+      -----------------------------------                                                 to this:
+                   af/oper SCNDOC15; AFADDR OMMVS1 failed; see COMMVS                      ----------------------------------------
+----------                                  and send message to Jim G and Rich H                                    instead of to R
+ich H and Linda Conn.                        see comments in commvs for more info on error.           9/02/21   r.humphris     - ma
+jor rewrite                                            1. monitor IDM* regions we care about                                   2. O
+nly alert us to problem after we notice high                          cpu over at least two checks.
+         3. Limit number of alert emails (per region) to                           one email per 30 minutes.
+                      4. debug mode if variable EMAIL set to NO                                  prod. mode if variable EMAIL set t
+o YES                  4/18/22   r.humphris     - add more cpu checking                                    1. monitor C2RSER24 as w
+ell.                                            2. Only alert us to problem after we notice high                          cpu over
+at least two checks.                                         3. Limit number of alert emails (per region) to
+    one email per 30 minutes.                                             4. debug mode if variable EMAIL set to NO
+                  prod. mode if variable EMAIL set to YES                  *******************************************************/
+    72 *-* /* trace 'r' */
+    73 *-* parm_data_set = 'SFRDBMDS.IDMS.RESULTS(SCNDOC15)'
+    75 *-* email = 'YES' /* set to NO for testing, YES for production */
+    76 *-* /* ----------------------------------------- */
+    78 *-* ADDRESS AFHOST
+    79 *-* /* "OPER 'SE ''SCNDOC15 FIRED'',USER=(SFRH66),LOGON' CONSOLE(11)" */
+    82 *-* "AFADDR OMMVS1"
+    83 *-* IF RC ¬= 0
+       *-*  THEN
+       *-*  DO
+    84 *-*   trace 'r'
+    85 *-*   MSG = "''af/oper SCNDOC15; AFADDR OMMVS1 failed; see COMMVS''"
+    86 *-*   SIGNAL ERROR_RTN
+    87 *-*  END /* END OF RC CHECK */
+    89 *-*  /* get current date time for use in variables */
+    90 *-* currentDate = date('b')
+    91 *-* currentTime = time('s')
+    92 *-* say 'executing scndoc15:  date/time='date()'/'time()
+    94 *-* /* get info on prior monitor checks */
+    95 *-* x = SHARVGET('SYSTEM','GLOBAL.SCNDOC15.') /*get info on job */
+    97 *-* parse var global.scndoc15.0 problemLines previousDate previousTime .
+    99 *-* /* reinit for new day ??? */
+   100 *-* if datatype(problemLines,'W') = 0   /* stem never set */
+   101 *-*  then
+       *-*  do
+   102 *-*   x = SetStemZero(0) /* reinit stem first time */
+   104 *-*   /* and reparse for new data */
+   105 *-*   parse var global.scndoc15.0 ,                                                         problemLines previousDate previo
+usTime .
+   108 *-*  end
+   109 *-* else
+       *-*  do
+   110 *-*   /* just update currenttime (really) */
+   111 *-*   /* in global.scndoc15.0             */
+   113 *-*   x = SetStemZero(problemLines) /* same lines, but update date/time*/
+   114 *-*   /* in stem for next time.          */
+   115 *-*   /* do NOT reparse, as we want to use PreviousDate PreviousTime */
+   116 *-*   /* from prior run.                                             */
+   117 *-*  end
+   119 *-* "SCPU30"    /* for testing use 10%; otherwise use 30%     */
+   120 *-* "AFADDR"    /*  this command is for 1 cpu so we mult by 3 */
+   121 *-* /*  as we have 3 cpu engines.                 */
+   124 *-* X = 'GLBVGET'('LINE#')
+   125 *-* IF LINE# >= 1
+       *-*  THEN
+   126 *-*  DO a = 2 TO LINE# BY 1
+   127 *-*   retline  = "LINE"a
+   128 *-*   X = GLBVGET(retline)
+   129 *-*   PARSE VALUE VALUE(retline)  WITH junk job percent .
+   131 *-*   if substr(job,1,3) = 'IDM' | job = 'C2RSER24'
+   132 *-*    then
+       *-*    do
+   133 *-*     call idmprobs /* handle problem address space */
+   134 *-*    end  /*  end of idm check */
+   135 *-*  end
+   137 *-*  /* done all the work we need to for this interval */
+   138 *-* exit 0
+   140 *-* IDMPROBS:
+   141 *-* /* We have a address space consuming a lot of cpu */
+   143 *-* /* First see if we already know about this address*/
+   144 *-* /* space.                                         */
+   147 *-* do index1 = 1 by 1 for problemLines
+   148 *-*  if word(global.scndoc15.index1,1) = job
+   149 *-*   then
+       *-*   leave
+   150 *-* end
+   152 *-* if index1 > problemLines /* no info on job? */
+   153 *-*  then
+       *-*  do
+   154 *-*   /* obviously, first time for this address space */
+   156 *-*   /* update stem zero so it knows new number of lines of    */
+   157 *-*   /* addres space info we've collected.                     */
+   158 *-*   problemLines = problemLines + 1
+   159 *-*   x = SetStemZero(problemLines) /* update stem zero to add line*/
+   161 *-*   /* invent new stem for this address space */
+   162 *-*   lastEmailDate = '000000'
+   163 *-*   lastEmailTime = 0
+   164 *-*   global.scndoc15.problemLines = ,                                              job currentDate currentTime '1' ,
+                                    lastEmailDate lastEmailTime
+   167 *-*   /* update for use next time */
+   168 *-*   x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'problemLines)
+   170 *-*   return /* ignore issue 1st time */
+   171 *-*  end
+   173 *-*  /* ahh, we've seen a problem with this since last time we were up*/
+   174 *-* parse var global.scndoc15.index1 ,                                                    pastjob pastDate pastTime pastNum
+,                                     LastEmailDate LastEmailTime .
+   178 *-* /* does email date need to be fixed? */
+   179 *-* /* --------------------------------- */
+   180 *-* if lastEmailDate <> currentDate
+   181 *-*  then
+       *-*  do
+   182 *-*   if lastEmailDate + 1 = currentDate & lastEmailTime >= 0
+   183 *-*    then
+       *-*    do
+   184 *-*     lastEmailDate = currentDate
+   185 *-*     lastEmailTime = lastEmailTime - 86400
+   186 *-*    end
+   187 *-*   else
+       *-*    do /* time to reset last email date/time*/
+   188 *-*     lastEmailDate = 0
+   189 *-*     lastEmailTime = 0
+   190 *-*    end
+   191 *-*  end
+   193 *-*  /* did we see address space in trouble last time? */
+   194 *-*  /* ---------------------------------------------- */
+   195 *-* if pastDate = previousDate ,                                             & pastTime = previousTime
+   197 *-*  then
+       *-*  do /* job still in trouble, for pastNum + 1 times */
+   199 *-*   /* check if time for email */
+   200 *-*   pastNum = pastNum + 1
+   201 *-*   if pastnum = 2 & LastEmailDate = 0 /* no prior email?        */
+   202 *-*    then
+       *-*    do                        /* and 2nd observation? email!*/
+   203 *-*     /* send email */
+   204 *-*     if   email = 'YES' & left(job,3) = 'IDM'
+   205 *-*      then
+       *-*      "EXEC ALERT 'PRODIDMS IDMOVR "job" "percent"'"
+   206 *-*     else
+       *-*      if email = 'YES' & job = 'C2RSER24'
+   207 *-*       then
+       *-*       "EXEC ALERT 'OPERPROD C2RSER24 "job" "percent"'"
+   208 *-*      else
+       *-*       x = sendmsg('SCNDOC15 debug email:' job percent)
+   210 *-*     /* update variable */
+   211 *-*     lastEmailDate = currentDate
+   212 *-*     lastEmailTime = currentTime
+   213 *-*     global.scndoc15.index1 = ,                                                   pastJob currentDate CurrentTime pastnum
+ ,                                       lastEmailDate LastEmailTime
+   217 *-*     x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'index1)
+   219 *-*     return
+   220 *-*    end
+   221 *-*   else
+       *-*    if currentTime - LastEmailTime > 1800  , /* or > 30 mins */              & pastNum > 2
+   223 *-*     then
+       *-*     do /* email, update + return */
+   224 *-*      /* send email */
+   225 *-*      if email = 'YES' & left(job,3) = 'IDM'
+   226 *-*       then
+       *-*       "EXEC ALERT 'PRODIDMS IDMOVR "job" "percent"'"
+   227 *-*      else
+       *-*       if email = 'YES' & job = 'C2RSER24'
+   228 *-*        then
+       *-*        "EXEC ALERT 'OPERPROD C2RSER24 "job" "percent"'"
+   229 *-*       else
+       *-*        x = sendmsg('SCNDOC15 debug email:' job percent)
+   231 *-*      /* update variable */
+   232 *-*      pastnum = 2 /* pretend only 2nd event, as we did email*/
+   233 *-*      lastEmailDate = currentDate
+   234 *-*      lastEmailTime = currentTime
+   235 *-*      global.scndoc15.index1 = ,                                                   pastJob currentDate CurrentTime pastnu
+m ,                                       lastEmailDate LastEmailTime
+   239 *-*      x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'index1)
+   241 *-*      return
+   242 *-*     end
+   243 *-*    else
+       *-*     do /* update + return */
+   244 *-*      /* update variable */
+   245 *-*      global.scndoc15.index1 = ,                                                   pastJob currentDate CurrentTime pastnu
+m ,                                       LastEmailDate LastEmailTime
+   249 *-*      x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'index1)
+   251 *-*      return
+   252 *-*     end
+   253 *-*  end
+   255 *-* if pastDate <> date('b') /* issue before today? */
+   256 *-*  then
+       *-*  do
+   257 *-*   /* obviously a new issue, update varablies and return */
+   258 *-*   /* update variable */
+   259 *-*   global.scndoc15.index1 = ,                                                      pastJob currentDate CurrentTime '1' ,
+                                          lastEmailDate lastEmailTime
+   263 *-*   x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'index1)
+   265 *-*   return
+   266 *-*  end
+   268 *-*  /* non-sequential issue in the same day for same region */
+   269 *-*  /* update variable */
+   270 *-* pastNum = '1' /* 1st high cpu observed, in a while */
+   271 *-* global.scndoc15.index1 = ,                                                      pastJob currentDate CurrentTime '1' ,
+                                        LastEmailDate LastEmailTime
+   275 *-* x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'index1)
+   277 *-* return
+   279 *-* ERROR_RTN:
+   280 *-* exitnum = 99
+   281 *-* CALL RECORDIT
+   282 *-* "OPER 'SE "MSG",USER=(SFRH66,SFRH25),LOGON' CONSOLE(11)"
+   283 *-* trace 'n'
+   284 *-* EXIT 99
+   285 *-* RECORDIT:
+   287 *-* wdate = date(u)
+   288 *-* dtime = time(n)
+   290 *-* "ALLOC DD(PARMDS) DSN('"parm_data_set"') SHR "
+   291 *-* /* ------------------------------------------- */
+   292 *-* /*                                             */
+   293 *-* /* ------------------------------------------- */
+   294 *-* ADDRESS MVS
+   295 *-* QUEUE 'EXIT WAS' exitnum wdate dtime time('s')
+   296 *-* "EXECIO * DISKW PARMDS (finis )"
+   297 *-* ADDRESS AFHOST
+   298 *-* "FREE  DDNAME(PARMDS)"
+   304 *-* RETURN
+   306 *-* SetStemZero:
+   307 *-* /* this is a function to set variable GLOBAL.SCNDOC15.0 */
+   308 *-* /* ...for the next time this exec is used.              */
+   309 *-* /*                                                      */
+   310 *-* /* called like:  x = SetStemZero(problemLines)          */
+   311 *-* /*                                                      */
+   312 *-* /* this will update the global.scndoc15.0 to            */
+   313 *-* /*    word 1 (number of lines)                          */
+   314 *-* /*    word 2 currentDate                                */
+   315 *-* /*    word 3 durrentTime                                */
+   316 *-* /* and write the variable back out                      */
+   318 *-* parse arg sszProblemLines .
+   320 *-* global.scndoc15.0 = sszProblemLines currentDate CurrentTime
+   322 *-* x = sharvput('SYSTEM','GLOBAL.SCNDOC15.0')
+   323 *-* return x
+   325 *-* sendMsg:
+   326 *-* /* this is a function to send a message to user(s)      */
+   327 *-* parse upper arg sendMsgMsg
+   328 *-* "OPER 'SE "sendMsgMsg",USER=(SFRH66),LOGON' CONSOLE(11)"
+   329 *-* return 0
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Built-In+/External use  'GLBVGET'             Reference: F(124)
+
+Variable (set w/rexx)   a                     Assigned : 126
+Variable (used in/rexx) a                     Reference: 127
+
+Address Envir.Constant: ADDRESS 'AFHOST'      Reference: 78 297
+
+Address Envir.Constant: ADDRESS 'MVS'         Reference: 294
+
+Variable (set w/rexx)   currentdate           Assigned : 90
+Variable (used in/rexx) currentdate           Reference: 164 180 182 184 211 213 233 235 245 259 271 320
+
+Variable (set w/rexx)   currenttime           Assigned : 91
+Variable (used in/rexx) currenttime           Reference: 164 212 213 221 234 235 245 259 271 320
+
+Built-In+/External use  DATATYPE              Reference: F(100)
+
+Built-In+/External use  DATE                  Reference: F(90) F(92) F(255) F(287)
+
+Variable (set w/rexx)   dtime                 Assigned : 288
+Variable (used in/rexx) dtime                 Reference: 295
+
+Variable (set w/rexx)   email                 Assigned : 75
+Variable (used in/rexx) email                 Reference: 204 206 225 227
+
+Label (internal label)  ERROR_RTN             Defined  : 279
+Label (int. label ref)  ERROR_RTN             Reference: S(86)
+
+Variable (set w/rexx)   exitnum               Assigned : 280
+Variable (used in/rexx) exitnum               Reference: 295
+
+Built-In+/External use  GLBVGET               Reference: F(128)
+
+Label (internal label)  IDMPROBS              Defined  : 140
+Label (int. label ref)  IDMPROBS              Reference: C(133)
+
+Variable (set w/rexx)   index1                Assigned : 147
+Variable (used in/rexx) index1                Reference: 152 217 239 249 263 275
+Variable (in Stem Set)  index1                Assigned : 213 235 245 259 271
+Variable (in Stem Ref)  index1                Reference: 148 174
+
+Variable (set w/rexx)   job                   Assigned : 129
+Variable (used in/rexx) job                   Reference: 131 148 164 204 205 206 207 208 225 226 227 228 229
+
+Variable (set w/rexx)   junk                  Assigned : 129
+Variable (NEVER USED)   junk                  No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   lastemaildate         Assigned : 162 174 184 188 211 233
+Variable (used in/rexx) lastemaildate         Reference: 164 180 182 201 213 235 245 259 271
+
+Variable (set w/rexx)   lastemailtime         Assigned : 163 174 185 189 212 234
+Variable (used in/rexx) lastemailtime         Reference: 164 182 185 213 221 235 245 259 271
+
+Built-In+/External use  LEFT                  Reference: F(204) F(225)
+
+Variable (NEVER SET)    LINE#                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) LINE#                 Reference: 125 126
+
+Variable (set w/rexx)   msg                   Assigned : 85
+Variable (used in/rexx) msg                   Reference: 282
+
+Variable (NEVER SET)    N                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) N                     Reference: 288
+
+Variable (set w/rexx)   parm_data_set         Assigned : 73
+Variable (used in/rexx) parm_data_set         Reference: 290
+
+Variable (set w/rexx)   pastdate              Assigned : 174
+Variable (used in/rexx) pastdate              Reference: 195 255
+
+Variable (set w/rexx)   pastjob               Assigned : 174
+Variable (used in/rexx) pastjob               Reference: 213 235 245 259 271
+
+Variable (set w/rexx)   pastnum               Assigned : 174 200 232 270
+Variable (used in/rexx) pastnum               Reference: 200 201 213 221 235 245
+
+Variable (set w/rexx)   pasttime              Assigned : 174
+Variable (used in/rexx) pasttime              Reference: 195
+
+Variable (set w/rexx)   percent               Assigned : 129
+Variable (used in/rexx) percent               Reference: 205 207 208 226 228 229
+
+Variable (set w/rexx)   previousdate          Assigned : 97 105
+Variable (used in/rexx) previousdate          Reference: 195
+
+Variable (set w/rexx)   previoustime          Assigned : 97 105
+Variable (used in/rexx) previoustime          Reference: 195
+
+Variable (set w/rexx)   problemlines          Assigned : 97 105 158
+Variable (used in/rexx) problemlines          Reference: 100 113 147 152 158 159 168
+Variable (in Stem Set)  problemlines          Assigned : 164
+
+SpecialVar(set no-XREF) RC                     *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RC                    Reference: 83
+
+Label (internal label)  RECORDIT              Defined  : 285
+Label (int. label ref)  RECORDIT              Reference: C(281)
+
+Variable (set w/rexx)   retline               Assigned : 127
+Variable (used in/rexx) retline               Reference: 128 129
+
+Variable (NEVER SET)    SCNDOC15              Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SCNDOC15              Assigned : 164 213 235 245 259 271 320
+Variable (in Stem Ref)  SCNDOC15              Reference: 97 105 148 174
+
+Label (internal label)  SENDMSG               Defined  : 325
+Label (int. label ref)  SENDMSG               Reference: F(208) F(229)
+
+Variable (set w/rexx)   sendmsgmsg            Assigned : 327
+Variable (used in/rexx) sendmsgmsg            Reference: 328
+
+Label (internal label)  SETSTEMZERO           Defined  : 306
+Label (int. label ref)  SETSTEMZERO           Reference: F(102) F(113) F(159)
+
+Built-In+/External use  SHARVGET              Reference: F(95)
+
+Built-In+/External use  SHARVPUT              Reference: F(168) F(217) F(239) F(249) F(263) F(275) F(322)
+
+Variable (set w/rexx)   sszproblemlines       Assigned : 318
+Variable (used in/rexx) sszproblemlines       Reference: 320
+
+Built-In+/External use  SUBSTR                Reference: F(131)
+
+Built-In+/External use  TIME                  Reference: F(91) F(92) F(288) F(295)
+
+Variable (NEVER SET)    U                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) U                     Reference: 287
+
+Built-In+/External use  VALUE                 Reference: F(129)
+
+Variable (set w/rexx)   wdate                 Assigned : 287
+Variable (used in/rexx) wdate                 Reference: 295
+
+Built-In+/External use  WORD                  Reference: F(148)
+
+Variable (set w/rexx)   x                     Assigned : 95 102 113 124 128 159 168 208 217 229 239 249 263 275 322
+Variable (used in/rexx) x                     Reference: 323
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-2 GLOBAL.SCNDOC15.0                 Assigned : 320
+Stem-2 GLOBAL.SCNDOC15.0                 Reference: 97 105
+Stem-2 GLOBAL.SCNDOC15.index1            Assigned : 213 235 245 259 271
+Stem-2 GLOBAL.SCNDOC15.index1            Reference: 148 174
+Stem-2 GLOBAL.SCNDOC15.problemlines      Assigned : 164
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

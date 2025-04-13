@@ -1,0 +1,340 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRCICDS.AFO340.RKANCMD(SCNDOC1#)"      */
+/*      ---------------------------------       */
+/*  date/time of XREF was:                      */
+/*     20220418 11:47:29                        */
+/*      ---------------------------------       */
+
+/************ REXX ***************************************
+        PROGRAM: MVSCMND
+        AUTHOR: BURNS
+        PURPOSE: Use omegmon/mvs af/operator interface to ask
+                 if any IDMS* tasks are above 15% cpu utilization.
+
+                 more cpu checking:
+                 ...add support to also check C2RSER24
+
+  DATE      PROGRMR            REASON
+  10/28/03  BURNS             INITIAL
+
+  10/31/03  EARL              -PICKUP ACTUAL % FOR NOTIFY MESSAGE
+                              -CALL ALERT FOR EPAGE NOTIFY
+                              -CHECK FOR ALL IDMS CVS
+                              -change command from 15 to 75
+  1/20/04   earl              - submit batch job to kill runaway
+                                adso task only for idmtstxx idmdocxx
+  4/06/04   earl              - because Bob B. wants nolog specified
+                                program needs changed to notify if
+                                omvs comm bridge is down
+  4/21/04   earl           - need to write mem to
+                           'SFRDBMDS.IDMS.RESULTS' with last good
+                                exec date time
+  1/05/06   EARL           - CHECK for CSMSALVE ovr 75%
+  8/15/06   earl           - changed from scpu75 to scpu70
+                             due to machine having less work
+  7/17/07   earl           - changed from scpu70 to scpu50
+                             due to machine having less work
+  6/10/20   r.humphris     - just return for now
+                             until we decide to restart the rule.
+  1/14/21   r.humphris     - trap OMEGMACT (defined in $$OGINIT)
+                   fixed to fire on the corrected message.  So
+                   that we logon to a console... That this rule
+                   actually uses.  Now that the console exists
+                   this rule can actually work.
+                           - In addition change SCPU50 to SCPU30
+                   as this processor only has 3 engines.  And
+                   10*3 equals 30 (not 50 was when we had 5 engines).
+                           - Remove "return" as this rule can now
+                   work again.  It was disabled before as it was
+                   unuseable in it's prior state.
+                           - don't update parm dataset when no
+                   problems exist.
+  5/13/21   r.humphris     - change error message
+                             from this:
+                 SCNDOC15    OMVS MAY NOT BE ACTIVE.
+                 -----------------------------------
+                             to this:
+                 af/oper SCNDOC15; AFADDR OMMVS1 failed; see COMMVS
+                 --------------------------------------------------
+                             and send message to Jim G and Rich H
+                             instead of to Rich H and Linda Conn.
+                 see comments in commvs for more info on error.
+  9/02/21   r.humphris     - major rewrite
+              1. monitor IDM* regions we care about
+              2. Only alert us to problem after we notice high
+                cpu over at least two checks.
+              3. Limit number of alert emails (per region) to
+                one email per 30 minutes.
+              4. debug mode if variable EMAIL set to NO
+                 prod. mode if variable EMAIL set to YES
+  4/18/22   r.humphris     - add more cpu checking
+              1. monitor C2RSER24 as well.
+              2. Only alert us to problem after we notice high
+                cpu over at least two checks.
+              3. Limit number of alert emails (per region) to
+                one email per 30 minutes.
+              4. debug mode if variable EMAIL set to NO
+                 prod. mode if variable EMAIL set to YES
+  *******************************************************/
+  /* trace 'r' */
+  parm_data_set = 'SFRDBMDS.IDMS.RESULTS(SCNDOC15)'
+
+  email = 'YES' /* set to NO for testing, YES for production */
+                /* ----------------------------------------- */
+
+  ADDRESS AFHOST
+ /* "OPER 'SE ''SCNDOC15 FIRED'',USER=(SFRH66),LOGON' CONSOLE(11)" */
+
+
+  "AFADDR OMMVS1"
+      IF RC ¬= 0 THEN DO
+         trace 'r'
+         MSG = "''af/oper SCNDOC15; AFADDR OMMVS1 failed; see COMMVS''"
+         SIGNAL ERROR_RTN
+         END /* END OF RC CHECK */
+
+  /* get current date time for use in variables */
+  currentDate = date('b')
+  currentTime = time('s')
+  say 'executing scndoc15:  date/time='date()'/'time()
+
+  /* get info on prior monitor checks */
+  x = SHARVGET('SYSTEM','GLOBAL.SCNDOC15.') /*get info on job */
+
+  parse var global.scndoc15.0 problemLines previousDate previousTime .
+
+  /* reinit for new day ??? */
+  if datatype(problemLines,'W') = 0   /* stem never set */
+  then do
+     x = SetStemZero(0) /* reinit stem first time */
+
+     /* and reparse for new data */
+     parse var global.scndoc15.0 ,
+                   problemLines previousDate previousTime .
+
+  end
+  else do
+     /* just update currenttime (really) */
+     /* in global.scndoc15.0             */
+
+     x = SetStemZero(problemLines) /* same lines, but update date/time*/
+                                   /* in stem for next time.          */
+     /* do NOT reparse, as we want to use PreviousDate PreviousTime */
+     /* from prior run.                                             */
+  end
+
+  "SCPU30"    /* for testing use 10%; otherwise use 30%     */
+  "AFADDR"    /*  this command is for 1 cpu so we mult by 3 */
+              /*  as we have 3 cpu engines.                 */
+
+
+   X = 'GLBVGET'('LINE#')
+   IF LINE# >= 1 THEN
+   DO a = 2 TO LINE# BY 1
+       retline  = "LINE"a
+       X = GLBVGET(retline)
+       PARSE VALUE VALUE(retline)  WITH junk job percent .
+
+       if substr(job,1,3) = 'IDM' | job = 'C2RSER24'
+       then do
+          call idmprobs /* handle problem address space */
+       end  /*  end of idm check */
+   end
+
+  /* done all the work we need to for this interval */
+  exit 0
+
+IDMPROBS:
+     /* We have a address space consuming a lot of cpu */
+
+     /* First see if we already know about this address*/
+     /* space.                                         */
+
+
+     do index1 = 1 by 1 for problemLines
+        if word(global.scndoc15.index1,1) = job
+        then leave
+     end
+
+     if index1 > problemLines /* no info on job? */
+     then do
+        /* obviously, first time for this address space */
+
+        /* update stem zero so it knows new number of lines of    */
+        /* addres space info we've collected.                     */
+        problemLines = problemLines + 1
+        x = SetStemZero(problemLines) /* update stem zero to add line*/
+
+        /* invent new stem for this address space */
+        lastEmailDate = '000000'
+        lastEmailTime = 0
+        global.scndoc15.problemLines = ,
+              job currentDate currentTime '1' ,
+                  lastEmailDate lastEmailTime
+        /* update for use next time */
+        x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'problemLines)
+
+        return /* ignore issue 1st time */
+     end
+
+     /* ahh, we've seen a problem with this since last time we were up*/
+     parse var global.scndoc15.index1 ,
+                   pastjob pastDate pastTime pastNum ,
+                   LastEmailDate LastEmailTime .
+
+     /* does email date need to be fixed? */
+     /* --------------------------------- */
+     if lastEmailDate <> currentDate
+     then do
+        if lastEmailDate + 1 = currentDate & lastEmailTime >= 0
+        then do
+           lastEmailDate = currentDate
+           lastEmailTime = lastEmailTime - 86400
+        end
+        else do /* time to reset last email date/time*/
+           lastEmailDate = 0
+           lastEmailTime = 0
+        end
+     end
+
+     /* did we see address space in trouble last time? */
+     /* ---------------------------------------------- */
+     if pastDate = previousDate ,
+      & pastTime = previousTime
+     then do /* job still in trouble, for pastNum + 1 times */
+
+        /* check if time for email */
+        pastNum = pastNum + 1
+        if pastnum = 2 & LastEmailDate = 0 /* no prior email?        */
+        then do                        /* and 2nd observation? email!*/
+           /* send email */
+           if   email = 'YES' & left(job,3) = 'IDM'
+           then "EXEC ALERT 'PRODIDMS IDMOVR "job" "percent"'"
+           else if email = 'YES' & job = 'C2RSER24'
+           then "EXEC ALERT 'OPERPROD C2RSER24 "job" "percent"'"
+           else x = sendmsg('SCNDOC15 debug email:' job percent)
+
+           /* update variable */
+           lastEmailDate = currentDate
+           lastEmailTime = currentTime
+           global.scndoc15.index1 = ,
+                pastJob currentDate CurrentTime pastnum ,
+                        lastEmailDate LastEmailTime
+
+           x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'index1)
+
+           return
+        end
+        else if currentTime - LastEmailTime > 1800  , /* or > 30 mins */
+              & pastNum > 2
+        then do /* email, update + return */
+           /* send email */
+           if email = 'YES' & left(job,3) = 'IDM'
+           then "EXEC ALERT 'PRODIDMS IDMOVR "job" "percent"'"
+           else if email = 'YES' & job = 'C2RSER24'
+           then "EXEC ALERT 'OPERPROD C2RSER24 "job" "percent"'"
+           else x = sendmsg('SCNDOC15 debug email:' job percent)
+
+           /* update variable */
+           pastnum = 2 /* pretend only 2nd event, as we did email*/
+           lastEmailDate = currentDate
+           lastEmailTime = currentTime
+           global.scndoc15.index1 = ,
+                pastJob currentDate CurrentTime pastnum ,
+                        lastEmailDate LastEmailTime
+
+           x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'index1)
+
+           return
+        end
+        else do /* update + return */
+           /* update variable */
+           global.scndoc15.index1 = ,
+                pastJob currentDate CurrentTime pastnum ,
+                        LastEmailDate LastEmailTime
+
+           x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'index1)
+
+           return
+        end
+     end
+
+     if pastDate <> date('b') /* issue before today? */
+     then do
+        /* obviously a new issue, update varablies and return */
+        /* update variable */
+        global.scndoc15.index1 = ,
+                pastJob currentDate CurrentTime '1' ,
+                        lastEmailDate lastEmailTime
+
+        x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'index1)
+
+        return
+     end
+
+     /* non-sequential issue in the same day for same region */
+     /* update variable */
+     pastNum = '1' /* 1st high cpu observed, in a while */
+     global.scndoc15.index1 = ,
+             pastJob currentDate CurrentTime '1' ,
+                     LastEmailDate LastEmailTime
+
+     x = sharvput('SYSTEM','GLOBAL.SCNDOC15.'index1)
+
+     return
+
+ERROR_RTN:
+     exitnum = 99
+     CALL RECORDIT
+     "OPER 'SE "MSG",USER=(SFRH66,SFRH25),LOGON' CONSOLE(11)"
+     trace 'n'
+     EXIT 99
+RECORDIT:
+
+  wdate = date(u)
+  dtime = time(n)
+
+       "ALLOC DD(PARMDS) DSN('"parm_data_set"') SHR "
+       /* ------------------------------------------- */
+       /*                                             */
+       /* ------------------------------------------- */
+     ADDRESS MVS
+     QUEUE 'EXIT WAS' exitnum wdate dtime time('s')
+     "EXECIO * DISKW PARMDS (finis )"
+     ADDRESS AFHOST
+       "FREE  DDNAME(PARMDS)"
+
+
+
+
+
+  RETURN
+
+SetStemZero:
+  /* this is a function to set variable GLOBAL.SCNDOC15.0 */
+  /* ...for the next time this exec is used.              */
+  /*                                                      */
+  /* called like:  x = SetStemZero(problemLines)          */
+  /*                                                      */
+  /* this will update the global.scndoc15.0 to            */
+  /*    word 1 (number of lines)                          */
+  /*    word 2 currentDate                                */
+  /*    word 3 durrentTime                                */
+  /* and write the variable back out                      */
+
+  parse arg sszProblemLines .
+
+  global.scndoc15.0 = sszProblemLines currentDate CurrentTime
+
+  x = sharvput('SYSTEM','GLOBAL.SCNDOC15.0')
+  return x
+
+sendMsg:
+  /* this is a function to send a message to user(s)      */
+  parse upper arg sendMsgMsg
+  "OPER 'SE "sendMsgMsg",USER=(SFRH66),LOGON' CONSOLE(11)"
+  return 0
+

@@ -1,0 +1,1501 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(QWCMDS)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(QWCMDS)
+   -----------------------------------------
+
+READY
+    QWCMDS
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH48.REXX.EXEC(QWCMDS)"      */
+    Generated scan code/comment:   /*      ------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:             */
+    Generated scan code/comment:   /*     20231217 23:07:05               */
+    Generated scan code/comment:   /*      ------------------------       */
+     1 *-* /*************************** REXX ************************************/
+     2 *-* /*                                                                   */
+     3 *-* /*                                                                   */
+     4 *-* /*                        Q W C M D S                                */
+     5 *-* /*                                                                   */
+     6 *-* /*                        Release 8.4                                */
+     7 *-* /*                                                                   */
+     8 *-* /*      This exec checks for presence of QW or QWS command           */
+     9 *-* /*      in SYSTEM or SITE command table, reports findings            */
+    10 *-* /*      to user, and offers option of updating existing              */
+    11 *-* /*      command table or creating new SITE command table.            */
+    12 *-* /*                                                                   */
+    13 *-* /*                                                                   */
+    14 *-* /*********************************************************************/
+    17 *-* REL = '8.4'                    /* Current Release Number Variable */
+    19 *-* /* Trace ?R */                    /* For tracing (if needed)         */
+    22 *-* Arg TMPJCL TMPTYPE                 /* Possible Argument from QWIAD */
+    24 *-* /*********************************************************************/
+    25 *-* /*                                                                   */
+    26 *-* /*                 Initialization/House Keeping                      */
+    27 *-* /*                                                                   */
+    28 *-* /*********************************************************************/
+    30 *-* If SYSVAR(SYSISPF) <> "ACTIVE"
+       *-*  Then
+    31 *-*  Do
+    32 *-*   Say "THIS REXX EXEC MUST BE EXECUTED UNDER ISPF - TRY AGAIN"
+    33 *-*   Exit
+    34 *-*  End
+    36 *-* Address ISPEXEC
+    37 *-* Parse Source P1 P2 P3 P4 P5 P6 P7 P8
+    38 *-* JCLDSN = P5                                   /* JCL Data Set Name */
+    40 *-* If JCLDSN = "?"
+       *-*  Then
+    41 *-*  Do
+    42 *-*   JCLDSN = TMPJCL
+    43 *-*   If JCLDSN = ''
+       *-*    Then
+    44 *-*    Do
+    45 *-*     Say "QWCMDS MUST BE EXECUTED EXPLICITLY AS SHOWN HERE:"
+    46 *-*     Say "    EXEC 'xxx.xxx.xxx(QWCMDS)'"
+    47 *-*     Say "WHERE xxx.xxx.xxx IS THE NAME OF THE MVS/QuickRef"
+    48 *-*     Say "JCL LIBRARY"
+    49 *-*     Exit
+    50 *-*    End
+    51 *-*  End
+    53 *-* "LIBDEF ISPPLIB DATASET ID('"JCLDSN"') STACK"   /* LIBDEF Panels   */
+    54 *-* "LIBDEF ISPMLIB DATASET ID('"JCLDSN"') STACK"   /* LIBDEF Messages */
+    56 *-* Address TSO
+    57 *-* MSGVAL = MSG('OFF')
+    58 *-* "FREE F(QWICMDUD)"
+    59 *-* MSGVAL = MSG(MSGVAL)
+    60 *-* "ALLOC FILE(QWICMDUD) NEW DELETE",                                                  "DSORG(PO) RECFM(F B) LRECL(80) BLKS
+IZE(6160)",                                 "UNIT(SYSDA)",                                                                  "SPACE(
+4,2) TRACKS DIR(2)"
+    65 *-* OPENSW = 'N'                              /* Set File Open Switch  */
+    66 *-* STEPS = 'WL'                              /* Set for Welcome Panel */
+    69 *-* /*********************************************************/
+    70 *-* /*                                                       */
+    71 *-* /*                 - Panel Table -                       */
+    72 *-* /*                                                       */
+    73 *-* /*********************************************************/
+    74 *-* /*                                                       */
+    75 *-* /*   Contains panel name suffixes and descriptions.      */
+    76 *-* /*                                                       */
+    77 *-* /*   The panel name suffix is also the step indicator.   */
+    78 *-* /*                                                       */
+    79 *-* /*   So the panel name for the Welcome Panel is QWCMPWL  */
+    80 *-* /*   and the step indicator is WL.                       */
+    81 *-* /*                                                       */
+    82 *-* /*   You can find references to a step or panel with     */
+    83 *-* /*   FIND xx WORD where xx is the panel name suffix.     */
+    84 *-* /*                                                       */
+    85 *-* /*   In most cases, there is one panel per step and      */
+    86 *-* /*   one step per panel.                                 */
+    87 *-* /*                                                       */
+    88 *-* /*   Some steps may not have an associated panel and     */
+    89 *-* /*   some steps may utilize more than one panel.         */
+    90 *-* /*                                                       */
+    91 *-* /*********************************************************/
+    92 *-* /*                                                       */
+    93 *-* /*     Suffix           Panel Description                */
+    94 *-* /*     ------   -------------------------------          */
+    95 *-* /*       BC     Make Backup Copy                         */
+    96 *-* /*       CC     Create Complete                          */
+    97 *-* /*       CD     Current Command Table Dsn                */
+    98 *-* /*       CF     Confirm Command Definition               */
+    99 *-* /*       CO     Create Storage Options                   */
+   100 *-* /*       CP     Specify Command Parameters               */
+   101 *-* /*       DC     Delete Commands                          */
+   102 *-* /*       SC     Show Current Commands                    */
+   103 *-* /*       SD     Show Current Commands (DBO)              */
+   104 *-* /*       SN     Show No Existing Commands                */
+   105 *-* /*       SP     Show Command Parameters                  */
+   106 *-* /*       SU     Show Commands In Update Table            */
+   107 *-* /*       TC     Termination (Create Table)               */
+   108 *-* /*       TU     Termination (Update Table)               */
+   109 *-* /*       UC     Update Complete                          */
+   110 *-* /*       UD     Updated Command Table DSN                */
+   111 *-* /*       UO     Update Storage Options                   */
+   112 *-* /*       WL     Welcome Panel                            */
+   113 *-* /*                                                       */
+   114 *-* /*********************************************************/
+   118 *-* /*********************************************************************/
+   119 *-* /*                                                                   */
+   120 *-* /*                     Panel Processing                              */
+   121 *-* /*                                                                   */
+   122 *-* /*********************************************************************/
+   125 *-* Do Forever                          /* Outer Do forces inner DO to */
+   126 *-*  /* process next panel in STEPS */
+   129 *-*  Do Forever                          /* Inner Do processes current  */
+   130 *-*   /*      panel in steps         */
+   133 *-*   Select                        /* Select the current panel in STEPS */
+   137 *-*    /*********************************************************************/
+   138 *-*    /*                                                                   */
+   139 *-*    /*                     Welcome Panel                                 */
+   140 *-*    /*                                                                   */
+   141 *-*    /*********************************************************************/
+   142 *-*   When RIGHT(STEPS,2) = 'WL'
+       *-*    Then           /* Welcome Panel?        */
+   143 *-*    Do                                      /* Yes                   */
+   144 *-*     Address ISPEXEC
+   145 *-*     "DISPLAY PANEL(QWCMPWL)"
+   146 *-*     If RC > 4
+       *-*      Then                         /* END or RETURN?       */
+   147 *-*      If OPENSW = 'Y'
+       *-*       Then
+   148 *-*       Call WrapUp
+   149 *-*      Else
+   150 *-*       Do
+   151 *-*        Address ISPEXEC
+   152 *-*        "LIBDEF ISPPLIB"
+   153 *-*        "LIBDEF ISPMLIB"
+   154 *-*        Exit
+   155 *-*       End
+   157 *-*     OPENSW   = 'Y'
+   158 *-*     CFONDCMD = ' '
+   159 *-*     CCMDINV  = ' '
+   160 *-*     CQWACT   = ' '
+   161 *-*     CQWDESC  = ' '
+   162 *-*     CQWSACT  = ' '
+   163 *-*     CQWSDESC = ' '
+   164 *-*     FCMDDSN  = ' '
+   165 *-*     Address ISPEXEC
+   166 *-*     "VGET (ZSCTPREF) ASIS"
+   167 *-*     If (RC = 0 & ZSCTPREF /= '' & ZSCTPREF /= ' ')
+       *-*      Then
+   168 *-*      Do
+   169 *-*       "VGET (ZSCTSRCH) ASIS"
+   170 *-*       If ZSCTSRCH = 'B'
+       *-*        Then
+   171 *-*        Do
+   172 *-*         Call CkSites
+   173 *-*         If CFONDCMD = ' '
+       *-*          Then
+   174 *-*          Call CkSystem
+   175 *-*        End
+   176 *-*       Else
+   177 *-*        Do
+   178 *-*         Call CkSystem
+   179 *-*         If CFONDCMD = ' '
+       *-*          Then
+   180 *-*          Call CkSites
+   181 *-*        End
+   182 *-*      End
+   183 *-*     Else
+   184 *-*      Call CkSystem
+   185 *-*     If CFONDCMD <> ' '
+       *-*      Then
+   186 *-*      STEPS = STEPS || 'SC'
+   187 *-*     Else
+   188 *-*      STEPS = STEPS || 'SN'
+   189 *-*     Leave
+   190 *-*    End
+   192 *-*    /*********************************************************************/
+   193 *-*    /*                                                                   */
+   194 *-*    /*                 Show Current Commands                             */
+   195 *-*    /*                                                                   */
+   196 *-*    /*********************************************************************/
+   197 *-*   When RIGHT(STEPS,2) = 'SC'
+       *-*    Then
+   198 *-*    Do
+   199 *-*     QCMDINV = CCMDINV
+   200 *-*     Address ISPEXEC
+   201 *-*     "VPUT (QCMDINV) SHARED"
+   202 *-*     If CQWACT = ' '
+       *-*      Then
+   203 *-*      CQWACT = 'QW is not defined in this table'
+   204 *-*     If CQWSACT = ' '
+       *-*      Then
+   205 *-*      CQWSACT = 'QWS is not defined in this table'
+   206 *-*     Address ISPEXEC
+   207 *-*     If TMPTYPE = 'F'
+       *-*      Then
+   208 *-*      "DISPLAY PANEL(QWCMPSC)"
+   209 *-*     Else
+   210 *-*      "DISPLAY PANEL(QWCMPSD)"
+   211 *-*     Call PostPnl
+   212 *-*     If BKUP = 'Y'
+       *-*      Then
+   213 *-*      Leave
+   214 *-*     If USECUR = 'Y' | TMPTYPE = 'D'
+       *-*      Then
+   215 *-*      Call WrapUp
+   216 *-*     STEPS = STEPS || 'CF'
+   217 *-*     Leave
+   218 *-*    End
+   220 *-*    /*********************************************************************/
+   221 *-*    /*                                                                   */
+   222 *-*    /*                 Show No Existing Commands                         */
+   223 *-*    /*                                                                   */
+   224 *-*    /*********************************************************************/
+   225 *-*   When RIGHT(STEPS,2) = 'SN'
+       *-*    Then
+   226 *-*    Do
+   227 *-*     Address ISPEXEC
+   228 *-*     "DISPLAY PANEL(QWCMPSN)"
+   229 *-*     Call PostPnl
+   230 *-*     If BKUP = 'Y'
+       *-*      Then
+   231 *-*      Leave
+   232 *-*     If TMPTYPE = 'D'
+       *-*      Then
+   233 *-*      Call WrapUp
+   234 *-*     STEPS = STEPS || 'CF'
+   235 *-*     Leave
+   236 *-*    End
+   238 *-*    /*********************************************************************/
+   239 *-*    /*                                                                   */
+   240 *-*    /*                 Confirm Command Definition                        */
+   241 *-*    /*                                                                   */
+   242 *-*    /*********************************************************************/
+   243 *-*   When RIGHT(STEPS,2) = 'CF'
+       *-*    Then
+   244 *-*    Do
+   245 *-*     Address ISPEXEC
+   246 *-*     "DISPLAY PANEL(QWCMPCF)"
+   247 *-*     Call PostPnl
+   248 *-*     If BKUP = 'Y'
+       *-*      Then
+   249 *-*      Leave
+   250 *-*     If UPDOPT = 'N'
+       *-*      Then
+   251 *-*      Call WrapUp
+   252 *-*     STEPS = STEPS || 'CP'
+   253 *-*     Leave
+   254 *-*    End
+   256 *-*    /*********************************************************************/
+   257 *-*    /*                                                                   */
+   258 *-*    /*                 Specify Command Parameters                        */
+   259 *-*    /*                                                                   */
+   260 *-*    /*********************************************************************/
+   261 *-*   When RIGHT(STEPS,2) = 'CP'
+       *-*    Then
+   262 *-*    Do
+   263 *-*     Address ISPEXEC
+   264 *-*     "DISPLAY PANEL(QWCMPCP)"
+   265 *-*     Call PostPnl
+   266 *-*     If BKUP = 'Y'
+       *-*      Then
+   267 *-*      Leave
+   268 *-*     UCMDMEM = 'ISPCMDS'
+   269 *-*     UTYPTB = 'system'
+   270 *-*     UCMDINV = 'LIBDEF'
+   271 *-*     UPDACT = 'updated'
+   272 *-*     If UINVTNQ = 'N'
+       *-*      Then
+   273 *-*      UCMDINV = 'non-LIBDEF'
+   274 *-*     If UPDTYP <> 'S'
+       *-*      Then
+   275 *-*      Do
+   276 *-*       UCMDMEM = USAI || 'CMDS'
+   277 *-*       UTYPTB = 'site'
+   278 *-*      End
+   279 *-*     If UPDTYP = 'C'
+       *-*      Then
+   280 *-*      Do
+   281 *-*       UPDACT = 'created'
+   282 *-*       STEPS = STEPS || 'SP'
+   283 *-*      End
+   284 *-*     Else
+   285 *-*      STEPS = STEPS || 'CD'
+   286 *-*     UCMPRD = UCMDMEM || '.'
+   287 *-*     QCMDINV = UCMDINV
+   288 *-*     Address ISPEXEC
+   289 *-*     "VPUT (QCMDINV) SHARED"
+   290 *-*     Leave
+   291 *-*    End
+   293 *-*    /*********************************************************************/
+   294 *-*    /*                                                                   */
+   295 *-*    /*                 Current Command Table DSN                         */
+   296 *-*    /*                                                                   */
+   297 *-*    /*********************************************************************/
+   298 *-*   When RIGHT(STEPS,2) = 'CD'
+       *-*    Then
+   299 *-*    Do
+   300 *-*     If FCMDDSN = ' '
+       *-*      Then
+   301 *-*      If CTYPTB = UTYPTB
+       *-*       Then
+   302 *-*       FCMDDSN = CCMDDSN
+   303 *-*      Else
+   304 *-*       Do
+   305 *-*        CCMDMEM = UCMDMEM
+   306 *-*        Call FindTble
+   307 *-*        FCMDDSN = CCMDDSN
+   308 *-*       End
+   309 *-*     Address ISPEXEC
+   310 *-*     "DISPLAY PANEL(QWCMPCD)"
+   311 *-*     Call PostPnl
+   312 *-*     If BKUP = 'Y'
+       *-*      Then
+   313 *-*      Leave
+   314 *-*     QTDDSN = "'"||FCMDDSN||"'"
+   315 *-*     MSGVAL = MSG('OFF')
+   316 *-*     LISTVAR = LISTDSI(QTDDSN)
+   317 *-*     MSGVAL = MSG(MSGVAL)
+   318 *-*     If LISTVAR > 4
+       *-*      Then
+   319 *-*      Do
+   320 *-*       ERRDSN = SUBSTR(QTDDSN,2,LENGTH(QTDDSN)-2)
+   321 *-*       "SETMSG MSG(QWCMD000)"
+   322 *-*       Leave
+   323 *-*      End
+   324 *-*     "LMINIT DATAID(WFID) DATASET("QTDDSN")"
+   325 *-*     "LMOPEN DATAID(&WFID)"
+   326 *-*     "LMMFIND DATAID(&WFID) MEMBER("CCMDMEM")"
+   327 *-*     SRC = RC
+   328 *-*     "LMCLOSE DATAID(&WFID)"
+   329 *-*     "LMFREE DATAID(&WFID)"
+   330 *-*     If SRC > 0
+       *-*      Then
+   331 *-*      Do
+   332 *-*       ERRDSN = SUBSTR(QTDDSN,2,LENGTH(QTDDSN)-2)
+   333 *-*       "SETMSG MSG(QWCMD001)"
+   334 *-*       Leave
+   335 *-*      End
+   336 *-*     FROMMEM = UCMDMEM
+   337 *-*     FROMDSN = FCMDDSN
+   338 *-*     TOMEM = '$QWICMDS'
+   339 *-*     TODD = 'QWICMDUD'
+   340 *-*     Call Cpyrnm
+   341 *-*     Address ISPEXEC
+   342 *-*     "TBOPEN $QWICMDS LIBRARY(QWICMDUD)"
+   343 *-*     CQWACT   = 'QW is not defined in this table'
+   344 *-*     CQWDESC  = ' '
+   345 *-*     CQWSACT  = 'QWS is not defined in this table'
+   346 *-*     CQWSDESC = ' '
+   347 *-*     ZCTVERB  = 'QW'
+   348 *-*     "TBTOP $QWICMDS"
+   349 *-*     "TBSCAN $QWICMDS ARGLIST(ZCTVERB)"
+   350 *-*     If RC = 0
+       *-*      Then
+   351 *-*      Do
+   352 *-*       CQWACT  = ZCTACT
+   353 *-*       CQWDESC = ZCTDESC
+   354 *-*      End
+   355 *-*     ZCTVERB = 'QWS'
+   356 *-*     "TBTOP $QWICMDS"
+   357 *-*     "TBSCAN $QWICMDS ARGLIST(ZCTVERB)"
+   358 *-*     If RC = 0
+       *-*      Then
+   359 *-*      Do
+   360 *-*       CQWSACT  = ZCTACT
+   361 *-*       CQWSDESC = ZCTDESC
+   362 *-*      End
+   363 *-*     "TBCLOSE $QWICMDS LIBRARY(QWICMDUD)"
+   364 *-*     If LEFT(CQWACT,17) = 'QW is not defined' &,                                        LEFT(CQWSACT,18) = 'QWS is not de
+fined'
+   365 *-*      Then
+   366 *-*      STEPS = STEPS || 'BC'
+   367 *-*     Else
+   368 *-*      STEPS = STEPS || 'SU'
+   369 *-*     Leave
+   370 *-*    End
+   372 *-*    /*********************************************************************/
+   373 *-*    /*                                                                   */
+   374 *-*    /*                 Show Commands In Update Table                     */
+   375 *-*    /*                                                                   */
+   376 *-*    /*********************************************************************/
+   377 *-*   When RIGHT(STEPS,2) = 'SU'
+       *-*    Then
+   378 *-*    Do
+   379 *-*     Address ISPEXEC
+   380 *-*     "DISPLAY PANEL(QWCMPSU)"
+   381 *-*     Call PostPnl
+   382 *-*     If BKUP = 'Y'
+       *-*      Then
+   383 *-*      Leave
+   384 *-*     STEPS = STEPS || 'BC'
+   385 *-*     Leave
+   386 *-*    End
+   389 *-*    /*********************************************************************/
+   390 *-*    /*                                                                   */
+   391 *-*    /*                 Make Backup Copy                                  */
+   392 *-*    /*                                                                   */
+   393 *-*    /*********************************************************************/
+   394 *-*   When RIGHT(STEPS,2) = 'BC'
+       *-*    Then
+   395 *-*    Do
+   396 *-*     IF BCMDDSN = 'BCMDDSN'
+       *-*      Then
+   397 *-*      BCMDDSN = FCMDDSN
+   398 *-*     BCMDMEM = SUBSTR(UCMDMEM,1,LENGTH(UCMDMEM)-1) || 'B'
+   399 *-*     Address ISPEXEC
+   400 *-*     "DISPLAY PANEL(QWCMPBC)"
+   401 *-*     Call PostPnl
+   402 *-*     If BKUP = 'Y'
+       *-*      Then
+   403 *-*      Leave
+   404 *-*     If BKUPOP = 'N'
+       *-*      Then
+   405 *-*      Do
+   406 *-*       STEPS = STEPS || 'SP'
+   407 *-*       Leave
+   408 *-*      End
+   409 *-*     ERRDSN = BCMDDSN
+   410 *-*     QTDDSN = "'"||BCMDDSN||"'"
+   411 *-*     MSGVAL = MSG('OFF')
+   412 *-*     LISTVAR = LISTDSI(QTDDSN)
+   413 *-*     MSGVAL = MSG(MSGVAL)
+   414 *-*     If LISTVAR > 4
+       *-*      Then
+   415 *-*      Do
+   416 *-*       "SETMSG MSG(QWCMD000)"
+   417 *-*       Leave
+   418 *-*      End
+   419 *-*     If BKUPOP = 'Y'
+       *-*      Then
+   420 *-*      Do
+   421 *-*       "LMINIT DATAID(WFID) DATASET("QTDDSN")"
+   422 *-*       "LMOPEN DATAID(&WFID)"
+   423 *-*       "LMMFIND DATAID(&WFID) MEMBER("BCMDMEM")"
+   424 *-*       SRC = RC
+   425 *-*       "LMCLOSE DATAID(&WFID)"
+   426 *-*       "LMFREE DATAID(&WFID)"
+   427 *-*       If SRC = 0
+       *-*        Then
+   428 *-*        Do
+   429 *-*         ERRMEM = BCMDMEM
+   430 *-*         ERRMSG = 'change backup option or change member name'
+   431 *-*         "SETMSG MSG(QWCMD002)"
+   432 *-*         Leave
+   433 *-*        End
+   434 *-*      End
+   435 *-*     QTDDSNF = "'"||FCMDDSN||"'"
+   436 *-*     "LMINIT DATAID(WFI2) DATASET("QTDDSN") ENQ(SHRW)"
+   437 *-*     "LMOPEN DATAID(&WFI2) OPTION(OUTPUT)"
+   438 *-*     If RC > 0
+       *-*      Then
+   439 *-*      Do
+   440 *-*       "LMFREE DATAID(&WFI2)"
+   441 *-*       ERRMSG = 'check update authority'
+   442 *-*       "SETMSG MSG(QWCMD003)"
+   443 *-*       Leave
+   444 *-*      End
+   445 *-*     "LMCLOSE DATAID(&WFI2)"
+   446 *-*     "LMINIT DATAID(WFID) DATASET("QTDDSNF")"
+   447 *-*     "LMCOPY FROMID(&WFID) FROMMEM("UCMDMEM"),                                               TODATAID(&WFI2) TOMEM("BCMDM
+EM") REPLACE"
+   449 *-*     "LMFREE DATAID(&WFID)"
+   450 *-*     "LMFREE DATAID(&WFI2)"
+   451 *-*     STEPS = STEPS || 'SP'
+   452 *-*     Leave
+   453 *-*    End
+   456 *-*    /*********************************************************************/
+   457 *-*    /*                                                                   */
+   458 *-*    /*                 Show Command Parameters                           */
+   459 *-*    /*                                                                   */
+   460 *-*    /*********************************************************************/
+   461 *-*   When RIGHT(STEPS,2) = 'SP'
+       *-*    Then
+   462 *-*    Do
+   463 *-*     Address ISPEXEC
+   464 *-*     "DISPLAY PANEL(QWCMPSP)"
+   465 *-*     Call PostPnl
+   466 *-*     If BKUP = 'Y'
+       *-*      Then
+   467 *-*      Leave
+   468 *-*     Call TmpAOC
+   469 *-*     Address TSO
+   470 *-*     MSGVAL = MSG('OFF')
+   471 *-*     "FREE F(QWICMDUD)"
+   472 *-*     MSGVAL = MSG(MSGVAL)
+   473 *-*     "ALLOC FILE(QWICMDUD) NEW DELETE",                                              "DSORG(PO) RECFM(F B) LRECL(80) BLKS
+IZE(6160)",                                 "UNIT(SYSDA)",                                                                  "SPACE(
+4,2) TRACKS DIR(2)"
+   478 *-*     If UPDTYP = 'C'
+       *-*      Then
+   479 *-*      Do
+   480 *-*       Address ISPEXEC
+   481 *-*       "TBCREATE $QWICMDS WRITE LIBRARY(QWICMDUD)",                                       "NAMES(ZCTVERB ZCTTRUNC ZCTACT
+ZCTDESC)"
+   483 *-*      End
+   484 *-*     Else
+   485 *-*      Do
+   486 *-*       FROMMEM = UCMDMEM
+   487 *-*       FROMDSN = FCMDDSN
+   488 *-*       TOMEM = '$QWICMDS'
+   489 *-*       TODD = 'QWICMDUD'
+   490 *-*       Call Cpyrnm
+   491 *-*       Address ISPEXEC
+   492 *-*       "TBOPEN $QWICMDS WRITE LIBRARY(QWICMDUD)"
+   493 *-*      End
+   495 *-*     If UPDTYP <> 'C'
+       *-*      Then
+   496 *-*      Do
+   497 *-*       ZCTVERB = 'QW'
+   498 *-*       "TBTOP $QWICMDS"
+   499 *-*       Call DelCmds
+   500 *-*       If BKUP = 'Y'
+       *-*        Then
+   501 *-*        Do
+   502 *-*         "TBCLOSE $QWICMDS"
+   503 *-*         Leave
+   504 *-*        End
+   505 *-*       ZCTVERB = 'QWS'
+   506 *-*       "TBTOP $QWICMDS"
+   507 *-*       Call DelCmds
+   508 *-*       If BKUP = 'Y'
+       *-*        Then
+   509 *-*        Do
+   510 *-*         "TBCLOSE $QWICMDS"
+   511 *-*         Leave
+   512 *-*        End
+   513 *-*      End
+   515 *-*     "TBTOP $QWICMDS"
+   516 *-*     If UCMDIND <> 'S'
+       *-*      Then
+   517 *-*      Do
+   518 *-*       ZCTVERB  = 'QW'
+   519 *-*       ZCTTRUNC = '0'
+   520 *-*       ZCTACT  = 'SELECT PGM(QWIKREF1)',                                                         'PARM(&ZPARM) NEWAPPL(QW
+IK)'
+   522 *-*       ZCTDESC = 'INVOKE QUICKREF AS POPUP APPLICATION'
+   523 *-*       If UINVTNQ = 'L'
+       *-*        Then
+   524 *-*        ZCTACT = "SELECT CMD(%QW PRM('&ZPARM'))",                                                "NEWAPPL(QWIK)"
+   526 *-*       "TBADD $QWICMDS"
+   527 *-*      End
+   528 *-*     If UCMDIND <> 'Q'
+       *-*      Then
+   529 *-*      Do
+   530 *-*       ZCTVERB  = 'QWS'
+   531 *-*       ZCTACT  =  'SELECT PGM(ISPSTRT)',                                                          'PARM(PGM(QWIKREF1) PAR
+M(&ZPARM)',                                              'NEWAPPL(QWIK) SCRNAME(QWS))'
+   534 *-*       ZCTDESC = 'INVOKE QUICKREF AS NEW SCREEN SPLIT'
+   535 *-*       If UINVTNQ = 'L'
+       *-*        Then
+   536 *-*        ZCTACT  = "SELECT PGM(ISPSTRT)",                                                          "PARM(CMD(%QW PRM('&ZPA
+RM'))",                                                  "NEWAPPL(QWIK) SCRNAME(QWS))"
+   539 *-*       "TBADD $QWICMDS"
+   540 *-*      End
+   541 *-*     "TBCLOSE $QWICMDS LIBRARY(QWICMDUD)"
+   543 *-*     If UPDTYP = 'C'
+       *-*      Then
+   544 *-*      STEPS = STEPS || 'CC'
+   545 *-*     Else
+   546 *-*      STEPS = STEPS || 'UC'
+   547 *-*     Leave
+   548 *-*    End
+   550 *-*    /*********************************************************************/
+   551 *-*    /*                                                                   */
+   552 *-*    /*                 Create Complete                                   */
+   553 *-*    /*                                                                   */
+   554 *-*    /*********************************************************************/
+   555 *-*   When RIGHT(STEPS,2) = 'CC'
+       *-*    Then
+   556 *-*    Do
+   557 *-*     Address ISPEXEC
+   558 *-*     "DISPLAY PANEL(QWCMPCC)"
+   559 *-*     Call PostPnl
+   560 *-*     If BKUP = 'Y'
+       *-*      Then
+   561 *-*      Leave
+   562 *-*     STEPS = STEPS || 'CO'
+   563 *-*     Leave
+   564 *-*    End
+   566 *-*    /*********************************************************************/
+   567 *-*    /*                                                                   */
+   568 *-*    /*                 Update Complete                                   */
+   569 *-*    /*                                                                   */
+   570 *-*    /*********************************************************************/
+   571 *-*   When RIGHT(STEPS,2) = 'UC'
+       *-*    Then
+   572 *-*    Do
+   573 *-*     Address ISPEXEC
+   574 *-*     "DISPLAY PANEL(QWCMPUC)"
+   575 *-*     Call PostPnl
+   576 *-*     If BKUP = 'Y'
+       *-*      Then
+   577 *-*      Leave
+   578 *-*     STEPS = STEPS || 'UO'
+   579 *-*     Leave
+   580 *-*    End
+   582 *-*    /*********************************************************************/
+   583 *-*    /*                                                                   */
+   584 *-*    /*                 Create Storage Options                            */
+   585 *-*    /*                                                                   */
+   586 *-*    /*********************************************************************/
+   587 *-*   When RIGHT(STEPS,2) = 'CO'
+       *-*    Then
+   588 *-*    Do
+   589 *-*     Address ISPEXEC
+   590 *-*     "DISPLAY PANEL(QWCMPCO)"
+   591 *-*     Call PostPnl
+   592 *-*     If BKUP = 'Y'
+       *-*      Then
+   593 *-*      Leave
+   594 *-*     STEPS = STEPS || 'UD'
+   595 *-*     Leave
+   596 *-*    End
+   598 *-*    /*********************************************************************/
+   599 *-*    /*                                                                   */
+   600 *-*    /*                 Update Storage Options                            */
+   601 *-*    /*                                                                   */
+   602 *-*    /*********************************************************************/
+   603 *-*   When RIGHT(STEPS,2) = 'UO'
+       *-*    Then
+   604 *-*    Do
+   605 *-*     Address ISPEXEC
+   606 *-*     "DISPLAY PANEL(QWCMPUO)"
+   607 *-*     Call PostPnl
+   608 *-*     If BKUP = 'Y'
+       *-*      Then
+   609 *-*      Leave
+   610 *-*     STEPS = STEPS || 'UD'
+   611 *-*     Leave
+   612 *-*    End
+   614 *-*    /*********************************************************************/
+   615 *-*    /*                                                                   */
+   616 *-*    /*                 Updated Command Table DSN                         */
+   617 *-*    /*                                                                   */
+   618 *-*    /*********************************************************************/
+   619 *-*   When RIGHT(STEPS,2) = 'UD'
+       *-*    Then
+   620 *-*    Do
+   621 *-*     If UCMDDSN = 'UCMDDSN'
+       *-*      Then
+   622 *-*      UCMDDSN = ' '
+   623 *-*     If UCMDDSN = ' '
+       *-*      Then
+   624 *-*      If UPDTYP <> 'C'
+       *-*       Then
+   625 *-*       UCMDDSN = FCMDDSN
+   626 *-*     Address ISPEXEC
+   627 *-*     "DISPLAY PANEL(QWCMPUD)"
+   628 *-*     Call PostPnl
+   629 *-*     If BKUP = 'Y'
+       *-*      Then
+   630 *-*      Leave
+   631 *-*     ERRDSN = UCMDDSN
+   632 *-*     QTDDSN = "'"||UCMDDSN||"'"
+   633 *-*     MSGVAL = MSG('OFF')
+   634 *-*     LISTVAR = LISTDSI(QTDDSN)
+   635 *-*     MSGVAL = MSG(MSGVAL)
+   636 *-*     If LISTVAR > 4
+       *-*      Then
+   637 *-*      Do
+   638 *-*       "SETMSG MSG(QWCMD000)"
+   639 *-*       Leave
+   640 *-*      End
+   641 *-*     If RPLOP = 'N'
+       *-*      Then
+   642 *-*      Do
+   643 *-*       "LMINIT DATAID(WFID) DATASET("QTDDSN")"
+   644 *-*       "LMOPEN DATAID(&WFID)"
+   645 *-*       "LMMFIND DATAID(&WFID) MEMBER("UCMDMEM")"
+   646 *-*       SRC = RC
+   647 *-*       "LMCLOSE DATAID(&WFID)"
+   648 *-*       "LMFREE DATAID(&WFID)"
+   649 *-*       If SRC = 0
+       *-*        Then
+   650 *-*        Do
+   651 *-*         ERRMEM = UCMDMEM
+   652 *-*         ERRMSG = 'change replace option or change PDS'
+   653 *-*         "SETMSG MSG(QWCMD002)"
+   654 *-*         Leave
+   655 *-*        End
+   656 *-*      End
+   657 *-*     "LMINIT DATAID(WFI2) DATASET("QTDDSN") ENQ(SHRW)"
+   658 *-*     "LMOPEN DATAID(&WFI2) OPTION(OUTPUT)"
+   659 *-*     If RC > 0
+       *-*      Then
+   660 *-*      Do
+   661 *-*       "LMFREE DATAID(&WFI2)"
+   662 *-*       ERRMSG = 'check update authority'
+   663 *-*       "SETMSG MSG(QWCMD003)"
+   664 *-*       Leave
+   665 *-*      End
+   666 *-*     "LMCLOSE DATAID(&WFI2)"
+   667 *-*     "LMINIT DATAID(WFID) DDNAME(QWICMDUD)"
+   668 *-*     "LMCOPY FROMID(&WFID) FROMMEM($QWICMDS),                                                TODATAID(&WFI2) TOMEM("UCMDM
+EM") REPLACE"
+   670 *-*     "LMFREE DATAID(&WFID)"
+   671 *-*     "LMFREE DATAID(&WFI2)"
+   673 *-*     If UPDTYP = 'C'
+       *-*      Then
+   674 *-*      STEPS = STEPS || 'TC'
+   675 *-*     Else
+   676 *-*      STEPS = STEPS || 'TU'
+   677 *-*     Leave
+   678 *-*    End
+   680 *-*    /*********************************************************************/
+   681 *-*    /*                                                                   */
+   682 *-*    /*                 Termination (Create Table)                        */
+   683 *-*    /*                                                                   */
+   684 *-*    /*********************************************************************/
+   685 *-*   When RIGHT(STEPS,2) = 'TC'
+       *-*    Then
+   686 *-*    Do
+   687 *-*     Address ISPEXEC
+   688 *-*     "DISPLAY PANEL(QWCMPTC)"
+   689 *-*     Call PostPnl
+   690 *-*     If BKUP = 'Y'
+       *-*      Then
+   691 *-*      Leave
+   692 *-*     Call WrapUp
+   693 *-*    End
+   695 *-*    /*********************************************************************/
+   696 *-*    /*                                                                   */
+   697 *-*    /*                 Termination (Update Table)                        */
+   698 *-*    /*                                                                   */
+   699 *-*    /*********************************************************************/
+   700 *-*   When RIGHT(STEPS,2) = 'TU'
+       *-*    Then
+   701 *-*    Do
+   702 *-*     Address ISPEXEC
+   703 *-*     "DISPLAY PANEL(QWCMPTU)"
+   704 *-*     Call PostPnl
+   705 *-*     If BKUP = 'Y'
+       *-*      Then
+   706 *-*      Leave
+   707 *-*     Call WrapUp
+   708 *-*    End
+   712 *-*   End                                 /* Select for Panels           */
+   713 *-*  End                                 /* Inner DO Forever for panels */
+   714 *-* End                                 /* Outer Do Forever for panels */
+   716 *-* /*********************************************************************/
+   717 *-* /*                                                                   */
+   718 *-* /*                 End of Panel Processing                           */
+   719 *-* /*                                                                   */
+   720 *-* /*********************************************************************/
+   723 *-* /*********************************************************************/
+   724 *-* /*                                                                   */
+   725 *-* /*                      Subroutines                                  */
+   726 *-* /*                                                                   */
+   727 *-* /*********************************************************************/
+   731 *-* /*********************************************************************/
+   732 *-* /*                                                                   */
+   733 *-* /*             Standard Post Panel Display Processing                */
+   734 *-* /*                                                                   */
+   735 *-* /*********************************************************************/
+   736 *-* PostPnl:
+   737 *-* BKUP = 'N'
+   738 *-* If RC > 4
+       *-*  Then                              /* END or RETURN?      */
+   739 *-*  Do                                        /* Yes                 */
+   740 *-*   "VGET (ZVERB)"
+   741 *-*   If ZVERB =  'RETURN' | ZVERB = ''
+       *-*    Then  /* Termination?        */
+   742 *-*    Call WrapUp                           /* Yes                 */
+   743 *-*   ELSE
+   744 *-*    Do                                    /* Its END             */
+   745 *-*     STEPS = LEFT(STEPS,LENGTH(STEPS)-2) /* Remove Current Step */
+   746 *-*     BKUP = 'Y'                          /* Set for backing up  */
+   747 *-*    End
+   748 *-*  End
+   749 *-* Return
+   751 *-* /*********************************************************************/
+   752 *-* /*                                                                   */
+   753 *-* /*           Check System Command Table                              */
+   754 *-* /*                                                                   */
+   755 *-* /*********************************************************************/
+   756 *-* CkSystem:
+       *-* Nop
+   758 *-* CCMDMEM = 'ISPCMDS'
+   759 *-* Call FindTble
+   760 *-* If CCMDDSN <> ' '
+       *-*  Then
+   761 *-*  Do
+   762 *-*   FINDCMD = 'QW'
+   763 *-*   Call FindCmd
+   764 *-*   FINDCMD = 'QWS'
+   765 *-*   Call FindCmd
+   766 *-*  End
+   768 *-* Return
+   770 *-* /*********************************************************************/
+   771 *-* /*                                                                   */
+   772 *-* /*           Check for Site Commands                                 */
+   773 *-* /*                                                                   */
+   774 *-* /*********************************************************************/
+   775 *-* CkSites:
+       *-* Nop
+   777 *-* Address ISPEXEC
+   778 *-* "VGET (ZSCTPREF) ASIS"
+   779 *-* If (RC = 0 & ZSCTPREF /= '' & ZSCTPREF /= ' ')
+       *-*  Then
+   780 *-*  Do
+   781 *-*   SITEPFX = ZSCTPREF
+   782 *-*   Call CkSite
+   783 *-*   If CFONDCMD = ' '
+       *-*    Then
+   784 *-*    Do
+   785 *-*     "VGET (ZSCTPRE2) ASIS"
+   786 *-*     If (RC = 0 & ZSCTPRE2 /= '' & ZSCTPRE2 /= ' ')
+       *-*      Then
+   787 *-*      Do
+   788 *-*       SITEPFX = ZSCTPRE2
+   789 *-*       Call CkSite
+   790 *-*       If CFONDCMD = ' '
+       *-*        Then
+   791 *-*        Do
+   792 *-*         "VGET (ZSCTPRE3) ASIS"
+   793 *-*         If (RC = 0 & ZSCTPRE3 /= '' & ZSCTPRE3 /= ' ')
+       *-*          Then
+   794 *-*          Do
+   795 *-*           SITEPFX = ZSCTPRE3
+   796 *-*           Call CkSite
+   797 *-*          End
+   798 *-*        End
+   800 *-*      End
+   801 *-*    End
+   802 *-*  End
+   804 *-* Return
+   806 *-* /*********************************************************************/
+   807 *-* /*                                                                   */
+   808 *-* /*           Check Specified Site Table                              */
+   809 *-* /*                                                                   */
+   810 *-* /*********************************************************************/
+   811 *-* CkSite:
+       *-* Nop
+   813 *-* CCMDMEM = SITEPFX||'CMDS'
+   814 *-* Call FindTble
+   815 *-* If CCMDDSN <> ' '
+       *-*  Then
+   816 *-*  Do
+   817 *-*   FINDCMD = 'QW'
+   818 *-*   Call FindCmd
+   819 *-*   FINDCMD = 'QWS'
+   820 *-*   Call FindCmd
+   821 *-*  End
+   823 *-* Return
+   826 *-* /*********************************************************************/
+   827 *-* /*                                                                   */
+   828 *-* /*                 Find Specified Command Table                      */
+   829 *-* /*                                                                   */
+   830 *-* /*      CCMDMEM must contain member name of command table to be      */
+   831 *-* /*              found (SITE command table name or ISPCMDS)           */
+   832 *-* /*                                                                   */
+   833 *-* /*      Upon return, CCMDDSN contains dsn of library containing      */
+   834 *-* /*           CCMDMEM or blanks if CCMDMEM not found                  */
+   835 *-* /*********************************************************************/
+   837 *-* FindTble:
+       *-* Nop
+   838 *-* TRAPVAR = OUTTRAP("OUTLNE.")
+   839 *-* Address TSO
+   840 *-* "LISTALC STATUS"
+   841 *-* TRAPVAR = OUTTRAP("MSGVAR",0)
+   842 *-* ALLDSN = ''
+   843 *-* I = 2
+   844 *-* Do While I <= OUTLNE.0
+   845 *-*  CCCSN = OUTLNE.I
+   846 *-*  IF SUBSTR(CCCSN,1,2) = '  '
+       *-*   Then
+   847 *-*   Do
+   848 *-*    IF SUBSTR(CCCSN,3,8) = 'ISPTLIB '
+       *-*     Then
+   849 *-*     Do
+   850 *-*      J = I - 1
+   851 *-*      ALLDSN = OUTLNE.J
+   852 *-*      I = I + 2
+   853 *-*      Do While i <= OUTLNE.0
+   854 *-*       CCCSN = OUTLNE.I
+   855 *-*       If SUBSTR(CCCSN,1,4) = '    '
+       *-*        Then
+   856 *-*        Do
+   857 *-*         J = i - 1
+   858 *-*         CCCSN = OUTLNE.J
+   859 *-*         ALLDSN = ALLDSN CCCSN
+   860 *-*         I = I + 2
+   861 *-*        End
+   862 *-*       Else
+       *-*        I = I + OUTLNE.0
+   863 *-*      End    /* ALL ENTRIES FOUND */
+   864 *-*     End     /* DDNAME CHECK */
+   865 *-*   End      /* DDNAME TYPE ENTRY */
+   866 *-*  I = I + 1
+   867 *-* End
+   869 *-* CCMDDSN = ' '
+   870 *-* Address ISPEXEC
+   871 *-* Do Until CCMDDSN /= ' '
+   872 *-*  If ALLDSN = ''
+       *-*   Then
+       *-*   Return
+   873 *-*  Parse Var ALLDSN CURDSN REMDSN
+   874 *-*  ALLDSN = REMDSN
+   875 *-*  QTDDSN = "'"||CURDSN||"'"
+   876 *-*  "LMINIT DATAID(WFID) DATASET("QTDDSN")"
+   877 *-*  "LMOPEN DATAID(&WFID)"
+   878 *-*  "LMMFIND DATAID(&WFID) MEMBER("CCMDMEM")"
+   879 *-*  If RC = 0
+       *-*   Then
+       *-*   CCMDDSN = CURDSN
+   880 *-*  "LMCLOSE DATAID(&WFID)"
+   881 *-*  "LMFREE DATAID(&WFID)"
+   882 *-* End
+   884 *-* Return
+   887 *-* /*********************************************************************/
+   888 *-* /*            Find Specified Command                                 */
+   889 *-* /*                                                                   */
+   890 *-* /*    FINDCMD must contain command to search for                     */
+   891 *-* /*    CCMDMEM must contain name of command table to be searched      */
+   892 *-* /*    CCMDDSN must contain dsn containing CCMDMEM                    */
+   893 *-* /*                                                                   */
+   894 *-* /*    Upon return, CFONDCMD is set to FINDCMD if command found       */
+   895 *-* /*                 CCMDINV is set to LIBDEF or non-LIBDEF            */
+   896 *-* /*                 Depending upon the command being processed:       */
+   897 *-* /*                   CQWACT or CQWSACT is set to command action      */
+   898 *-* /*                   CQWDESC or CQWSACT is set to command description*/
+   899 *-* /*                                                                   */
+   900 *-* /*********************************************************************/
+   901 *-* FindCmd:
+       *-* Nop
+   902 *-* FROMMEM = CCMDMEM
+   903 *-* FROMDSN = CCMDDSN
+   904 *-* TOMEM = '$QWICMDS'
+   905 *-* TODD = 'QWICMDUD'
+   906 *-* Call Cpyrnm
+   907 *-* Address ISPEXEC
+   908 *-* "TBOPEN $QWICMDS LIBRARY(QWICMDUD)"
+   909 *-* ZCTVERB = FINDCMD
+   910 *-* "TBSCAN $QWICMDS ARGLIST(ZCTVERB)"
+   911 *-* If RC = 0
+       *-*  Then
+   912 *-*  Do
+   913 *-*   If CCMDMEM = 'ISPCMDS'
+       *-*    Then
+   914 *-*    CTYPTB = 'system'
+   915 *-*   Else
+   916 *-*    CTYPTB = 'site'
+   917 *-*   If CFONDCMD = ' '
+       *-*    Then
+   918 *-*    CFONDCMD = FINDCMD
+   919 *-*   If FINDCMD = 'QW'
+       *-*    Then
+   920 *-*    Do
+   921 *-*     CQWACT = ZCTACT
+   922 *-*     CQWDESC = ZCTDESC
+   923 *-*    End
+   924 *-*   Else
+   925 *-*    Do
+   926 *-*     CQWSACT = ZCTACT
+   927 *-*     CQWSDESC = ZCTDESC
+   928 *-*    End
+   929 *-*   If CCMDINV = ' '
+       *-*    Then
+   930 *-*    If WORDPOS('CMD(%QW',ZCTACT) > 0 |,                                                WORDPOS('PARM(CMD(%QW',ZCTACT) > 0
+   931 *-*     Then
+   932 *-*     CCMDINV = 'LIBDEF'
+   933 *-*    Else
+   934 *-*     CCMDINV = 'non-LIBDEF'
+   935 *-*  End
+   936 *-* "TBCLOSE $QWICMDS LIBRARY(QWICMDUD)"
+   938 *-* Return
+   940 *-* /*********************************************************************/
+   941 *-* /*                   Copy/Rename command table                       */
+   942 *-* /*                                                                   */
+   943 *-* /*     FROMMEM must contain name of command table to be copied       */
+   944 *-* /*     FROMDSN must contain dsn containing FROMMEM                   */
+   945 *-* /*     TOMEM  must contain new member name                           */
+   946 *-* /*     TODD   must contain ddname to copy to                         */
+   947 *-* /*                                                                   */
+   948 *-* /*     Note: Before searching or updating a command table,           */
+   949 *-* /*           this exec makes a copy of the command table             */
+   950 *-* /*           under a different name.                                 */
+   951 *-* /*           This is necessary because ISPF will not let             */
+   952 *-* /*           you TBOPEN a table (like ISPCMDS) that is               */
+   953 *-* /*           already open - even if your copy of the table           */
+   954 *-* /*           is coming from a different data set.                    */
+   955 *-* /*********************************************************************/
+   957 *-* Cpyrnm:
+       *-* Nop
+   959 *-* Address ISPEXEC
+   960 *-* QTDDSN = "'"FROMDSN"'"
+   961 *-* "LMINIT DATAID(WFID) DATASET("QTDDSN")"
+   962 *-* "LMINIT DATAID(WFI2) DDNAME("TODD")"
+   963 *-* "LMCOPY FROMID(&WFID) FROMMEM("FROMMEM"),                                               TODATAID(&WFI2) TOMEM("TOMEM") R
+EPLACE"
+   965 *-* "LMFREE DATAID(&WFID)"
+   966 *-* "LMFREE DATAID(&WFI2)"
+   968 *-* Return
+   970 *-* /*********************************************************************/
+   971 *-* /*                                                                   */
+   972 *-* /*                   Delete Commands                                 */
+   973 *-* /*                                                                   */
+   974 *-* /*********************************************************************/
+   976 *-* DelCmds:
+       *-* Nop
+   978 *-* Do Forever
+   979 *-*  Address ISPEXEC
+   980 *-*  "TBSCAN $QWICMDS ARGLIST(ZCTVERB)"
+   981 *-*  If RC > 0
+       *-*   Then
+   982 *-*   Return
+   983 *-*  If UCMDIND = 'B' |,                                                               (UCMDIND = 'Q' & ZCTVERB = 'QW') |,
+                                           (UCMDIND = 'S' & ZCTVERB = 'QWS')
+   985 *-*   Then
+   986 *-*   "TBDELETE $QWICMDS"
+   987 *-*  Else
+   988 *-*   Do
+   989 *-*    Address ISPEXEC
+   990 *-*    "DISPLAY PANEL(QWCMPDC)"
+   991 *-*    If RC > 4
+       *-*     Then
+   992 *-*     Do
+   993 *-*      "VGET (ZVERB)"
+   994 *-*      If ZVERB = 'RETURN'
+       *-*       Then
+   995 *-*       Do
+   996 *-*        "TBCLOSE $QWICMDS"
+   997 *-*        Call WrapUp
+   998 *-*       End
+   999 *-*      BKUP = 'Y'
+  1000 *-*      Return
+  1001 *-*     End
+  1002 *-*    Else
+  1003 *-*     If CMDDLTOP = 'Y'
+       *-*      Then
+  1004 *-*      "TBDELETE $QWICMDS"
+  1005 *-*   End
+  1006 *-* End
+  1008 *-* /*********************************************************************/
+  1009 *-* /*                                                                   */
+  1010 *-* /*          Allocate and TBOPEN/TBCLOSE Temporary Data Set           */
+  1011 *-* /*                                                                   */
+  1012 *-* /*    Allocate and TBOPEN/TBCLOSE a temporary data set so QWICMDUD   */
+  1013 *-* /*    can be FREEd and reALLOCATEd in case of rerun or backing up    */
+  1014 *-* /*********************************************************************/
+  1016 *-* TmpAOC:
+  1017 *-* Address TSO
+  1018 *-* MSGVAL = MSG('OFF')
+  1019 *-* "FREE F(QWICMDTP)"
+  1020 *-* MSGVAL = MSG(MSGVAL)
+  1021 *-* "ALLOC FILE(QWICMDTP) NEW DELETE",                                                  "DSORG(PO) RECFM(F B) LRECL(80) BLKS
+IZE(6160)",                                 "UNIT(SYSDA)",                                                                  "SPACE(
+4,2) TRACKS DIR(2)"
+  1025 *-* CCMDMEM = 'ISPCMDS'
+  1026 *-* Call FindTble
+  1027 *-* FROMMEM = CCMDMEM
+  1028 *-* FROMDSN = CCMDDSN
+  1029 *-* TOMEM = '$QWICMDS'
+  1030 *-* TODD = 'QWICMDTP'
+  1031 *-* Call Cpyrnm
+  1032 *-* Address ISPEXEC
+  1033 *-* "TBOPEN $QWICMDS LIBRARY(QWICMDTP)"
+  1034 *-* "TBCLOSE $QWICMDS LIBRARY(QWICMDTP)"
+  1035 *-* Return
+  1037 *-* /*********************************************************************/
+  1038 *-* /*                                                                   */
+  1039 *-* /*                WrapUp/Termination Processing                      */
+  1040 *-* /*                                                                   */
+  1041 *-* /*********************************************************************/
+  1043 *-* WrapUp:
+  1044 *-* Address ISPEXEC
+  1045 *-* "LIBDEF ISPPLIB"
+  1046 *-* "LIBDEF ISPMLIB"
+  1047 *-* Call TmpAOC
+  1049 *-* Exit
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Address Envir.Constant: ADDRESS 'ISPEXEC'      Reference: 36 144 151 165 200 206 227 245 263 288 309 341 379 399 463 480 491 557 573 589 605 626
+                        ...                               687 702 777 870 907 959 979 989 1032 1044
+
+Address Envir.Constant: ADDRESS 'TSO'          Reference: 56 469 839 1017
+
+Variable (set w/rexx)   alldsn                 Assigned : 842 851 859 874
+Variable (used in/rexx) alldsn                 Reference: 859 872 873
+
+Variable (set w/rexx)   bcmddsn                Assigned : 397
+Variable (used in/rexx) bcmddsn                Reference: 396 409 410
+
+Variable (set w/rexx)   bcmdmem                Assigned : 398
+Variable (used in/rexx) bcmdmem                Reference: 423 429 447
+
+Variable (set w/rexx)   bkup                   Assigned : 737 746 999
+Variable (used in/rexx) bkup                   Reference: 212 230 248 266 312 382 402 466 500 508 560 576 592 608 629 690 705
+
+Variable (NEVER SET)    BKUPOP                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) BKUPOP                 Reference: 404 419
+
+Variable (set w/rexx)   cccsn                  Assigned : 845 854 858
+Variable (used in/rexx) cccsn                  Reference: 846 848 855 859
+
+Variable (set w/rexx)   ccmddsn                Assigned : 869 879
+Variable (used in/rexx) ccmddsn                Reference: 302 307 760 815 871 903 1028
+
+Variable (set w/rexx)   ccmdinv                Assigned : 159 932 934
+Variable (used in/rexx) ccmdinv                Reference: 199 929
+
+Variable (set w/rexx)   ccmdmem                Assigned : 305 758 813 1025
+Variable (used in/rexx) ccmdmem                Reference: 326 878 902 913 1027
+
+Variable (set w/rexx)   cfondcmd               Assigned : 158 918
+Variable (used in/rexx) cfondcmd               Reference: 173 179 185 783 790 917
+
+Label (internal label)  CKSITE                 Defined  : 811
+Label (int. label ref)  CKSITE                 Reference: C(782) C(789) C(796)
+
+Label (internal label)  CKSITES                Defined  : 775
+Label (int. label ref)  CKSITES                Reference: C(172) C(180)
+
+Label (internal label)  CKSYSTEM               Defined  : 756
+Label (int. label ref)  CKSYSTEM               Reference: C(174) C(178) C(184)
+
+Variable (NEVER SET)    CMDDLTOP               Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) CMDDLTOP               Reference: 1003
+
+Label (internal label)  CPYRNM                 Defined  : 957
+Label (int. label ref)  CPYRNM                 Reference: C(340) C(490) C(906) C(1031)
+
+Variable (set w/rexx)   cqwact                 Assigned : 160 203 343 352 921
+Variable (used in/rexx) cqwact                 Reference: 202 364
+
+Variable (set w/rexx)   cqwdesc                Assigned : 161 344 353 922
+Variable (NEVER USED)   cqwdesc                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   cqwsact                Assigned : 162 205 345 360 926
+Variable (used in/rexx) cqwsact                Reference: 204 364
+
+Variable (set w/rexx)   cqwsdesc               Assigned : 163 346 361 927
+Variable (NEVER USED)   cqwsdesc               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   ctyptb                 Assigned : 914 916
+Variable (used in/rexx) ctyptb                 Reference: 301
+
+Variable (set w/rexx)   curdsn                 Assigned : 873
+Variable (used in/rexx) curdsn                 Reference: 875 879
+
+Label (internal label)  DELCMDS                Defined  : 976
+Label (int. label ref)  DELCMDS                Reference: C(499) C(507)
+
+Variable (set w/rexx)   errdsn                 Assigned : 320 332 409 631
+Variable (NEVER USED)   errdsn                 No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   errmem                 Assigned : 429 651
+Variable (NEVER USED)   errmem                 No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   errmsg                 Assigned : 430 441 652 662
+Variable (NEVER USED)   errmsg                 No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   fcmddsn                Assigned : 164 302 307
+Variable (used in/rexx) fcmddsn                Reference: 300 314 337 397 435 487 625
+
+Variable (set w/rexx)   findcmd                Assigned : 762 764 817 819
+Variable (used in/rexx) findcmd                Reference: 909 918 919
+Label (internal label)  FINDCMD                Defined  : 901
+Label (int. label ref)  FINDCMD                Reference: C(763) C(765) C(818) C(820)
+
+Label (internal label)  FINDTBLE               Defined  : 837
+Label (int. label ref)  FINDTBLE               Reference: C(306) C(759) C(814) C(1026)
+
+Variable (set w/rexx)   fromdsn                Assigned : 337 487 903 1028
+Variable (used in/rexx) fromdsn                Reference: 960
+
+Variable (set w/rexx)   frommem                Assigned : 336 486 902 1027
+Variable (used in/rexx) frommem                Reference: 963
+
+Variable (set w/rexx)   i                      Assigned : 843 852 860 862 866
+Variable (used in/rexx) i                      Reference: 844 850 852 853 857 860 862 866
+Variable (in Stem Ref)  i                      Reference: 845 854
+
+Variable (set w/rexx)   j                      Assigned : 850 857
+Variable (in Stem Ref)  j                      Reference: 851 858
+
+Variable (set w/rexx)   jcldsn                 Assigned : 38 42
+Variable (used in/rexx) jcldsn                 Reference: 40 43 53 54
+
+Built-In+/External use  LEFT                   Reference: F(364) F(745)
+
+Built-In+/External use  LENGTH                 Reference: F(320) F(332) F(398) F(745)
+
+Built-In+/External use  LISTDSI                Reference: F(316) F(412) F(634)
+
+Variable (set w/rexx)   listvar                Assigned : 316 412 634
+Variable (used in/rexx) listvar                Reference: 318 414 636
+
+Built-In+/External use  MSG                    Reference: F(57) F(59) F(315) F(317) F(411) F(413) F(470) F(472) F(633) F(635) F(1018) F(1020)
+
+Variable (set w/rexx)   msgval                 Assigned : 57 59 315 317 411 413 470 472 633 635 1018 1020
+Variable (used in/rexx) msgval                 Reference: 59 317 413 472 635 1020
+
+Variable (set w/rexx)   opensw                 Assigned : 65 157
+Variable (used in/rexx) opensw                 Reference: 147
+
+Built-In+/External use  OUTTRAP                Reference: F(838) F(841)
+
+Variable (set w/rexx)   p1                     Assigned : 37
+Variable (NEVER USED)   p1                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   p2                     Assigned : 37
+Variable (NEVER USED)   p2                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   p3                     Assigned : 37
+Variable (NEVER USED)   p3                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   p4                     Assigned : 37
+Variable (NEVER USED)   p4                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   p5                     Assigned : 37
+Variable (used in/rexx) p5                     Reference: 38
+
+Variable (set w/rexx)   p6                     Assigned : 37
+Variable (NEVER USED)   p6                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   p7                     Assigned : 37
+Variable (NEVER USED)   p7                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   p8                     Assigned : 37
+Variable (NEVER USED)   p8                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  POSTPNL                Defined  : 736
+Label (int. label ref)  POSTPNL                Reference: C(211) C(229) C(247) C(265) C(311) C(381) C(401) C(465) C(559) C(575) C(591) C(607)
+                        ...                               C(628) C(689) C(704)
+
+Variable (set w/rexx)   qcmdinv                Assigned : 199 287
+Variable (NEVER USED)   qcmdinv                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   qtddsn                 Assigned : 314 410 632 875 960
+Variable (used in/rexx) qtddsn                 Reference: 316 320 324 332 412 421 436 634 643 657 876 961
+
+Variable (set w/rexx)   qtddsnf                Assigned : 435
+Variable (used in/rexx) qtddsnf                Reference: 446
+
+SpecialVar(set no-XREF) RC                      *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RC                     Reference: 146 167 327 350 358 424 438 646 659 738 779 786 793 879 911 981 991
+
+Variable (set w/rexx)   rel                    Assigned : 17
+Variable (NEVER USED)   rel                    No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   remdsn                 Assigned : 873
+Variable (used in/rexx) remdsn                 Reference: 874
+
+Built-In+/External use  RIGHT                  Reference: F(142) F(197) F(225) F(243) F(261) F(298) F(377) F(394) F(461) F(555) F(571) F(587)
+                        ...                               F(603) F(619) F(685) F(700)
+
+Variable (NEVER SET)    RPLOP                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) RPLOP                  Reference: 641
+
+Variable (set w/rexx)   sitepfx                Assigned : 781 788 795
+Variable (used in/rexx) sitepfx                Reference: 813
+
+Variable (set w/rexx)   src                    Assigned : 327 424 646
+Variable (used in/rexx) src                    Reference: 330 427 649
+
+Variable (set w/rexx)   steps                  Assigned : 66 186 188 216 234 252 282 285 366 368 384 406 451 544 546 562 578 594 610 674 676 745
+Variable (used in/rexx) steps                  Reference: 142 186 188 197 216 225 234 243 252 261 282 285 298 366 368 377 384 394 406 451 461 544
+                        ...                               546 555 562 571 578 587 594 603 610 619 674 676 685 700 745
+
+Built-In+/External use  SUBSTR                 Reference: F(320) F(332) F(398) F(846) F(848) F(855)
+
+Variable (NEVER SET)    SYSISPF                Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSISPF                Reference: 30
+
+Built-In+/External use  SYSVAR                 Reference: F(30)
+
+Label (internal label)  TMPAOC                 Defined  : 1016
+Label (int. label ref)  TMPAOC                 Reference: C(468) C(1047)
+
+Variable (set w/rexx)   tmpjcl                 Assigned : 22
+Variable (used in/rexx) tmpjcl                 Reference: 42
+
+Variable (set w/rexx)   tmptype                Assigned : 22
+Variable (used in/rexx) tmptype                Reference: 207 214 232
+
+Variable (set w/rexx)   todd                   Assigned : 339 489 905 1030
+Variable (used in/rexx) todd                   Reference: 962
+
+Variable (set w/rexx)   tomem                  Assigned : 338 488 904 1029
+Variable (used in/rexx) tomem                  Reference: 963
+
+Variable (set w/rexx)   trapvar                Assigned : 838 841
+Variable (NEVER USED)   trapvar                No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   ucmddsn                Assigned : 622 625
+Variable (used in/rexx) ucmddsn                Reference: 621 623 631 632
+
+Variable (NEVER SET)    UCMDIND                Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) UCMDIND                Reference: 516 528 983
+
+Variable (set w/rexx)   ucmdinv                Assigned : 270 273
+Variable (used in/rexx) ucmdinv                Reference: 287
+
+Variable (set w/rexx)   ucmdmem                Assigned : 268 276
+Variable (used in/rexx) ucmdmem                Reference: 286 305 336 398 447 486 645 651 668
+
+Variable (set w/rexx)   ucmprd                 Assigned : 286
+Variable (NEVER USED)   ucmprd                 No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (NEVER SET)    UINVTNQ                Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) UINVTNQ                Reference: 272 523 535
+
+Variable (set w/rexx)   updact                 Assigned : 271 281
+Variable (NEVER USED)   updact                 No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (NEVER SET)    UPDOPT                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) UPDOPT                 Reference: 250
+
+Variable (NEVER SET)    UPDTYP                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) UPDTYP                 Reference: 274 279 478 495 543 624 673
+
+Variable (NEVER SET)    USAI                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) USAI                   Reference: 276
+
+Variable (NEVER SET)    USECUR                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) USECUR                 Reference: 214
+
+Variable (set w/rexx)   utyptb                 Assigned : 269 277
+Variable (used in/rexx) utyptb                 Reference: 301
+
+Built-In+/External use  WORDPOS                Reference: F(930)
+
+Label (internal label)  WRAPUP                 Defined  : 1043
+Label (int. label ref)  WRAPUP                 Reference: C(148) C(215) C(233) C(251) C(692) C(707) C(742) C(997)
+
+Variable (set w/rexx)   zctact                 Assigned : 520 524 531 536
+Variable (used in/rexx) zctact                 Reference: 352 360 921 926 930
+
+Variable (set w/rexx)   zctdesc                Assigned : 522 534
+Variable (used in/rexx) zctdesc                Reference: 353 361 922 927
+
+Variable (set w/rexx)   zcttrunc               Assigned : 519
+Variable (NEVER USED)   zcttrunc               No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   zctverb                Assigned : 347 355 497 505 518 530 909
+Variable (used in/rexx) zctverb                Reference: 983
+
+Variable (NEVER SET)    ZSCTPRE2               Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ZSCTPRE2               Reference: 786 788
+
+Variable (NEVER SET)    ZSCTPRE3               Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ZSCTPRE3               Reference: 793 795
+
+Variable (NEVER SET)    ZSCTPREF               Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ZSCTPREF               Reference: 167 779 781
+
+Variable (NEVER SET)    ZSCTSRCH               Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ZSCTSRCH               Reference: 170
+
+Variable (NEVER SET)    ZVERB                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ZVERB                  Reference: 741 994
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 OUTLNE.0      Reference: 844 853 862
+Stem-1 OUTLNE.i      Reference: 845 854
+Stem-1 OUTLNE.j      Reference: 851 858
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

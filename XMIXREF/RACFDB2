@@ -1,0 +1,2146 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(RACFDB2)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(RACFDB2)
+   -----------------------------------------
+
+READY
+    RACFDB2
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.CNTL.RACFDB2.PDS(RACFDB2)"      */
+    Generated scan code/comment:   /*      --------------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                     */
+    Generated scan code/comment:   /*     20231217 23:04:41                       */
+    Generated scan code/comment:   /*      --------------------------------       */
+     1 *-* /*Rexx*/
+     2 *-* Arg owner ssid classmnt model charopt .
+     3 *-* /* Set addressability to DB2 Rexx function */
+     4 *-* ADDRESS TSO "SUBCOM DSNREXX"
+     5 *-* If RC = 1
+       *-*  Then
+       *-*  S_RC = RXSUBCOM('ADD','DSNREXX','DSNREXX')
+     6 *-* Else
+       *-*  Do
+     7 *-*   Say 'Can not access DB2 Rexx Function.  Ending...'
+     8 *-*   Exit
+     9 *-*  End
+    10 *-* ADDRESS DSNREXX
+    11 *-* "CONNECT "ssid
+    13 *-* /* Set basic header */
+    14 *-* hdr.0 = 6
+    15 *-* hdr.1 = "/* DB2 to RACF conversion CLIST */"
+    16 *-* hdr.2 = "/* input agruments              */"
+    17 *-* hdr.3 = "/*     owner = " owner ", ssid = " ssid  "*/"
+    18 *-* hdr.4 = "/*     classmnt = " classmnt  ", model= " model  "*/"
+    19 *-* hdr.5 = "/*     charopt = " charopt      "*/"
+    20 *-* hdr.6 = "/* date=" DATE() "time=" TIME() "*/"
+    21 *-* Address TSO "EXECIO * DISKW CLIST (STEM hdr."
+    23 *-* /* Set Optional header (relies on hdr. above) */
+    24 *-* hdr.1 = "/* Optional DB2 to RACF conversion CLIST */"
+    25 *-* Address TSO "EXECIO * DISKW OPTCLST (STEM hdr."
+    27 *-* If owner=""
+       *-*  Then
+       *-*  Do
+    28 *-*   Say "Owner must be specified"
+    29 *-*   Exit
+    30 *-*  End
+    31 *-* If ssid=""
+       *-*  Then
+       *-*  Do
+    32 *-*   Say "SSID must be specified"
+    33 *-*   Exit
+    34 *-*  End
+    35 *-* If classmnt=""
+       *-*  Then
+       *-*  classmnt="DSN"
+    36 *-* If model=""
+       *-*  Then
+       *-*  model=2
+    38 *-*  /* Set class based on 'Classification Model' */
+    39 *-*  /* If an invalid model, we default to II     */
+    40 *-* If model=1
+       *-*  Then
+       *-*  class=Strip(ssid)"ADM"charopt
+    41 *-* Else
+       *-*  class=classmnt"ADM"charopt
+    43 *-* /*---------------------------------------------------*/
+    44 *-* /* Start processing DB2 authorization tables         */
+    45 *-* /*---------------------------------------------------*/
+    46 *-* call sys_attr "SYSADM","SYSADMAUTH"
+    47 *-* call sys_attr "SYSOPR","SYSOPRAUTH"
+    48 *-* call sys_attr "SYSCTRL","SYSCTRLAUTH"
+    50 *-* call db_attr "DBADM","DBADMAUTH"
+    51 *-* call db_option
+    52 *-* call db_attr "DBMAINT","DBMAINTAUTH"
+    53 *-* call db_attr "DBCTRL","DBCTRLAUTH"
+    54 *-* call packadm_attr "PACKADM"
+    56 *-* /* Resource privileges */
+    57 *-* If model=1
+       *-*  Then
+       *-*  class="M"Strip(ssid)"SM"charopt
+    58 *-* Else
+       *-*  class="M"classmnt"SM"charopt
+    59 *-* call sys_attr "ARCHIVE","ARCHIVEAUTH"
+    60 *-* call sys_attr "BINDADD","BINDADDAUTH"
+    61 *-* call bindagent
+    62 *-* call sys_attr "CREATEALIAS","CREATEALIASAUTH"
+    63 *-* call sys_attr "CREATEDBA","CREATEDBAAUTH"
+    64 *-* call sys_attr "CREATEDBC","CREATEDBCAUTH"
+    65 *-* call sys_attr "CREATESG","CREATESGAUTH"
+    66 *-* call sys_attr "DISPLAY","DISPLAYAUTH"
+    67 *-* call sys_attr "MONITOR1","MON1AUTH"
+    68 *-* call sys_attr "MONITOR2","MON2AUTH"
+    69 *-* call sys_attr "RECOVER","RECOVERAUTH"
+    70 *-* call sys_attr "STOPALL","STOPALLAUTH"
+    71 *-* call sys_attr "STOSPACE","STOSPACEAUTH"
+    72 *-* call sys_attr "TRACE","TRACEAUTH"
+    73 *-* call sys_attr "CREATETMTAB","CREATETMTABAUTH"
+    75 *-* /* Table privileges */
+    76 *-* call tab_priv "ALTER","ALTERAUTH"
+    77 *-* call tab_priv "DELETE","DELETEAUTH"
+    78 *-* call tab_priv "INDEX","INDEXAUTH"
+    79 *-* call tab_priv "INSERT","INSERTAUTH"
+    80 *-* call tab_priv "SELECT","SELECTAUTH"
+    81 *-* call tab_priv "REFERENCES","REFERENCESAUTH"
+    82 *-* call tab_upd
+    84 *-* /* Database privileges */
+    85 *-* call def_priv "DB","CREATETAB","CREATETABAUTH","DB"
+    86 *-* call def_priv "DB","CREATETS","CREATETSAUTH","DB"
+    87 *-* call def_priv "DB","DISPLAYDB","DISPLAYDBAUTH","DB"
+    88 *-* call def_priv "DB","DROP","DROPAUTH","DB"
+    89 *-* call def_priv "DB","IMAGCOPY","IMAGCOPYAUTH","DB"
+    90 *-* call def_priv "DB","LOAD","LOADAUTH","DB"
+    91 *-* call def_priv "DB","REORG","REORGAUTH","DB"
+    92 *-* call def_priv "DB","RECOVERDB","RECOVERDBAUTH","DB"
+    93 *-* call def_priv "DB","REPAIR","REPAIRAUTH","DB"
+    94 *-* call def_priv "DB","STARTDB","STARTDBAUTH","DB"
+    95 *-* call def_priv "DB","STATS","STATSAUTH","DB"
+    96 *-* call def_priv "DB","STOPDB","STOPAUTH","DB"
+    98 *-* /* Plan privileges */
+    99 *-* call def_priv "PN","BIND","BINDAUTH","PLAN"
+   100 *-* call def_priv "PN","EXECUTE","EXECUTEAUTH","PLAN"
+   102 *-* /* Package privileges */
+   103 *-* call pack_priv "BIND","BINDAUTH"
+   104 *-* call pack_priv "EXECUTE","EXECUTEAUTH"
+   105 *-* call pack_priv "COPY","COPYAUTH"
+   107 *-* /* Collection privileges */
+   108 *-* call cltn_priv "CREATEIN"
+   110 *-* /* Use BUFFERPOOL/STOGROUP/TABLESPACE privileges */
+   111 *-* call use_priv "USE","B","BP"
+   112 *-* call use_priv "USE","S","SG"
+   113 *-* call use_priv "USE","R","TS"
+   115 *-* Address TSO "EXECIO 0 DISKW CLIST (FINIS"
+   116 *-* "DISCONNECT"
+   117 *-* Exit
+   119 *-* def_priv:
+   120 *-* /*****************************************************************/
+   121 *-* /* Get DB2 Default privileges (plans, db, etc.)                  */
+   122 *-* /*****************************************************************/
+   123 *-* Arg type,auth,col,tab
+   124 *-* If model=1
+       *-*  Then
+       *-*  class="M"Strip(ssid)||type||charopt
+   125 *-* Else
+       *-*  class="M"classmnt||type||charopt
+   127 *-* /* Find all objects, and make commands to create profiles */
+   128 *-* /* for 'auth'. Then remove executor from access list.     */
+   129 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYS"tab"AUTH"
+   130 *-* call ZSQL
+   131 *-* Do Until SQLCODE \= 0
+   132 *-*  "EXECSQL FETCH C1 INTO :name"
+   133 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   134 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   135 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   136 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",                                "OWNER("owner")"
+   138 *-*    Push cmd
+   139 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   141 *-*    cmd="PERMIT "prof" CLASS("class") RESET"
+   142 *-*    Push cmd
+   143 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   144 *-*   End
+   145 *-* End /* do until */
+   146 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   147 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   148 *-* "EXECSQL CLOSE C1"
+   149 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   151 *-*  /* If any of those were PUBLIC, change UACC to READ */
+   152 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYS"tab"AUTH",                              "WHERE GRANTEE IN ('PUBLIC','PUBLIC*')
+ AND "col"¬=' '"
+   154 *-* call ZSQL
+   155 *-* Do Until SQLCODE \= 0
+   156 *-*  "EXECSQL FETCH C1 INTO :name"
+   157 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   158 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   159 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   160 *-*    cmd="RALT "class prof" UACC(READ)"
+   161 *-*    Push cmd
+   162 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   163 *-*   End
+   164 *-* End /* do until */
+   165 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   166 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   167 *-* "EXECSQL CLOSE C1"
+   168 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   170 *-*  /* Get all ids (except PUBLIC) for access list */
+   171 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYS"tab"AUTH",                     "WHERE GRANTEE NOT IN ('PUBLIC','PUBLI
+C*') AND "col"='Y'"
+   173 *-* call ZSQL
+   174 *-* Do Until SQLCODE \= 0
+   175 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+   176 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   177 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   178 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   179 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                     "ID("Strip(grantee)")"
+   181 *-*    Push cmd
+   182 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   183 *-*   End
+   184 *-* End /* do until */
+   185 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   186 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   187 *-* "EXECSQL CLOSE C1"
+   188 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   190 *-*  /* With Grants */
+   191 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYS"tab"AUTH",                     "WHERE GRANTEE NOT IN ('PUBLIC','PUBLI
+C*') AND "col"='G'"
+   193 *-* call ZSQL
+   194 *-* Do Until SQLCODE \= 0
+   195 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+   196 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   197 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   198 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   199 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                    "ID("Strip(grantee)")"
+   201 *-*    Push cmd
+   202 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   203 *-*   End
+   204 *-* End /* do until */
+   205 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   206 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   207 *-* "EXECSQL CLOSE C1"
+   208 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   209 *-* Return    /* def_priv */
+   211 *-* tab_priv:
+   212 *-* /*****************************************************************/
+   213 *-* /* Get DB2 Tables privileges                                     */
+   214 *-* /*****************************************************************/
+   215 *-* Arg auth,col
+   216 *-* If model=1
+       *-*  Then
+       *-*  class="M"Strip(ssid)"TB"charopt
+   217 *-* Else
+       *-*  class="M"classmnt"TB"charopt
+   219 *-* /* Find all objects, and make commands to create profiles */
+   220 *-* /* for non-column based authority */
+   221 *-* sql="SELECT DISTINCT TCREATOR, TTNAME FROM SYSIBM.SYSTABAUTH",                    "WHERE GRANTEETYPE=' '"
+   223 *-* call ZSQL
+   224 *-* Do Until SQLCODE \= 0
+   225 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname"
+   226 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   227 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   228 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   229 *-*    prof=prof'.'auth
+   230 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",                                "OWNER("owner")"
+   232 *-*    Push cmd
+   233 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   235 *-*    cmd="PERMIT "prof" CLASS("class") RESET"
+   236 *-*    Push cmd
+   237 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   238 *-*   End
+   239 *-* End /* do until */
+   240 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   241 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   242 *-* "EXECSQL CLOSE C1"
+   243 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   245 *-*  /* If any of those were PUBLIC, change UACC to READ */
+   246 *-* sql="SELECT DISTINCT TCREATOR, TTNAME FROM SYSIBM.SYSTABAUTH",                    "WHERE GRANTEE IN ('PUBLIC','PUBLIC*')
+ AND "col"¬=' '",                         "AND GRANTEETYPE=' '"
+   249 *-* call ZSQL
+   250 *-* Do Until SQLCODE \= 0
+   251 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname"
+   252 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   253 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   254 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   255 *-*    prof=prof'.'auth
+   256 *-*    cmd="RALT "class prof" UACC(READ)"
+   257 *-*    Push cmd
+   258 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   259 *-*   End
+   260 *-* End /* do until */
+   261 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   262 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   263 *-* "EXECSQL CLOSE C1"
+   264 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   266 *-*  /* Get all ids (except PUBLIC) for access list */
+   267 *-* sql="SELECT DISTINCT TCREATOR, TTNAME, GRANTEE",                                  "FROM SYSIBM.SYSTABAUTH",
+                                          "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND "col"='Y'",                      "AND GRAN
+TEETYPE=' '"
+   271 *-* call ZSQL
+   272 *-* Do Until SQLCODE \= 0
+   273 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname, :grantee"
+   274 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   275 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   276 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   277 *-*    prof=prof'.'auth
+   278 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                     "ID("Strip(grantee)")"
+   280 *-*    Push cmd
+   281 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   282 *-*   End
+   283 *-* End /* do until */
+   284 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   285 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   286 *-* "EXECSQL CLOSE C1"
+   287 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   289 *-*  /* With Grants */
+   290 *-* sql="SELECT DISTINCT TCREATOR, TTNAME, GRANTEE",                                  "FROM SYSIBM.SYSTABAUTH",
+                                          "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND "col"='G'",                      "AND GRAN
+TEETYPE=' '"
+   294 *-* call ZSQL
+   295 *-* Do Until SQLCODE \= 0
+   296 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname, :grantee"
+   297 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   298 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   299 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   300 *-*    prof=prof'.'auth
+   301 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                    "ID("Strip(grantee)")"
+   303 *-*    Push cmd
+   304 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   305 *-*   End
+   306 *-* End /* do until */
+   307 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   308 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   309 *-* "EXECSQL CLOSE C1"
+   310 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   311 *-* Return    /* tab_priv */
+   313 *-* tab_upd:
+   314 *-* /*****************************************************************/
+   315 *-* /* Get DB2 Table Update privileges                               */
+   316 *-* /*****************************************************************/
+   317 *-* If model=1
+       *-*  Then
+       *-*  class="M"Strip(ssid)"TB"charopt
+   318 *-* Else
+       *-*  class="M"classmnt"TB"charopt
+   320 *-* /* Find all objects, and make commands to create profiles */
+   321 *-* /* for non-column based authority */
+   322 *-* sql="SELECT DISTINCT TCREATOR, TTNAME FROM SYSIBM.SYSTABAUTH",                      "WHERE GRANTEETYPE=' '"
+   324 *-* call ZSQL
+   325 *-* Do Until SQLCODE \= 0
+   326 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname"
+   327 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   328 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   329 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   330 *-*    prof=prof'.UPDATE'
+   331 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",                                "OWNER("owner")"
+   333 *-*    Push cmd
+   334 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   336 *-*    cmd="PERMIT "prof" CLASS("class") RESET"
+   337 *-*    Push cmd
+   338 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   339 *-*   End
+   340 *-* End /* do until */
+   341 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   342 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   343 *-* "EXECSQL CLOSE C1"
+   344 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   346 *-*  /* If any of those were PUBLIC, change UACC to READ */
+   347 *-* sql="SELECT DISTINCT TCREATOR, TTNAME FROM SYSIBM.SYSTABAUTH",                      "WHERE GRANTEE IN ('PUBLIC','PUBLIC*
+') AND UPDATEAUTH¬=' '",                    "AND GRANTEETYPE=' ' AND UPDATECOLS=' '"
+   350 *-* call ZSQL
+   351 *-* Do Until SQLCODE \= 0
+   352 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname"
+   353 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   354 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   355 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   356 *-*    prof=prof'.UPDATE'
+   357 *-*    cmd="RALT "class prof" UACC(READ)"
+   358 *-*    Push cmd
+   359 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   360 *-*   End
+   361 *-* End /* do until */
+   362 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   363 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   364 *-* "EXECSQL CLOSE C1"
+   365 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   367 *-*  /* Get all ids (except PUBLIC) for access list */
+   368 *-* sql="SELECT DISTINCT TCREATOR, TTNAME, GRANTEE",                                    "FROM SYSIBM.SYSTABAUTH",
+                                            "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND",                                "UPDATE
+AUTH='Y' AND GRANTEETYPE=' ' AND UPDATECOLS=' '"
+   372 *-* call ZSQL
+   373 *-* Do Until SQLCODE \= 0
+   374 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname, :grantee"
+   375 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   376 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   377 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   378 *-*    prof=prof'.UPDATE'
+   379 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                     "ID("Strip(grantee)")"
+   381 *-*    Push cmd
+   382 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   383 *-*   End
+   384 *-* End /* do until */
+   385 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   386 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   387 *-* "EXECSQL CLOSE C1"
+   388 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   390 *-*  /* With Grants */
+   391 *-* sql="SELECT DISTINCT TCREATOR, TTNAME, GRANTEE",                                    "FROM SYSIBM.SYSTABAUTH",
+                                            "WHERE GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND",                                "UPDATE
+AUTH='G' AND GRANTEETYPE=' ' AND UPDATECOLS=' '"
+   395 *-* call ZSQL
+   396 *-* Do Until SQLCODE \= 0
+   397 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname, :grantee"
+   398 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   399 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   400 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   401 *-*    prof=prof'.UPDATE'
+   402 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                    "ID("Strip(grantee)")"
+   404 *-*    Push cmd
+   405 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   406 *-*   End
+   407 *-* End /* do until */
+   408 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   409 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   410 *-* "EXECSQL CLOSE C1"
+   411 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   413 *-*  /************************************************/
+   414 *-*  /* Now for Column-only                          */
+   415 *-*  /************************************************/
+   417 *-*  /* Find all objects, and make commands to create profiles */
+   418 *-*  /* for column based authority */
+   419 *-* sql="SELECT DISTINCT T.TCREATOR, T.TTNAME, C.COLNAME",                            "FROM SYSIBM.SYSTABAUTH T,",
+                                          "SYSIBM.SYSCOLAUTH C WHERE T.GRANTEETYPE=' ' AND",                              "T.DATEGR
+ANTED=C.DATEGRANTED AND T.TIMEGRANTED=C.TIMEGRANTED",                  "AND T.TTNAME=C.TNAME AND T.TCREATOR=C.CREATOR",
+                    "AND T.UPDATECOLS='*' AND T.UPDATEAUTH¬=' '"
+   425 *-* call ZSQL
+   426 *-* Do Until SQLCODE \= 0
+   427 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname, :colname"
+   428 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   429 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   430 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   431 *-*    prof=prof'.'Strip(colname)'.UPDATE'
+   432 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",                              "OWNER("owner")"
+   434 *-*    Push cmd
+   435 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   437 *-*    cmd="PERMIT "prof" CLASS("class") RESET"
+   438 *-*    Push cmd
+   439 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   440 *-*   End
+   441 *-* End /* do until */
+   442 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   443 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   444 *-* "EXECSQL CLOSE C1"
+   445 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   447 *-*  /* If any of those were PUBLIC, change UACC to READ */
+   448 *-* sql="SELECT DISTINCT T.TCREATOR, T.TTNAME, C.COLNAME",                            "FROM SYSIBM.SYSTABAUTH T,",
+                                          "SYSIBM.SYSCOLAUTH C WHERE T.GRANTEETYPE=' ' AND",                              "T.DATEGR
+ANTED=C.DATEGRANTED AND T.TIMEGRANTED=C.TIMEGRANTED",                  "AND T.TTNAME=C.TNAME AND T.TCREATOR=C.CREATOR",
+                    "AND T.GRANTEE IN ('PUBLIC','PUBLIC*')",                                        "AND T.UPDATECOLS='*' AND T.UPD
+ATEAUTH¬=' '"
+   455 *-* call ZSQL
+   456 *-* Do Until SQLCODE \= 0
+   457 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname, :colname"
+   458 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   459 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   460 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   461 *-*    prof=prof'.'Strip(colname)'.UPDATE'
+   462 *-*    cmd="RALT "class prof" UACC(READ)"
+   463 *-*    Push cmd
+   464 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   465 *-*   End
+   466 *-* End /* do until */
+   467 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   468 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   469 *-* "EXECSQL CLOSE C1"
+   470 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   472 *-*  /* Get all ids (except PUBLIC) for access list */
+   473 *-* sql="SELECT DISTINCT T.TCREATOR, T.TTNAME, C.COLNAME, T.GRANTEE",                 "FROM SYSIBM.SYSTABAUTH T, SYSIBM.SYSC
+OLAUTH C",                                "WHERE T.GRANTEETYPE=' ' AND",                                                  "T.DATEGR
+ANTED=C.DATEGRANTED AND T.TIMEGRANTED=C.TIMEGRANTED",                  "AND T.TTNAME=C.TNAME AND T.TCREATOR=C.CREATOR",
+                    "AND T.GRANTEE NOT IN ('PUBLIC','PUBLIC*')",                                    "AND T.UPDATECOLS='*' AND T.UPD
+ATEAUTH¬='Y'"
+   480 *-* call ZSQL
+   481 *-* Do Until SQLCODE \= 0
+   482 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname, :colname, :grantee"
+   483 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   484 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   485 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   486 *-*    prof=prof'.'Strip(colname)'.UPDATE'
+   487 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                     "ID("Strip(grantee)")"
+   489 *-*    Push cmd
+   490 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   491 *-*   End
+   492 *-* End /* do until */
+   493 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   494 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   495 *-* "EXECSQL CLOSE C1"
+   496 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   498 *-*  /* With Grants */
+   499 *-* sql="SELECT DISTINCT T.TCREATOR, T.TTNAME, C.COLNAME, T.GRANTEE",                 "FROM SYSIBM.SYSTABAUTH T, SYSIBM.SYSC
+OLAUTH C",                                "WHERE T.GRANTEETYPE=' ' AND",                                                  "T.DATEGR
+ANTED=C.DATEGRANTED AND T.TIMEGRANTED=C.TIMEGRANTED",                  "AND T.TTNAME=C.TNAME AND T.TCREATOR=C.CREATOR",
+                    "AND T.GRANTEE NOT IN ('PUBLIC','PUBLIC*')",                                    "AND T.UPDATECOLS='*' AND T.UPD
+ATEAUTH¬='G'"
+   506 *-* call ZSQL
+   507 *-* Do Until SQLCODE \= 0
+   508 *-*  "EXECSQL FETCH C1 INTO :tcreator, :ttname, :colname, :grantee"
+   509 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   510 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(tcreator)'.'Strip(ttname)
+   511 *-*    Else
+       *-*     prof=ssid'.'Strip(tcreator)'.'Strip(ttname)
+   512 *-*    prof=prof'.'Strip(colname)'.UPDATE'
+   513 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                    "ID("Strip(grantee)")"
+   515 *-*    Push cmd
+   516 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   517 *-*   End
+   518 *-* End /* do until */
+   519 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   520 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   521 *-* "EXECSQL CLOSE C1"
+   522 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   523 *-* Return    /* tab_upd */
+   525 *-* use_priv:
+   526 *-* /*****************************************************************/
+   527 *-* /* Get DB2 USE privileges (bufferpool, stogroup, tablespace)     */
+   528 *-* /*****************************************************************/
+   529 *-* Arg auth,obtype,type
+   530 *-* If model=1
+       *-*  Then
+       *-*  class="M"Strip(ssid)||type||charopt
+   531 *-* Else
+       *-*  class="M"classmnt||type||charopt
+   533 *-* /* Find all objects, and make commands to create profiles */
+   534 *-* /* for 'auth'. Then remove executor from access list.     */
+   535 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",                                  "WHERE OBTYPE='"obtype"'"
+   537 *-* call ZSQL
+   538 *-* Do Until SQLCODE \= 0
+   539 *-*  "EXECSQL FETCH C1 INTO :name"
+   540 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   541 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   542 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   543 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",                                "OWNER("owner")"
+   545 *-*    Push cmd
+   546 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   548 *-*    cmd="PERMIT "prof" CLASS("class") RESET"
+   549 *-*    Push cmd
+   550 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   551 *-*   End
+   552 *-* End /* do until */
+   553 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   554 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   555 *-* "EXECSQL CLOSE C1"
+   556 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   558 *-*  /* If any of those were PUBLIC, change UACC to READ */
+   559 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",                                  "WHERE OBTYPE='"obtype"' AND USEAUTH
+¬=' '",                                     "AND GRANTEE IN ('PUBLIC','PUBLIC*')"
+   562 *-* call ZSQL
+   563 *-* Do Until SQLCODE \= 0
+   564 *-*  "EXECSQL FETCH C1 INTO :name"
+   565 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   566 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   567 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   568 *-*    cmd="RALT "class prof" UACC(READ)"
+   569 *-*    Push cmd
+   570 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   571 *-*   End
+   572 *-* End /* do until */
+   573 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   574 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   575 *-* "EXECSQL CLOSE C1"
+   576 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   578 *-*  /* Get all ids (except PUBLIC) for access list */
+   579 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",                         "WHERE OBTYPE='"obtype"' AND USEAUTH
+='Y'",                                      "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*')"
+   582 *-* call ZSQL
+   583 *-* Do Until SQLCODE \= 0
+   584 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+   585 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   586 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   587 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   588 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                     "ID("Strip(grantee)")"
+   590 *-*    Push cmd
+   591 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   592 *-*   End
+   593 *-* End /* do until */
+   594 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   595 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   596 *-* "EXECSQL CLOSE C1"
+   597 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   599 *-*  /* With Grants */
+   600 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",                         "WHERE OBTYPE='"obtype"' AND USEAUTH
+='G'",                                      "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*')"
+   603 *-* call ZSQL
+   604 *-* Do Until SQLCODE \= 0
+   605 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+   606 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   607 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+   608 *-*    Else
+       *-*     prof=ssid'.'Strip(name)'.'auth
+   609 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                     "ID("Strip(grantee)")"
+   611 *-*    Push cmd
+   612 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   613 *-*   End
+   614 *-* End /* do until */
+   615 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   616 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   617 *-* "EXECSQL CLOSE C1"
+   618 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   619 *-* Return    /* use_priv */
+   621 *-* pack_priv:
+   622 *-* /*****************************************************************/
+   623 *-* /* Get DB2 Package privileges                                    */
+   624 *-* /*    This gets tricky, because SYSPACKAUTH has COLLID and       */
+   625 *-* /* can have * for NAME (Package ID).  We must define all the     */
+   626 *-* /* permits with * first, then PERMIT FROM(xx.*) as well as the   */
+   627 *-* /* normal permits.                                               */
+   628 *-* /*    We also ignore any row where GRANTEETYPE='P' (for access)  */
+   629 *-* /*****************************************************************/
+   630 *-* Arg auth,col
+   631 *-* If model=1
+       *-*  Then
+       *-*  class="M"Strip(ssid)"PK"charopt
+   632 *-* Else
+       *-*  class="M"classmnt"PK"charopt
+   634 *-* /* Find ALL packages, and make commands to create profiles */
+   635 *-* /* for 'auth'. Then remove executor from access list.      */
+   636 *-* sql="SELECT DISTINCT COLLID, NAME FROM SYSIBM.SYSPACKAUTH"
+   637 *-* call ZSQL
+   638 *-* Do Until SQLCODE \= 0
+   639 *-*  "EXECSQL FETCH C1 INTO :collid, :name"
+   640 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   641 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(collid)'.'Strip(name)'.'auth
+   642 *-*    Else
+       *-*     prof=ssid'.'Strip(collid)'.'Strip(name)'.'auth
+   643 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",                                "OWNER("owner")"
+   645 *-*    Push cmd
+   646 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   648 *-*    cmd="PERMIT "prof" CLASS("class") RESET"
+   649 *-*    Push cmd
+   650 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   651 *-*   End
+   652 *-* End /* do until */
+   653 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   654 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   655 *-* "EXECSQL CLOSE C1"
+   656 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   658 *-*  /* If any of those were PUBLIC, change UACC to READ */
+   659 *-* sql="SELECT DISTINCT COLLID, NAME FROM SYSIBM.SYSPACKAUTH",                       "WHERE GRANTEE IN ('PUBLIC','PUBLIC*')
+ AND "col"¬=' '",                         "AND GRANTEETYPE=' '"
+   662 *-* call ZSQL
+   663 *-* Do Until SQLCODE \= 0
+   664 *-*  "EXECSQL FETCH C1 INTO :collid, :name"
+   665 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   666 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(collid)'.'Strip(name)'.'auth
+   667 *-*    Else
+       *-*     prof=ssid'.'Strip(collid)'.'Strip(name)'.'auth
+   668 *-*    cmd="RALT "class prof" UACC(READ)"
+   669 *-*    Push cmd
+   670 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   671 *-*   End
+   672 *-* End /* do until */
+   673 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   674 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   675 *-* "EXECSQL CLOSE C1"
+   676 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   678 *-*  /* Get all ids (except PUBLIC) for access list to '*' packs */
+   679 *-* sql="SELECT DISTINCT COLLID, GRANTEE FROM SYSIBM.SYSPACKAUTH",                    "WHERE GRANTEE NOT IN ('PUBLIC','PUBLI
+C*') AND "col"='Y'",                      "AND GRANTEETYPE=' ' AND NAME='*'"
+   682 *-* call ZSQL
+   683 *-* Do Until SQLCODE \= 0
+   684 *-*  "EXECSQL FETCH C1 INTO :collid, :grantee"
+   685 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   686 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(collid)'.*.'auth
+   687 *-*    Else
+       *-*     prof=ssid'.'Strip(collid)'.*.'auth
+   688 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                     "ID("grantee")"
+   690 *-*    Push cmd
+   691 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   692 *-*   End
+   693 *-* End /* do until */
+   694 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   695 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   696 *-* "EXECSQL CLOSE C1"
+   697 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   699 *-*  /* With Grants */
+   700 *-* sql="SELECT DISTINCT COLLID, GRANTEE FROM SYSIBM.SYSPACKAUTH",                    "WHERE GRANTEE NOT IN ('PUBLIC','PUBLI
+C*') AND "col"='G'",                      "AND GRANTEETYPE=' ' AND NAME='*'"
+   703 *-* call ZSQL
+   704 *-* Do Until SQLCODE \= 0
+   705 *-*  "EXECSQL FETCH C1 INTO :collid, :grantee"
+   706 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   707 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(collid)'.*.'auth
+   708 *-*    Else
+       *-*     prof=ssid'.'Strip(collid)'.*.'auth
+   709 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                    "ID("grantee")"
+   711 *-*    Push cmd
+   712 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   713 *-*   End
+   714 *-* End /* do until */
+   715 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   716 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   717 *-* "EXECSQL CLOSE C1"
+   718 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   720 *-*  /* Now copy those access lists to individual package profiles */
+   721 *-*  /* if a * profile existed above                               */
+   722 *-* sql="SELECT DISTINCT A.COLLID, A.NAME FROM SYSIBM.SYSPACKAUTH A",                 "WHERE A.NAME¬='*' AND A.GRANTEETYPE='
+ ' AND",                                  "EXISTS(SELECT B.COLLID FROM SYSIBM.SYSPACKAUTH B WHERE",                         "B.NAME
+='*' AND A.COLLID=B.COLLID",                                             "AND B.GRANTEETYPE=' ')"
+   727 *-* call ZSQL
+   728 *-* Do Until SQLCODE \= 0
+   729 *-*  "EXECSQL FETCH C1 INTO :collid, :name"
+   730 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   731 *-*    If model=1
+       *-*     Then
+       *-*     prefix=Strip(collid)"."
+   732 *-*    Else
+       *-*     prefix=ssid"."Strip(collid)"."
+   733 *-*    cmd="PERMIT "prefix||Strip(name)"."auth,                                          "CLASS("class") FROM("prefix"*."aut
+h")"
+   735 *-*    Push cmd
+   736 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   737 *-*   End
+   738 *-* End /* do until */
+   739 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   740 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   741 *-* "EXECSQL CLOSE C1"
+   742 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   744 *-*  /* Get all ids (except PUBLIC) for access to individual pack  */
+   745 *-*  /* profiles                                                   */
+   746 *-* sql="SELECT DISTINCT COLLID, NAME, GRANTEE FROM SYSIBM.SYSPACKAUTH",              "WHERE GRANTEE NOT IN ('PUBLIC','PUBLI
+C*') AND "col"='Y'",                      "AND GRANTEETYPE=' ' AND NAME¬='*'"
+   749 *-* call ZSQL
+   750 *-* Do Until SQLCODE \= 0
+   751 *-*  "EXECSQL FETCH C1 INTO :collid, :name, :grantee"
+   752 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   753 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(collid)"."Strip(name)"."auth
+   754 *-*    Else
+       *-*     prof=ssid"."Strip(collid)"."Strip(name)"."auth
+   755 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                     "ID("Strip(grantee)")"
+   757 *-*    Push cmd
+   758 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   759 *-*   End
+   760 *-* End /* do until */
+   761 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   762 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   763 *-* "EXECSQL CLOSE C1"
+   764 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   766 *-*  /* With Grants */
+   767 *-* sql="SELECT DISTINCT COLLID, NAME, GRANTEE FROM SYSIBM.SYSPACKAUTH",              "WHERE GRANTEE NOT IN ('PUBLIC','PUBLI
+C*') AND "col"='G'",                      "AND GRANTEETYPE=' ' AND NAME¬='*'"
+   770 *-* call ZSQL
+   771 *-* Do Until SQLCODE \= 0
+   772 *-*  "EXECSQL FETCH C1 INTO :collid, :name, :grantee"
+   773 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   774 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(collid)"."Strip(name)"."auth
+   775 *-*    Else
+       *-*     prof=ssid"."Strip(collid)"."Strip(name)"."auth
+   776 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                    "ID("Strip(grantee)")"
+   778 *-*    Push cmd
+   779 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   780 *-*   End
+   781 *-* End /* do until */
+   782 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   783 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   784 *-* "EXECSQL CLOSE C1"
+   785 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   786 *-* Return     /* pack_priv */
+   788 *-* cltn_priv:
+   789 *-* /*****************************************************************/
+   790 *-* /* Get DB2 Collection privileges                                 */
+   791 *-* /*    This gets tricky, because SYSRESAUTH with OBTYPE='C'       */
+   792 *-* /* can have * for NAME (Collection ID).  We must define all      */
+   793 *-* /* the permits with * first, then PERMIT FROM(xx.*) as well as  */
+   794 *-* /* the normal permits.                                           */
+   795 *-* /*****************************************************************/
+   796 *-* Arg auth
+   797 *-* /* Note: auth is always CREATEIN for Collections */
+   798 *-* If model=1
+       *-*  Then
+       *-*  class="M"Strip(ssid)"CL"charopt
+   799 *-* Else
+       *-*  class="M"classmnt"CL"charopt
+   801 *-* /* Find all objects, and make commands to create profiles */
+   802 *-* /* for 'auth'. Then remove executor from access list.     */
+   803 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",                                "WHERE OBTYPE='C' AND QUALIFIER='
+   '"
+   805 *-* call ZSQL
+   806 *-* Do Until SQLCODE \= 0
+   807 *-*  "EXECSQL FETCH C1 INTO :name"
+   808 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   809 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)"."auth
+   810 *-*    Else
+       *-*     prof=ssid"."Strip(name)"."auth
+   811 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",                              "OWNER("owner")"
+   813 *-*    Push cmd
+   814 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   816 *-*    cmd="PERMIT "prof" CLASS("class") RESET"
+   817 *-*    Push cmd
+   818 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   819 *-*   End
+   820 *-* End /* do until */
+   821 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   822 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   823 *-* "EXECSQL CLOSE C1"
+   824 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   826 *-*  /* If any of those were PUBLIC, change UACC to READ */
+   827 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",                                "WHERE OBTYPE='C' AND QUALIFIER='
+   '",                                    "AND GRANTEE IN ('PUBLIC','PUBLIC*') AND USEAUTH¬=' '"
+   830 *-* call ZSQL
+   831 *-* Do Until SQLCODE \= 0
+   832 *-*  "EXECSQL FETCH C1 INTO :name"
+   833 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   834 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)"."auth
+   835 *-*    Else
+       *-*     prof=ssid"."Strip(name)"."auth
+   836 *-*    cmd="RALT "class prof" UACC(READ)"
+   837 *-*    Push cmd
+   838 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   839 *-*   End
+   840 *-* End /* do until */
+   841 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   842 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   843 *-* "EXECSQL CLOSE C1"
+   844 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   846 *-*  /* Get all ids (except PUBLIC) for access list to '*' coll. */
+   847 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",                       "WHERE OBTYPE='C' AND QUALIFIER='
+   '",                                    "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND USEAUTH='Y'",                      "AND NAME
+='*'"
+   851 *-* call ZSQL
+   852 *-* Do Until SQLCODE \= 0
+   853 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+   854 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   855 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)"."auth
+   856 *-*    Else
+       *-*     prof=ssid"."Strip(name)"."auth
+   857 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                     "ID("Strip(grantee)")"
+   859 *-*    Push cmd
+   860 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   861 *-*   End
+   862 *-* End /* do until */
+   863 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   864 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   865 *-* "EXECSQL CLOSE C1"
+   866 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   868 *-*  /* With Grants */
+   869 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",                       "WHERE OBTYPE='C' AND QUALIFIER='
+   '",                                    "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND USEAUTH='G'",                      "AND NAME
+='*'"
+   873 *-* call ZSQL
+   874 *-* Do Until SQLCODE \= 0
+   875 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+   876 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   877 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)"."auth
+   878 *-*    Else
+       *-*     prof=ssid"."Strip(name)"."auth
+   879 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                    "ID("Strip(grantee)")"
+   881 *-*    Push cmd
+   882 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   883 *-*   End
+   884 *-* End /* do until */
+   885 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   886 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   887 *-* "EXECSQL CLOSE C1"
+   888 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   890 *-*  /* Now copy the '*' access list to the individuals ones */
+   891 *-*  /* if the * existed                                     */
+   892 *-* sql="SELECT DISTINCT A.NAME FROM SYSIBM.SYSRESAUTH A",                            "WHERE A.OBTYPE='C' AND A.QUALIFIER='
+       '",                                "AND A.NAME¬='*'",                                                              "AND EXIS
+TS(SELECT * FROM SYSIBM.SYSRESAUTH B WHERE",                           " B.NAME='*' AND B.OBTYPE='C' AND B.QUALIFIER='        ')"
+   897 *-* call ZSQL
+   898 *-* Do Until SQLCODE \= 0
+   899 *-*  "EXECSQL FETCH C1 INTO :name"
+   900 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   901 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)"."auth
+   902 *-*    Else
+       *-*     prof=ssid"."Strip(name)"."auth
+   903 *-*    If model=1
+       *-*     Then
+       *-*     fromprof="*."auth
+   904 *-*    Else
+       *-*     fromprof=ssid".*."auth
+   905 *-*    cmd="PERMIT "prof" CLASS("class") FROM("fromprof")"
+   906 *-*    Push cmd
+   907 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   908 *-*   End
+   909 *-* End /* do until */
+   910 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   911 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   912 *-* "EXECSQL CLOSE C1"
+   913 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   915 *-*  /* Get all ids (except PUBLIC) for access to individual */
+   916 *-*  /* collection profiles                                  */
+   917 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",                       "WHERE OBTYPE='C' AND QUALIFIER='
+   '",                                    "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND USEAUTH='Y'",                      "AND NAME
+¬='*'"
+   921 *-* call ZSQL
+   922 *-* Do Until SQLCODE \= 0
+   923 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+   924 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   925 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)"."auth
+   926 *-*    Else
+       *-*     prof=ssid"."Strip(name)"."auth
+   927 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                     "ID("Strip(grantee)")"
+   929 *-*    Push cmd
+   930 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   931 *-*   End
+   932 *-* End /* do until */
+   933 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   934 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   935 *-* "EXECSQL CLOSE C1"
+   936 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   938 *-*  /* With Grants */
+   939 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",                       "WHERE OBTYPE='C' AND QUALIFIER='
+   '",                                    "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*') AND USEAUTH='G'",                      "AND NAME
+¬='*'"
+   943 *-* call ZSQL
+   944 *-* Do Until SQLCODE \= 0
+   945 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+   946 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+   947 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)"."auth
+   948 *-*    Else
+       *-*     prof=ssid"."Strip(name)"."auth
+   949 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                    "ID("Strip(grantee)")"
+   951 *-*    Push cmd
+   952 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+   953 *-*   End
+   954 *-* End /* do until */
+   955 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   956 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   957 *-* "EXECSQL CLOSE C1"
+   958 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   959 *-* Return    /* cltn_priv */
+   961 *-* sys_attr:
+   962 *-* /*****************************************************************/
+   963 *-* /* Get DB2 system administrative authorities                     */
+   964 *-* /*****************************************************************/
+   965 *-* Arg auth,col
+   966 *-* If model=1
+       *-*  Then
+       *-*  prof=auth
+   967 *-* Else
+       *-*  prof=ssid"."auth
+   969 *-* /* First determine if it is given to PUBLIC */
+   970 *-* sql="SELECT COUNT(*) FROM SYSIBM.SYSUSERAUTH",                                    "WHERE GRANTEE='PUBLIC' AND "col"¬=' '
+"
+   972 *-* call ZSQL
+   973 *-* "EXECSQL FETCH C1 INTO :rows"
+   974 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'FETCH C1 '
+   975 *-* "EXECSQL CLOSE C1"
+   976 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1 '
+   978 *-*  /* If there are no rows, it is not public */
+   979 *-* If rows = 0
+       *-*  Then
+       *-*  uac="NONE"
+   980 *-* Else
+       *-*  uac="READ"
+   982 *-* /* Define base profile */
+   983 *-* cmd="RDEF "class prof" UACC("uac") OWNER("owner") AUDIT(ALL(READ))"
+   984 *-* Push cmd
+   985 *-* Address TSO "EXECIO 1 DISKW CLIST"
+   987 *-* /* Remove executor from access list */
+   988 *-* cmd="PERMIT "prof" CLASS("class") RESET"
+   989 *-* Push cmd
+   990 *-* Address TSO "EXECIO 1 DISKW CLIST"
+   992 *-* /* Get all ids (except PUBLIC) for access list */
+   993 *-* /* Without GRANT */
+   994 *-* sql="SELECT DISTINCT GRANTEE FROM SYSIBM.SYSUSERAUTH",                            "WHERE "col"='Y' AND GRANTEE¬='PUBLIC'
+"
+   996 *-* call ZSQL
+   997 *-* Do Until SQLCODE \= 0
+   998 *-*  "EXECSQL FETCH C1 INTO :grantee"
+   999 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1000 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                       "ID("Strip(grantee)")"
+  1002 *-*    Push cmd
+  1003 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1004 *-*   End
+  1005 *-* End /* do until */
+  1006 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1007 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1008 *-* "EXECSQL CLOSE C1"
+  1009 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1 '
+  1011 *-*  /* With GRANT */
+  1012 *-* sql="SELECT DISTINCT GRANTEE FROM SYSIBM.SYSUSERAUTH",                            "WHERE "col"='G' AND GRANTEE¬='PUBLIC'
+"
+  1014 *-* call ZSQL
+  1015 *-* Do Until SQLCODE \= 0
+  1016 *-*  "EXECSQL FETCH C1 INTO :grantee"
+  1017 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1018 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                      "ID("Strip(grantee)")"
+  1020 *-*    Push cmd
+  1021 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1022 *-*   End
+  1023 *-* End /* do until */
+  1024 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1025 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1026 *-* "EXECSQL CLOSE C1"
+  1027 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1 '
+  1028 *-* Return     /* sys_attr */
+  1030 *-* bindagent:
+  1031 *-* /*****************************************************************/
+  1032 *-* /* Get DB2 system BINDAGENT authority                            */
+  1033 *-* /*****************************************************************/
+  1034 *-* /* Create (ssid.)grantor.BINDAGENT profile for each GRANTOR */
+  1035 *-* /* And remove executor from access list */
+  1036 *-* sql="SELECT DISTINCT GRANTOR FROM SYSIBM.SYSUSERAUTH",                            "WHERE BINDAGENTAUTH¬=' '"
+  1038 *-* call ZSQL
+  1039 *-* Do Until SQLCODE \= 0
+  1040 *-*  "EXECSQL FETCH C1 INTO :grantor"
+  1041 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1042 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(grantor)'.BINDAGENT'
+  1043 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(grantor)'.BINDAGENT'
+  1044 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",                                "OWNER("owner")"
+  1046 *-*    Push cmd
+  1047 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1049 *-*    cmd="PERMIT "prof" CLASS("class") RESET"
+  1050 *-*    Push cmd
+  1051 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1052 *-*   End
+  1053 *-* End /* do until */
+  1054 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1055 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1056 *-* "EXECSQL CLOSE C1"
+  1057 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1 '
+  1059 *-*  /* Change UACC if it is given to PUBLIC */
+  1060 *-* sql="SELECT DISTINCT GRANTOR FROM SYSIBM.SYSUSERAUTH",                            "WHERE BINDAGENTAUTH¬=' ' AND GRANTEE=
+'PUBLIC'"
+  1062 *-* call ZSQL
+  1063 *-* Do Until SQLCODE \= 0
+  1064 *-*  "EXECSQL FETCH C1 INTO :grantor"
+  1065 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1066 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(grantor)'.BINDAGENT'
+  1067 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(grantor)'.BINDAGENT'
+  1068 *-*    cmd="RALT " class prof" UACC(READ)"
+  1069 *-*    Push cmd
+  1070 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1071 *-*   End
+  1072 *-* End /* do until */
+  1073 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1074 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1075 *-* "EXECSQL CLOSE C1"
+  1076 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1078 *-*  /* Get all ids (except PUBLIC) for access list */
+  1079 *-* sql="SELECT DISTINCT GRANTOR, GRANTEE FROM SYSIBM.SYSUSERAUTH",                   "WHERE BINDAGENTAUTH='Y' AND GRANTEE¬=
+'PUBLIC'"
+  1081 *-* call ZSQL
+  1082 *-* Do Until SQLCODE \= 0
+  1083 *-*  "EXECSQL FETCH C1 INTO :grantor, :grantee"
+  1084 *-*  If SQLCODE=0
+       *-*   Then
+       *-*   Do
+  1085 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(grantor)'.BINDAGENT'
+  1086 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(grantor)'.BINDAGENT'
+  1087 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                       "ID("Strip(grantee)")"
+  1089 *-*    Push cmd
+  1090 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1091 *-*   End
+  1092 *-* End /* do until */
+  1093 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1094 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1095 *-* "EXECSQL CLOSE C1"
+  1096 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1098 *-*  /* With Grants */
+  1099 *-* sql="SELECT DISTINCT GRANTOR, GRANTEE FROM SYSIBM.SYSUSERAUTH",                   "WHERE BINDAGENTAUTH='G' AND GRANTEE¬=
+'PUBLIC'"
+  1101 *-* call ZSQL
+  1102 *-* Do Until SQLCODE \= 0
+  1103 *-*  "EXECSQL FETCH C1 INTO :grantor, :grantee"
+  1104 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1105 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(grantor)'.BINDAGENT'
+  1106 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(grantor)'.BINDAGENT'
+  1107 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                      "ID("Strip(grantee)")"
+  1109 *-*    Push cmd
+  1110 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1111 *-*   End
+  1112 *-* End /* do until */
+  1113 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1114 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1115 *-* "EXECSQL CLOSE C1"
+  1116 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1117 *-* Return     /* bindagent */
+  1119 *-* db_attr:
+  1120 *-* /*****************************************************************/
+  1121 *-* /* Get DB2 database administrative authorities                   */
+  1122 *-* /*****************************************************************/
+  1123 *-* Arg auth,col
+  1125 *-* /* Find all databases, and make commands to create profiles */
+  1126 *-* /* for 'auth'. Then remove executor from access list.       */
+  1127 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYSDBAUTH"
+  1128 *-* call ZSQL
+  1129 *-* Do Until SQLCODE \= 0
+  1130 *-*  "EXECSQL FETCH C1 INTO :name"
+  1131 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1132 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+  1133 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(name)'.'auth
+  1134 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",                                "OWNER("owner")"
+  1136 *-*    Push cmd
+  1137 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1139 *-*    cmd="PE "prof" CLASS("class") RESET"
+  1140 *-*    Push cmd
+  1141 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1142 *-*   End
+  1143 *-* End /* do until */
+  1144 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1145 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1146 *-* "EXECSQL CLOSE C1"
+  1147 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1149 *-*  /* If any of those were PUBLIC, change UACC to READ */
+  1150 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYSDBAUTH",                                 "WHERE GRANTEE='PUBLIC' AND "col"¬=' '
+"
+  1152 *-* call ZSQL
+  1153 *-* Do Until SQLCODE \= 0
+  1154 *-*  "EXECSQL FETCH C1 INTO :name"
+  1155 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1156 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+  1157 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(name)'.'auth
+  1158 *-*    cmd="RALT "class prof" UACC(READ)"
+  1159 *-*    Push cmd
+  1160 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1161 *-*   End
+  1162 *-* End /* do until */
+  1163 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1164 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1165 *-* "EXECSQL CLOSE C1"
+  1166 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1168 *-*  /* Get all ids (except PUBLIC) for access list */
+  1169 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSDBAUTH",                        "WHERE GRANTEE¬='PUBLIC' AND "col"='Y'
+"
+  1171 *-* call ZSQL
+  1172 *-* Do Until SQLCODE \= 0
+  1173 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+  1174 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1175 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+  1176 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(name)'.'auth
+  1177 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                       "ID("Strip(grantee)")"
+  1179 *-*    Push cmd
+  1180 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1181 *-*   End
+  1182 *-* End /* do until */
+  1183 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1184 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1185 *-* "EXECSQL CLOSE C1"
+  1186 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1188 *-*  /* With Grants */
+  1189 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSDBAUTH",                        "WHERE GRANTEE¬='PUBLIC' AND "col"='G'
+"
+  1191 *-* call ZSQL
+  1192 *-* Do Until SQLCODE \= 0
+  1193 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+  1194 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1195 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+  1196 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(name)'.'auth
+  1197 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                      "ID("Strip(grantee)")"
+  1199 *-*    Push cmd
+  1200 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1201 *-*   End
+  1202 *-* End /* do until */
+  1203 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1204 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1205 *-* "EXECSQL CLOSE C1"
+  1206 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1207 *-* Return
+  1209 *-* db_option:
+  1210 *-* /*****************************************************************/
+  1211 *-* /* For DBADM write optional commands for profile with no DBname  */
+  1212 *-* /*****************************************************************/
+  1213 *-* If model=1
+       *-*  Then
+       *-*  prof="DBADM"
+  1214 *-* Else
+       *-*  prof=Strip(ssid)".DBADM"
+  1215 *-* cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ)) OWNER("owner")"
+  1216 *-* Push cmd
+  1217 *-* Address TSO "EXECIO 1 DISKW OPTCLST"
+  1219 *-* cmd="PE "prof" CLASS("class") RESET"
+  1220 *-* Push cmd
+  1221 *-* Address TSO "EXECIO 1 DISKW OPTCLST"
+  1223 *-* /* Never make it PUBLIC */
+  1225 *-* /* Get all ids (except PUBLIC) for access list */
+  1226 *-* sql="SELECT DISTINCT GRANTEE FROM SYSIBM.SYSDBAUTH",                              "WHERE GRANTEE¬='PUBLIC' AND DBADMAUTH
+='Y'"
+  1228 *-* call ZSQL
+  1229 *-* Do Until SQLCODE \= 0
+  1230 *-*  "EXECSQL FETCH C1 INTO :grantee"
+  1231 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1232 *-*    If model=1
+       *-*     Then
+       *-*     prof="DBADM"
+  1233 *-*    Else
+       *-*     prof=Strip(ssid)".DBADM"
+  1234 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ)",                                       "ID("Strip(grantee)")"
+  1236 *-*    Push cmd
+  1237 *-*    Address TSO "EXECIO 1 DISKW OPTCLST"
+  1238 *-*   End
+  1239 *-* End /* do until */
+  1240 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1241 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1242 *-* "EXECSQL CLOSE C1"
+  1243 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1245 *-*  /* with Grants */
+  1246 *-* sql="SELECT DISTINCT GRANTEE FROM SYSIBM.SYSDBAUTH",                              "WHERE GRANTEE¬='PUBLIC' AND DBADMAUTH
+='G'"
+  1248 *-* call ZSQL
+  1249 *-* Do Until SQLCODE \= 0
+  1250 *-*  "EXECSQL FETCH C1 INTO :grantee"
+  1251 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1252 *-*    If model=1
+       *-*     Then
+       *-*     prof="DBADM"
+  1253 *-*    Else
+       *-*     prof=Strip(ssid)".DBADM"
+  1254 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                      "ID("Strip(grantee)")"
+  1256 *-*    Push cmd
+  1257 *-*    Address TSO "EXECIO 1 DISKW OPTCLST"
+  1258 *-*   End
+  1259 *-* End /* do until */
+  1260 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1261 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1262 *-* "EXECSQL CLOSE C1"
+  1263 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1264 *-* Return
+  1266 *-* packadm_attr:
+  1267 *-* /*****************************************************************/
+  1268 *-* /* Get DB2 PACKADM                                               */
+  1269 *-* /*****************************************************************/
+  1270 *-* Arg auth
+  1272 *-* /* Find all collections, and make commands to create profiles */
+  1273 *-* /* for 'auth'. Then remove executor from access list.         */
+  1274 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH"
+  1275 *-* call ZSQL
+  1276 *-* Do Until SQLCODE \= 0
+  1277 *-*  "EXECSQL FETCH C1 INTO :name"
+  1278 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1279 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+  1280 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(name)'.'auth
+  1281 *-*    cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ)) OWNER("owner")"
+  1282 *-*    Push cmd
+  1283 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1285 *-*    cmd="PERMIT "prof" CLASS("class") RESET"
+  1286 *-*    Push cmd
+  1287 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1288 *-*   End
+  1289 *-* End /* do until */
+  1290 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1291 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1292 *-* "EXECSQL CLOSE C1"
+  1293 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1295 *-*  /* If any of those were PUBLIC, change UACC to READ */
+  1296 *-* sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",                                "WHERE GRANTEE='PUBLIC' AND QUALIFIER=
+'PACKADM'",                               "AND OBTYPE='C' AND USEAUTH¬=' '"
+  1299 *-* call ZSQL
+  1300 *-* Do Until SQLCODE \= 0
+  1301 *-*  "EXECSQL FETCH C1 INTO :name"
+  1302 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1303 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+  1304 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(name)'.'auth
+  1305 *-*    cmd="RALT "class prof" UACC(READ)"
+  1306 *-*    Push cmd
+  1307 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1308 *-*   End
+  1309 *-* End /* do until */
+  1310 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1311 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1312 *-* "EXECSQL CLOSE C1"
+  1313 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1315 *-*  /* Get all ids (except PUBLIC) for access list */
+  1316 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",                       "WHERE GRANTEE¬='PUBLIC' AND QUALIFIER
+='PACKADM'",                              "AND OBTYPE='C' AND USEAUTH='Y'"
+  1319 *-* call ZSQL
+  1320 *-* Do Until SQLCODE \= 0
+  1321 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+  1322 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1323 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+  1324 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(name)'.'auth
+  1325 *-*    cmd="PERMIT "prof" CLASS("class") ACC(READ) ID("Strip(grantee)")"
+  1326 *-*    Push cmd
+  1327 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1328 *-*   End
+  1329 *-* End /* do until */
+  1330 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1331 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1332 *-* "EXECSQL CLOSE C1"
+  1333 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1335 *-*  /* with Grants */
+  1336 *-* sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",                       "WHERE GRANTEE¬='PUBLIC' AND QUALIFIER
+='PACKADM'",                              "AND OBTYPE='C' AND USEAUTH='G'"
+  1339 *-* call ZSQL
+  1340 *-* Do Until SQLCODE \= 0
+  1341 *-*  "EXECSQL FETCH C1 INTO :name, :grantee"
+  1342 *-*  If SQLCODE = 0
+       *-*   Then
+       *-*   Do
+  1343 *-*    If model=1
+       *-*     Then
+       *-*     prof=Strip(name)'.'auth
+  1344 *-*    Else
+       *-*     prof=Strip(ssid)'.'Strip(name)'.'auth
+  1345 *-*    cmd="PERMIT "prof" CLASS("class") ACC(ALTER)",                                      "ID("Strip(grantee)")"
+  1347 *-*    Push cmd
+  1348 *-*    Address TSO "EXECIO 1 DISKW CLIST"
+  1349 *-*   End
+  1350 *-* End /* do until */
+  1351 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+  1352 *-* Else
+       *-*  call prtsqlca 'FETCH C1 '
+  1353 *-* "EXECSQL CLOSE C1"
+  1354 *-* If SQLCODE\=0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+  1355 *-* Return
+  1357 *-* ZSQL:
+  1358 *-* err_sw = "0"
+  1359 *-* "EXECSQL DECLARE C1 CURSOR FOR S1"
+  1360 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'DECLARE C1 CURSOR'
+  1361 *-* "EXECSQL PREPARE S1 INTO :outsqlca FROM :sql"
+  1362 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'PREPARE S1'
+  1363 *-* "EXECSQL OPEN C1"
+  1364 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'OPEN C1 '
+  1365 *-* Return  /* zsql */
+  1367 *-* prtsqlca:
+  1368 *-* err_sw = "1"
+  1369 *-* Say '** Error SQL statement - ' arg(1)
+  1370 *-* Say '** failing SQL statement - ' sql
+  1371 *-* Say 'SQLCODE = 'SQLCODE
+  1372 *-* Say 'SQLERRMC = 'SQLERRMC
+  1373 *-* Say 'SQLERRP = 'SQLERRP
+  1374 *-* Say 'SQLERRD = 'SQLERRD.1',',                                                               || SQLERRD.2',',
+                                                    || SQLERRD.3',',
+ || SQLERRD.4',',                                                                || SQLERRD.5',',
+                              || SQLERRD.6
+  1381 *-* Say 'SQLWARN = 'SQLWARN.1',',                                                               || SQLWARN.2',',
+                                                    || SQLWARN.3',',
+ || SQLWARN.4',',                                                                || SQLWARN.5',',
+                              || SQLWARN.6',',                                                                || SQLWARN.7',',
+                                                           || SQLWARN.8',',
+        || SQLWARN.9',',                                                                || SQLWARN.10
+  1392 *-* Say 'SQLSTATE= 'SQLSTATE
+  1393 *-* Exit 999
+  1394 *-* Return
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Address Envir.Constant: ADDRESS 'DSNREXX'        Reference: 10
+
+Address Envir.Constant: ADDRESS 'TSO' <cmd>      Reference: 4 21 25 115 139 143 162 182 202 233 237 258 281 304 334 338 359 382 405 435 439 464
+                        ...                                 490 516 546 550 570 591 612 646 650 670 691 712 736 758 779 814 818 838 860 882 907
+                        ...                                 930 952 985 990 1003 1021 1047 1051 1070 1090 1110 1137 1141 1160 1180 1200 1217 1221
+                        ...                                 1237 1257 1283 1287 1307 1327 1348
+
+Built-In+/External use  ARG                      Reference: F(1369)
+
+Variable (set w/rexx)   auth                     Assigned : 123 215 529 630 796 965 1123 1270
+Variable (used in/rexx) auth                     Reference: 134 135 158 159 177 178 197 198 229 255 277 300 541 542 566 567 586 587 607 608 641
+                        ...                                 642 666 667 686 687 707 708 733 753 754 774 775 809 810 834 835 855 856 877 878 901
+                        ...                                 902 903 904 925 926 947 948 966 967 1132 1133 1156 1157 1175 1176 1195 1196 1279 1280
+                        ...                                 1303 1304 1323 1324 1343 1344
+
+Label (internal label)  BINDAGENT                Defined  : 1030
+Label (int. label ref)  BINDAGENT                Reference: C(61)
+
+Variable (set w/rexx)   charopt                  Assigned : 2
+Variable (used in/rexx) charopt                  Reference: 19 40 41 57 58 124 125 216 217 317 318 530 531 631 632 798 799
+
+Variable (set w/rexx)   class                    Assigned : 40 41 57 58 124 125 216 217 317 318 530 531 631 632 798 799
+Variable (used in/rexx) class                    Reference: 136 141 160 179 199 230 235 256 278 301 331 336 357 379 402 432 437 462 487 513 543
+                        ...                                 548 568 588 609 643 648 668 688 709 733 755 776 811 816 836 857 879 905 927 949 983
+                        ...                                 988 1000 1018 1044 1049 1068 1087 1107 1134 1139 1158 1177 1197 1215 1219 1234 1254
+                        ...                                 1281 1285 1305 1325 1345
+
+Variable (set w/rexx)   classmnt                 Assigned : 2 35
+Variable (used in/rexx) classmnt                 Reference: 18 35 41 58 125 217 318 531 632 799
+
+Label (internal label)  CLTN_PRIV                Defined  : 788
+Label (int. label ref)  CLTN_PRIV                Reference: C(108)
+
+Variable (set w/rexx)   cmd                      Assigned : 136 141 160 179 199 230 235 256 278 301 331 336 357 379 402 432 437 462 487 513 543
+                        ...                                 548 568 588 609 643 648 668 688 709 733 755 776 811 816 836 857 879 905 927 949 983
+                        ...                                 988 1000 1018 1044 1049 1068 1087 1107 1134 1139 1158 1177 1197 1215 1219 1234 1254
+                        ...                                 1281 1285 1305 1325 1345
+Variable (used in/rexx) cmd                      Reference: 138 142 161 181 201 232 236 257 280 303 333 337 358 381 404 434 438 463 489 515 545
+                        ...                                 549 569 590 611 645 649 669 690 711 735 757 778 813 817 837 859 881 906 929 951 984
+                        ...                                 989 1002 1020 1046 1050 1069 1089 1109 1136 1140 1159 1179 1199 1216 1220 1236 1256
+                        ...                                 1282 1286 1306 1326 1347
+
+Variable (set w/rexx)   col                      Assigned : 123 215 630 965 1123
+Variable (used in/rexx) col                      Reference: 152 171 191 246 267 290 659 679 700 746 767 970 994 1012 1150 1169 1189
+
+Variable (NEVER SET)    COLLID                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) COLLID                   Reference: 641 642 666 667 686 687 707 708 731 732 753 754 774 775
+
+Variable (NEVER SET)    COLNAME                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) COLNAME                  Reference: 431 461 486 512
+
+Built-In+/External use  DATE                     Reference: F(20)
+
+Label (internal label)  DB_ATTR                  Defined  : 1119
+Label (int. label ref)  DB_ATTR                  Reference: C(50) C(52) C(53)
+
+Label (internal label)  DB_OPTION                Defined  : 1209
+Label (int. label ref)  DB_OPTION                Reference: C(51)
+
+Label (internal label)  DEF_PRIV                 Defined  : 119
+Label (int. label ref)  DEF_PRIV                 Reference: C(85) C(86) C(87) C(88) C(89) C(90) C(91) C(92) C(93) C(94) C(95) C(96) C(99) C(100)
+
+Variable (set w/rexx)   err_sw                   Assigned : 1358 1368
+Variable (NEVER USED)   err_sw                   No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   fromprof                 Assigned : 903 904
+Variable (used in/rexx) fromprof                 Reference: 905
+
+Variable (NEVER SET)    GRANTEE                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) GRANTEE                  Reference: 179 199 278 301 379 402 487 513 588 609 688 709 755 776 857 879 927 949 1000 1018 1087
+                        ...                                 1107 1177 1197 1234 1254 1325 1345
+
+Variable (NEVER SET)    GRANTOR                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) GRANTOR                  Reference: 1042 1043 1066 1067 1085 1086 1105 1106
+
+Variable (set w/rexx)   model                    Assigned : 2 36
+Variable (used in/rexx) model                    Reference: 18 36 40 57 124 134 158 177 197 216 227 253 275 298 317 328 354 376 399 429 459 484
+                        ...                                 510 530 541 566 586 607 631 641 666 686 707 731 753 774 798 809 834 855 877 901 903
+                        ...                                 925 947 966 1042 1066 1085 1105 1132 1156 1175 1195 1213 1232 1252 1279 1303 1323 1343
+
+Variable (NEVER SET)    NAME                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) NAME                     Reference: 134 135 158 159 177 178 197 198 541 542 566 567 586 587 607 608 641 642 666 667 733
+                        ...                                 753 754 774 775 809 810 834 835 855 856 877 878 901 902 925 926 947 948 1132 1133 1156
+                        ...                                 1157 1175 1176 1195 1196 1279 1280 1303 1304 1323 1324 1343 1344
+
+Variable (set w/rexx)   obtype                   Assigned : 529
+Variable (used in/rexx) obtype                   Reference: 535 559 579 600
+
+Variable (set w/rexx)   owner                    Assigned : 2
+Variable (used in/rexx) owner                    Reference: 17 27 136 230 331 432 543 643 811 983 1044 1134 1215 1281
+
+Label (internal label)  PACKADM_ATTR             Defined  : 1266
+Label (int. label ref)  PACKADM_ATTR             Reference: C(54)
+
+Label (internal label)  PACK_PRIV                Defined  : 621
+Label (int. label ref)  PACK_PRIV                Reference: C(103) C(104) C(105)
+
+Variable (set w/rexx)   prefix                   Assigned : 731 732
+Variable (used in/rexx) prefix                   Reference: 733
+
+Variable (set w/rexx)   prof                     Assigned : 134 135 158 159 177 178 197 198 227 228 229 253 254 255 275 276 277 298 299 300 328
+                        ...                                 329 330 354 355 356 376 377 378 399 400 401 429 430 431 459 460 461 484 485 486 510
+                        ...                                 511 512 541 542 566 567 586 587 607 608 641 642 666 667 686 687 707 708 753 754 774
+                        ...                                 775 809 810 834 835 855 856 877 878 901 902 925 926 947 948 966 967 1042 1043 1066
+                        ...                                 1067 1085 1086 1105 1106 1132 1133 1156 1157 1175 1176 1195 1196 1213 1214 1232 1233
+                        ...                                 1252 1253 1279 1280 1303 1304 1323 1324 1343 1344
+Variable (used in/rexx) prof                     Reference: 136 141 160 179 199 229 230 235 255 256 277 278 300 301 330 331 336 356 357 378 379
+                        ...                                 401 402 431 432 437 461 462 486 487 512 513 543 548 568 588 609 643 648 668 688 709
+                        ...                                 755 776 811 816 836 857 879 905 927 949 983 988 1000 1018 1044 1049 1068 1087 1107
+                        ...                                 1134 1139 1158 1177 1197 1215 1219 1234 1254 1281 1285 1305 1325 1345
+
+Label (internal label)  PRTSQLCA                 Defined  : 1367
+Label (int. label ref)  PRTSQLCA                 Reference: C(147) C(149) C(166) C(168) C(186) C(188) C(206) C(208) C(241) C(243) C(262) C(264)
+                        ...                                 C(285) C(287) C(308) C(310) C(342) C(344) C(363) C(365) C(386) C(388) C(409) C(411)
+                        ...                                 C(443) C(445) C(468) C(470) C(494) C(496) C(520) C(522) C(554) C(556) C(574) C(576)
+                        ...                                 C(595) C(597) C(616) C(618) C(654) C(656) C(674) C(676) C(695) C(697) C(716) C(718)
+                        ...                                 C(740) C(742) C(762) C(764) C(783) C(785) C(822) C(824) C(842) C(844) C(864) C(866)
+                        ...                                 C(886) C(888) C(911) C(913) C(934) C(936) C(956) C(958) C(974) C(976) C(1007) C(1009)
+                        ...                                 C(1025) C(1027) C(1055) C(1057) C(1074) C(1076) C(1094) C(1096) C(1114) C(1116)
+                        ...                                 C(1145) C(1147) C(1164) C(1166) C(1184) C(1186) C(1204) C(1206) C(1241) C(1243)
+                        ...                                 C(1261) C(1263) C(1291) C(1293) C(1311) C(1313) C(1331) C(1333) C(1352) C(1354)
+                        ...                                 C(1360) C(1362) C(1364)
+
+SpecialVar(set no-XREF) RC                        *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RC                       Reference: 5
+
+Variable (NEVER SET)    ROWS                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ROWS                     Reference: 979
+
+Built-In+/External use  RXSUBCOM                 Reference: F(5)
+
+Variable (set w/rexx)   sql                      Assigned : 129 152 171 191 221 246 267 290 322 347 368 391 419 448 473 499 535 559 579 600 636
+                        ...                                 659 679 700 722 746 767 803 827 847 869 892 917 939 970 994 1012 1036 1060 1079 1099
+                        ...                                 1127 1150 1169 1189 1226 1246 1274 1296 1316 1336
+Variable (used in/rexx) sql                      Reference: 1370
+
+SpecialVar(set no-XREF) SQLCODE                   *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLCODE                  Reference: 131 133 146 149 155 157 165 168 174 176 185 188 194 196 205 208 224 226 240 243 250
+                        ...                                 252 261 264 272 274 284 287 295 297 307 310 325 327 341 344 351 353 362 365 373 375
+                        ...                                 385 388 396 398 408 411 426 428 442 445 456 458 467 470 481 483 493 496 507 509 519
+                        ...                                 522 538 540 553 556 563 565 573 576 583 585 594 597 604 606 615 618 638 640 653 656
+                        ...                                 663 665 673 676 683 685 694 697 704 706 715 718 728 730 739 742 750 752 761 764 771
+                        ...                                 773 782 785 806 808 821 824 831 833 841 844 852 854 863 866 874 876 885 888 898 900
+                        ...                                 910 913 922 924 933 936 944 946 955 958 974 976 997 999 1006 1009 1015 1017 1024 1027
+                        ...                                 1039 1041 1054 1057 1063 1065 1073 1076 1082 1084 1093 1096 1102 1104 1113 1116 1129
+                        ...                                 1131 1144 1147 1153 1155 1163 1166 1172 1174 1183 1186 1192 1194 1203 1206 1229 1231
+                        ...                                 1240 1243 1249 1251 1260 1263 1276 1278 1290 1293 1300 1302 1310 1313 1320 1322 1330
+                        ...                                 1333 1340 1342 1351 1354 1360 1362 1364 1371
+
+SpecialVar(set no-XREF) SQLERRMC                  *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLERRMC                 Reference: 1372
+
+SpecialVar(set no-XREF) SQLERRP                   *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLERRP                  Reference: 1373
+
+SpecialVar(set no-XREF) SQLSTATE                  *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLSTATE                 Reference: 1392
+
+Variable (set w/rexx)   ssid                     Assigned : 2
+Variable (used in/rexx) ssid                     Reference: 11 17 31 40 57 124 135 159 178 198 216 228 254 276 299 317 329 355 377 400 430 460
+                        ...                                 485 511 530 542 567 587 608 631 642 667 687 708 732 754 775 798 810 835 856 878 902
+                        ...                                 904 926 948 967 1043 1067 1086 1106 1133 1157 1176 1196 1214 1233 1253 1280 1304 1324
+                        ...                                 1344
+
+Built-In+/External use  STRIP                    Reference: F(40) F(57) F(124) F(134) F(135) F(158) F(159) F(177) F(178) F(179) F(197) F(198)
+                        ...                                 F(199) F(216) F(227) F(228) F(253) F(254) F(275) F(276) F(278) F(298) F(299) F(301)
+                        ...                                 F(317) F(328) F(329) F(354) F(355) F(376) F(377) F(379) F(399) F(400) F(402) F(429)
+                        ...                                 F(430) F(431) F(459) F(460) F(461) F(484) F(485) F(486) F(487) F(510) F(511) F(512)
+                        ...                                 F(513) F(530) F(541) F(542) F(566) F(567) F(586) F(587) F(588) F(607) F(608) F(609)
+                        ...                                 F(631) F(641) F(642) F(666) F(667) F(686) F(687) F(707) F(708) F(731) F(732) F(733)
+                        ...                                 F(753) F(754) F(755) F(774) F(775) F(776) F(798) F(809) F(810) F(834) F(835) F(855)
+                        ...                                 F(856) F(857) F(877) F(878) F(879) F(901) F(902) F(925) F(926) F(927) F(947) F(948)
+                        ...                                 F(949) F(1000) F(1018) F(1042) F(1043) F(1066) F(1067) F(1085) F(1086) F(1087) F(1105)
+                        ...                                 F(1106) F(1107) F(1132) F(1133) F(1156) F(1157) F(1175) F(1176) F(1177) F(1195)
+                        ...                                 F(1196) F(1197) F(1214) F(1233) F(1234) F(1253) F(1254) F(1279) F(1280) F(1303)
+                        ...                                 F(1304) F(1323) F(1324) F(1325) F(1343) F(1344) F(1345)
+
+Label (internal label)  SYS_ATTR                 Defined  : 961
+Label (int. label ref)  SYS_ATTR                 Reference: C(46) C(47) C(48) C(59) C(60) C(62) C(63) C(64) C(65) C(66) C(67) C(68) C(69) C(70)
+                        ...                                 C(71) C(72) C(73)
+
+Variable (set w/rexx)   s_rc                     Assigned : 5
+Variable (NEVER USED)   s_rc                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   tab                      Assigned : 123
+Variable (used in/rexx) tab                      Reference: 129 152 171 191
+
+Label (internal label)  TAB_PRIV                 Defined  : 211
+Label (int. label ref)  TAB_PRIV                 Reference: C(76) C(77) C(78) C(79) C(80) C(81)
+
+Label (internal label)  TAB_UPD                  Defined  : 313
+Label (int. label ref)  TAB_UPD                  Reference: C(82)
+
+Variable (NEVER SET)    TCREATOR                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) TCREATOR                 Reference: 227 228 253 254 275 276 298 299 328 329 354 355 376 377 399 400 429 430 459 460 484
+                        ...                                 485 510 511
+
+Built-In+/External use  TIME                     Reference: F(20)
+
+Variable (NEVER SET)    TTNAME                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) TTNAME                   Reference: 227 228 253 254 275 276 298 299 328 329 354 355 376 377 399 400 429 430 459 460 484
+                        ...                                 485 510 511
+
+Variable (set w/rexx)   type                     Assigned : 123 529
+Variable (used in/rexx) type                     Reference: 124 125 530 531
+
+Variable (set w/rexx)   uac                      Assigned : 979 980
+Variable (used in/rexx) uac                      Reference: 983
+
+Label (internal label)  USE_PRIV                 Defined  : 525
+Label (int. label ref)  USE_PRIV                 Reference: C(111) C(112) C(113)
+
+Label (internal label)  ZSQL                     Defined  : 1357
+Label (int. label ref)  ZSQL                     Reference: C(130) C(154) C(173) C(193) C(223) C(249) C(271) C(294) C(324) C(350) C(372) C(395)
+                        ...                                 C(425) C(455) C(480) C(506) C(537) C(562) C(582) C(603) C(637) C(662) C(682) C(703)
+                        ...                                 C(727) C(749) C(770) C(805) C(830) C(851) C(873) C(897) C(921) C(943) C(972) C(996)
+                        ...                                 C(1014) C(1038) C(1062) C(1081) C(1101) C(1128) C(1152) C(1171) C(1191) C(1228)
+                        ...                                 C(1248) C(1275) C(1299) C(1319) C(1339)
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 HDR.#          Assigned : 15 16 17 18 19 20 24
+Stem-1 HDR.0          Assigned : 14
+
+Stem-1 SQLERRD.#       *Special: Assigned via an ADDR env cmd and/or REXX itself
+Stem-1 SQLERRD.#      Reference: 1374
+
+Stem-1 SQLWARN.#       *Special: Assigned via an ADDR env cmd and/or REXX itself
+Stem-1 SQLWARN.#      Reference: 1381
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

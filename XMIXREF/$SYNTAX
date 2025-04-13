@@ -1,0 +1,34 @@
+   ==> Scan of exec failed (probably a syntax error)
+   -------------------------------------------------
+    1) See full (trace 's') exec in pds:
+        SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN($SYNTAX)
+
+    2) And instead of xref listing this contains the output
+      from the failing trace 's' output in this member
+      in:
+        SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF($SYNTAX)
+
+    3) Note:  trace 's' got rc> 4: probably syntax error
+
+    Failing (trace 's') output follows, go to end of
+    this member to see the syntax error.
+   -----------------------------------------
+
+READY
+    $SYNTAX
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.REXX($SYNTAX)"      */
+    Generated scan code/comment:   /*      --------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:         */
+    Generated scan code/comment:   /*     20231217 23:02:54           */
+    Generated scan code/comment:   /*      --------------------       */
+     1 *-* /* rexx */
+     2 *-* /* nonsense syntax error   */
+     3 *-* if x = y
+     4 *-*  then
+       *-*  nop
+    15 +++  then
+IRX0008I Error running $SYNTAX, line 15: Unexpected THEN or ELSE
+READY
+END

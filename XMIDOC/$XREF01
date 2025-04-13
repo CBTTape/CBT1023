@@ -1,0 +1,56 @@
+$XREF01 - documents the header portion of members in *.SAMPLE.REXXXREF.XREF
+
+Each member in the *.XREF library has a header.
+
+The standard header will show:
+------------------------------
+  1) that the scan succeeded with rc <= 4
+
+  2) it will tell you the full data set name of the .TREX(member)
+         this is a copy of the original exec with a prefix added (comments) and
+         with an added "trace 's'" instruction to get a rexx scan of the exec.
+
+  3) it will tell you the full data set name of the .XREF(member)
+         this is the scan that was produced by the .TREX(member).  Scan output
+         was then modified by PSTTRACE so that the standard header is created
+         properly.
+
+  4) after line "READY", it will show the name of the rexx exec / member name
+
+  5) Then there will be "Generated scan code/comment:" lines
+     a)  in comments there will be the full data set name containing
+       the original rexx exec.
+
+     b)  in comments there will be the data/time of when this exec had a xref
+       generated.
+
+  6) then the scan of the original exec follows.
+
+
+
+
+
+
+
+The standard header looks like this:
+------------------------------------
+
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.SAMPLE.REXXXREF.TREX(CHKAPF00)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.SAMPLE.REXXXREF.XREF(CHKAPF00)
+   -----------------------------------------
+
+READY
+    CHKAPF00
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.REXX(CHKAPF00)"      */
+    Generated scan code/comment:   /*      ---------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:          */
+    Generated scan code/comment:   /*     20211020 13:27:45            */
+    Generated scan code/comment:   /*      ---------------------       */
+

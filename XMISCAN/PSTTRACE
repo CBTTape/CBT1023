@@ -1,0 +1,208 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.PUBLIC.REXXXREF.REXX(PSTTRACE)"      */
+/*      -------------------------------------       */
+/*  date/time of XREF was:                          */
+/*     20231217 23:08:31                            */
+/*      -------------------------------------       */
+
+/* rexx = psttrace */
+/*                                                       */
+/* take scan output... that PSTTRACE set up              */
+/* (1) and remove line numbers from PreTrace rexx        */
+/*    line numbers.                                      */
+/* (2) and 'fix' line numbers of rest of scan to match   */
+/*    line numbers from original exec.                   */
+/*                                                       */
+/* Thus, the xref will have approriate line numbers      */
+/* to match the input rexx exec.  And to match the scan  */
+/* that was generated.                                   */
+/*                                                       */
+/* assumption:  invoked from jcl */
+/*                                              */
+/*   ddname:  IN has a rexx member              */
+/*   ddname:  OUT      has a (new) rexx member  */
+/*                                              */
+/*   after opening IN  for input                */
+/*   after opening OUT for output               */
+/*   ... write /* REXX */ to output file        */
+/*   ... write trace 's'  to output file        */
+/*   copy contents of IN to OUT                 */
+/*                                              */
+/* Input Arguments give us details on datasets  */
+/*    involved.                                 */
+/*                                              */
+/*                                                       */
+
+'EXECIO 100 DISKR IN (OPEN STEM IN.'
+INRc = rc
+if INRc = 0 | INRc = 2
+then nop
+else do
+   say 'PSTTRACE008E:  severe error'
+   say 'error opening file IN rc='INRc
+   say 'exit with rc=8'
+   'EXECIO 0 DISKR IN (FINIS'
+   exit 8
+end
+
+'EXECIO 0 DISKW OUT (OPEN'
+OUTRc = rc
+if OUTRc = 0
+then nop
+else do
+   say 'PSTTRACE010E:  severe error'
+   say 'error opening file OUT rc='OUTRc
+   say 'exit with rc=8'
+   'EXECIO 0 DISKR IN (FINIS'
+   'EXECIO 0 DISKW OUT(FINIS'
+   exit 8
+end
+
+in = 0
+out= 0
+pendingError = 0
+do forever /* skip until we find some scan code output */
+   in = in + 1
+   if in > in.0
+   then do
+      /* looks like junk, just write what we got and exit */
+      say '...PSTTRACE failure, looks like this is not a rexx scan'
+      say '      writing out first buffer and exitting with rc=12'
+      out = in
+      out.out = '...PSTTRACE failure, looks like this is not a rexx scan'
+      out = out + 1
+      out.out = '      writing out first buffer and exitting with rc=12'
+      'EXECIO' out 'DISKW OUT (FINIS STEM OUT.'
+      if rc <> 0
+      then say 'error writting/closing output to ddname=OUT; rc='rc
+      'EXECIO 0 DISKR IN (FINIS'
+      exit 12
+   end
+   x = pos('*-*',in.in)
+   if x = 0
+   then out.in = in.in
+   else do
+      parse var in.in numx '*-*' word1 word2 word3 .
+      if numx = 2
+      then do
+         if word1 word2 = "trace 's'"
+         then nop
+         else pendingError = 1
+      end
+      if numx = 4
+      then do
+         if word2 word2 word3 = '/* rexx member'
+         then nop
+         else pendingError = 1
+      end
+      if numx = 5
+      then do
+         if word1 left(word2,1) = '/* "'
+         then nop
+         else pendingError = 1
+      end
+      if numx = 6 | numx = 9
+      then do
+         if word1 left(word2,1) = '/* -'
+         then nop
+         else pendingError = 1
+      end
+      if numx = 8
+      then do
+         if word1 left(word2,1) = '/* 2'
+         then nop
+         else pendingError = 1
+      end
+      if numx > 9
+      then leave
+
+      parse var in.in numx '*-*' rest
+      out.in = '    Generated scan code/comment: ' rest
+   end
+end
+
+if pendingError > 0
+then do
+   say ' '
+   say 'Note:'
+   say '  rexx scan doesn''t look correct, but we will treat'
+   say '  rexx statement' numx 'as if it were the 1st line'
+   say '  in the rexx exec we are creating a xref for'
+   say ' '
+   offset = numx - 1
+end
+else offset = numx - 1
+
+/* now fix this one card */
+parse var in.in numx '*-*' rest
+out.in = right(numx-offset,6) '*-*' || rest
+out = in
+
+do forever
+   in = in + 1
+   if in > in.0
+   then do
+      /* time to get another buffer */
+      if inrc <> 0
+      then leave /* time to leave */
+
+      in = 0
+      'EXECIO 100 DISKR IN (STEM IN.'
+      inrc = rc
+      if inrc = 0 | inrc = 2
+      then iterate /* start with next input buffer record */
+      leave
+   end
+
+   /* now fix card in in.in */
+   out = out + 1
+   if pos('*-*',in.in) = 0
+   then out.out = in.in
+   else do
+      parse var in.in numx '*-*' rest
+      if numx = ''
+      then out.out = in.in
+      else out.out = right(numx-offset,6) '*-*' || rest
+   end
+
+   if out > 100
+   then do /* time to write an output buffer */
+      'EXECIO' out 'DISKW OUT (STEM OUT.'
+      outRc = rc
+      if outRc <> 0
+      then do
+         say 'Error writting to ddname=OUT; rc='rc
+         say 'Will exit w/rc=12'
+         'EXECIO 0 DISKW OUT (FINIS'
+         'EXECIO 0 DISKR IN  (FINIS'
+         exit 12
+      end
+      out = 0 /*reset output buffer */
+   end
+end
+
+if inrc <> 2
+then say 'error reading from ddname=IN; rc='inrc
+
+'EXECIO' out 'DISKW OUT (STEM OUT. FINIS' /* write out last buffer */
+outRc = rc
+if outRc <> 0
+then do
+   say 'Error writing/closing ddname=OUT; rc='rc
+   say 'Will exit w/rc=12'
+   'EXECIO 0 DISKW OUT (FINIS'
+   'EXECIO 0 DISKR IN  (FINIS'
+   exit 12
+end
+
+if inrc <> 2
+then do
+   say 'exiting w/rc=12'
+   exit 12
+end
+
+/* normal end */
+exit 0

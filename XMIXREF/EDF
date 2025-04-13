@@ -1,0 +1,1058 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(EDF)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(EDF)
+   -----------------------------------------
+
+READY
+    EDF
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH48.CBT.REXXEXEC.PDS(EDF)"      */
+    Generated scan code/comment:   /*      ----------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                 */
+    Generated scan code/comment:   /*     20231217 23:06:18                   */
+    Generated scan code/comment:   /*      ----------------------------       */
+     1 *-* /* EDF   (Edit Find) ***************************************** Rexx */
+     2 *-* /*   Created By: TRAN,C.T.                                          */
+     3 *-* /*   When: 02/14/92                                                 */
+     4 *-* /*                                                                  */
+     5 *-* /*   What: EDF   is a Rexx EXEC dialog To browse/edit/LV/Delete     */
+     6 *-* /*   the next occurence of dataset at cursor line                   */
+     7 *-* /*   (or bring up a whole list of dsn for further processing).      */
+     8 *-* /*   Enter EDF   at command line                                    */
+     9 *-* /*   Then move cursor To the string To be found.                    */
+    10 *-* /*   Helpful in browse/edit imbeded dsn without typing name         */
+    11 *-* /*                                                                  */
+    12 *-* /*   Option: B: Browse (default)                                    */
+    13 *-* /*           E: Edit                                                */
+    14 *-* /*           L: LV status of dataset instead of browse/edit         */
+    15 *-* /*           C: Full screen display of dsnames By CATALYST          */
+    16 *-* /*      blank : Full screen display of dsnames By Popup panel       */
+    17 *-* /*     NOCHECK: Datasets will not be checked for existance          */
+    18 *-* /*   By CT Tran program Products        2/92                        */
+    19 *-* /*                                                                  */
+    20 *-* /********************************************************************/
+    21 *-* Address ISREDIT
+    22 *-* "MACRO (OPT nocheck) NOPROCESS"
+    23 *-* Trace "OFF"
+    24 *-* Call Initialize
+    25 *-* Call Process_main
+    26 *-* /*Call Endpgm*/
+    27 *-* Exit
+    29 *-* Process_main:
+    30 *-* edfcmd = Left(opt,2)
+    31 *-* Select
+    32 *-* When firstlin = 1 & ccrs = 0
+       *-*  Then
+       *-*  Do
+    33 *-*   "(LASTLINE) = LINENUM .ZL"
+    34 *-*   /*       "(firstlin) = LINENUM .ZF"*/
+    35 *-*   If ¬Datatype(firstlin,"N")
+       *-*    Then
+       *-*    firstlin = 1
+    36 *-*   Call Setup_display
+    37 *-*   Select
+    38 *-*   When totaldsn = 0
+       *-*    Then
+       *-*    Do
+    39 *-*     zedsmsg = "No dsname(s) found"
+    40 *-*     Address "ISPEXEC" "setmsg Msg(ISRZ000)"
+    41 *-*    End
+    42 *-*   When catalyst
+       *-*    Then
+       *-*    Do
+    43 *-*     Call Do_catalyst
+    44 *-*    End
+    45 *-*   Otherwise
+       *-*    Call Displ_it
+    46 *-*   End /* End of Select ... */
+    47 *-*  End
+    48 *-* Otherwise
+       *-*  Do
+    49 *-*   If ¬Datatype(lastline,"N")
+       *-*    Then
+       *-*    lastline = firstlin
+    50 *-*   Call Setup_display
+    51 *-*   Select
+    52 *-*   When catalyst
+       *-*    Then
+       *-*    Do
+    53 *-*     Call Do_catalyst
+    54 *-*    End
+    55 *-*   Otherwise
+       *-*    Do
+    56 *-*     zcmd = 1
+    57 *-*     If totaldsn = 1
+       *-*      Then
+       *-*      Call Browse_them
+    58 *-*     Else
+       *-*      Call Displ_it
+    59 *-*    End
+    60 *-*   End /* End of Select ... */
+    61 *-*  End
+    62 *-* End  /* End of Select ... */
+    63 *-* Return
+    65 *-* Catalyst_msgs:
+    66 *-* dsn.0 = 7
+    67 *-* dsn.1 = "This list contains all the dataset names pulled from "
+    68 *-* dsn.2 = "dataset('"Strip(dsname,"B")"')"
+    69 *-* dsn.3 = "You can perform all Catalyst functions"
+    70 *-* dsn.4 = "against these datasets. To Exit press <Enter>"
+    71 *-* dsn.5 = "twice To get back To the editing session."
+    72 *-* dsn.6 = Copies(" ",20)"Thanks for using EDF C function"
+    73 *-* dsn.7 = Copies(" ",20)"A service of Program Products group"
+    74 *-* Do i = 1 By 1 To dsn.0
+    75 *-*  dsn.i = "/*"Substr(dsn.i,1,60," ")"*/"
+    76 *-* End i
+    77 *-* Return
+    79 *-* Add_dsn_to_table:
+    80 *-* If dsn = ""
+       *-*  Then
+       *-*  Return
+    81 *-* Address "ISPEXEC" "TBADD @EDF "
+    82 *-* If rc = 0
+       *-*  Then
+       *-*  Do
+    83 *-*   i = i + 1
+    84 *-*   If ¬nocheck
+       *-*    Then
+       *-*    Do
+    85 *-*     If Sysdsn("'"dsn"'") ¬= "OK"
+       *-*      Then
+       *-*      Do
+    86 *-*       x = 41-Length(dsn)
+    87 *-*       If x > 0
+       *-*        Then,
+    88 *-*        dsn = dsn"<-"Substr(dash,1,x,"-")"-UNCATALOGED"
+    89 *-*      End
+    90 *-*     totaldsn = totaldsn+1
+    91 *-*     dsn.i = dsn
+    92 *-*     copyf = copyf dsn.i
+    93 *-*    End
+    94 *-*  End
+    95 *-* Return
+    97 *-* Setup_display:
+    98 *-* Address "ISPEXEC" "TBCREATE @EDF   KEYS(DSN) NOWRITE REPLACE"
+    99 *-* i = dsn.0
+   100 *-* copyf = ""
+   101 *-* totaldsn=0
+   102 *-* Do firstlin = firstlin By 1 To lastline
+   103 *-*  "(NAME) = LINE" firstlin
+   104 *-*  If Get_line() ¬= 0
+       *-*   Then
+       *-*   Iterate
+   105 *-*  Call Add_dsn_to_table
+   106 *-* End firstlin /* finished parsing the data lines */
+   107 *-* Return
+   109 *-* Get_line:
+   110 *-* Select
+   111 *-* When Left(name,2) = "/*"
+       *-*  Then
+       *-*  Return (4)
+   112 *-* When Left(name,3) = "//*"
+       *-*  Then
+       *-*  Return (4)
+   113 *-* When Pos("DSN=",name) > 0
+       *-*  Then
+       *-*  Do
+   114 *-*   Parse Var name "DSN=" dsn ","
+   115 *-*  End
+   116 *-* When Pos("DSNAME=",name) > 0
+       *-*  Then
+       *-*  Do
+   117 *-*   Parse Var name "DSNAME=" dsn  ","
+   118 *-*  End
+   119 *-* When clist_rexx
+       *-*  Then
+       *-*  Do
+   120 *-*   Call Process_clist_rexx
+   121 *-*   Return (4)
+   122 *-*  End
+   123 *-* Otherwise
+       *-*  Return (4)
+   124 *-* End /* End of Select ... */
+   125 *-* If Left(dsn,1) = "'" & Right(dsn,1) ¬= "'"
+       *-*  Then,
+   126 *-*  dsn = dsn"'" /* add ending quote */
+   127 *-* Return (0)
+   129 *-* Process_clist_rexx:
+   130 *-* Do i = 1 By 1 To Words(name)
+   131 *-*  dsn = Word(name,i)
+   132 *-*  Select
+   133 *-*  When Pos(".",dsn) > 0
+       *-*   Then
+       *-*   dsn = Valid_dsname(dsn)
+   134 *-*  When Pos("(",dsn) > 0
+       *-*   Then
+       *-*   dsn = Valid_dsname(dsn)
+   135 *-*  When Pos("'",dsn) > 0
+       *-*   Then
+       *-*   dsn = Valid_dsname(dsn)
+   136 *-*  Otherwise
+       *-*   dsn = ""
+   137 *-*  End /* End of Select ... */
+   138 *-*  If dsn ¬= ""
+       *-*   Then
+       *-*   Do
+   139 *-*    dsn = Strip(Translate(dsn,"","'"),"B")
+   140 *-*    Call Add_dsn_to_table
+   141 *-*   End
+   142 *-* End i
+   143 *-* Return ("")
+   145 *-* Valid_dsname:
+   146 *-* Arg vdsn
+   147 *-* Upper vdsn
+   148 *-* Select
+   149 *-* When Pos("'",vdsn) > 0
+       *-*  Then
+       *-*  Do
+   150 *-*   Parse Var vdsn "'" vdsn "'"
+   151 *-*   vdsn = "'"vdsn"'"
+   152 *-*  End
+   153 *-* When Lastpos("(",vdsn) > 0
+       *-*  Then
+       *-*  Do
+   154 *-*   Parse Var vdsn "(" vdsn ")"
+   155 *-*  End
+   156 *-* Otherwise
+       *-*  Return ("")
+   157 *-* End /* End of Select ... */
+   158 *-* vdsn = Space(vdsn,                                                         Substr(" )",1+(Pos("(",vdsn)>0 &,
+                           (Left(vdsn,1)¬="'")),1),0)
+   161 *-* Address "TSO"
+   162 *-* If Listdsi(vdsn "RECALL") ¬= 0
+       *-*  Then,
+   163 *-*  If Listdsi("'"vdsn"'" "RECALL") ¬= 0
+       *-*   Then
+       *-*   Return ("")
+   164 *-* If Pos("(",vdsn) > 0
+       *-*  Then,
+   165 *-*  Parse Var vdsn "(" mem ")"
+   166 *-* Else
+       *-*  mem = ""
+   167 *-* Return (Space("'"Sysdsname || Substr(" (",1+(Length(mem)>0),1) ||,         mem || Substr(" )",1+(Length(mem)>0),1)"'",0)
+)
+   169 *-* /********************************************************************/
+   170 *-* /*  Common routine for display a popup panel with no update.        */
+   171 *-* /*                                                                  */
+   172 *-* /*                                                                  */
+   173 *-* /*                                                                  */
+   174 *-* /*                                                                  */
+   175 *-* /********************************************************************/
+   176 *-* Displ_it:
+   177 *-* /* totaldsn = Right(totaldsn,2,"0")*/
+   178 *-* Address "ISPEXEC"
+   179 *-* parms = ""
+   180 *-* Call ParseFl
+   181 *-* cc = 0
+   182 *-* Do While cc = 0
+   183 *-*  If parms = ""
+       *-*   Then
+       *-*   Do
+   184 *-*    "addpop column(20) row(4)"
+   185 *-*    "DISPLAY PANEL(EDFind)"
+   186 *-*    cc = rc
+   187 *-*    "rempop"
+   188 *-*    If cc > 4
+       *-*     Then
+       *-*     Return
+   189 *-*   End
+   190 *-*  Else
+       *-*   Parse Upper var parms zcmd
+   191 *-*  opt = Wordpos(edfcmd,"BR ED DE LV")
+   192 *-*  opt = Word("BROWSE EDIT DELETE LV",opt)
+   193 *-*  Select
+   194 *-*  When DATATYPE(ZCMD) = "NUM"
+       *-*   Then
+       *-*   Do
+   195 *-*    Call Browse_them
+   196 *-*   End
+   197 *-*  When zcmd = ""
+       *-*   Then
+       *-*   Nop
+   198 *-*  When  Sysdsn("'"zcmd"'")  = "OK"
+       *-*   Then
+       *-*   Do
+   199 *-*    dsname = zcmd
+   200 *-*    Call Search_Browse_them
+   201 *-*   End
+   202 *-*  Otherwise
+       *-*   Do  /* string To scan */
+   203 *-*    dsname = zcmd
+   204 *-*    /*          Call ParseFl;*/
+   205 *-*    Call Search_Browse_them
+   206 *-*   End
+   207 *-*  End /* End of Select ... */
+   208 *-* End
+   209 *-* Return
+   211 *-* ParseFl:
+   212 *-* Parse Upper var CopyF dsn01   dsn02  dsn03  dsn04  ,                       dsn05  dsn06  dsn07  dsn08  dsn09  dsn10 ,
+                           dsn11  dsn12  dsn13  dsn14 dsn15,                                       dsn16  dsn17  dsn18  dsn19  dsn2
+0 ,                                     dsn21  dsn22  dsn23  dsn24 dsn25 ,                                      dsn26  dsn27  dsn28
+  dsn29  dsn30 ,                                     dsn31  dsn32  dsn33  dsn34 dsn35 ,                                      dsn36
+ dsn37  dsn38  dsn39  dsn40,                                      dsn41  dsn42  dsn43  dsn44 dsn45 dsn46 dsn47 dsn48 dsn49 dsn50,
+       dsn51  dsn52  dsn53  dsn54 dsn55 dsn56 dsn57 dsn58 dsn59 dsn60,         dsn61  dsn62  dsn63  dsn64 dsn65 dsn66 dsn67 dsn68 d
+sn69 dsn70,         dsn71  dsn72  dsn73  dsn74 dsn75 dsn76 dsn77 dsn78 dsn79 dsn80
+   224 *-* Return
+   226 *-* Search_browse_them:
+   227 *-* If Search_word() = 0
+       *-*  Then
+       *-*  Call Browse_them
+   228 *-* Else
+       *-*  Do
+   229 *-*   zedsmsg = "Bad dsn selection.."
+   230 *-*   zedlmsg = dsname "is NOT in the LIST displayed below"
+   231 *-*   Address "ISPEXEC" "SETMSG MSG(ISRZ000)"
+   232 *-*  End
+   233 *-* Return
+   235 *-* Endpgm:
+   236 *-* If subrou = "YES"
+       *-*  Then
+       *-*  Address ISREDIT "End "
+   237 *-* Return
+   239 *-* SEARCH_Word:
+   240 *-* x = Pos(dsname,CopyF)
+   241 *-* If x > 0
+       *-*  Then
+       *-*  Do
+   242 *-*   x1 = Word(Substr(CopyF,x),1)
+   243 *-*   zcmd = Wordpos(x1,copyf)
+   244 *-*   /*   Call browse_them */
+   245 *-*   Return (0)
+   246 *-*  End
+   247 *-* Return (4)
+   249 *-* Browse_them:
+   250 *-* /*                                                                         zcmd = Right(zcmd,2,"0")
+                           Interpret "dsname = dsn"zcmd                                         */
+   254 *-* dsname = Word(copyf,zcmd)
+   255 *-* zedsmsg = "Dataset not found"
+   256 *-* If ¬nocheck
+       *-*  Then
+       *-*  Do
+   257 *-*   If Sysdsn("'"dsname"'")  ¬= "OK"
+       *-*    Then
+       *-*    Do
+   258 *-*     "setmsg Msg(ISRZ000)"
+   259 *-*     Return
+   260 *-*    End
+   261 *-*  End
+   262 *-* Else
+       *-*  If Pos("<-",dsname) > 0
+       *-*   Then
+       *-*   Do
+   263 *-*    "setmsg Msg(ISRZ000)"
+   264 *-*    Return
+   265 *-*   End
+   266 *-* zedsmsg = edfcmd "Done ..."
+   267 *-* Select
+   268 *-* When edfcmd = "LV"
+       *-*  Then
+       *-*  Do
+   269 *-*   Address "ISPEXEC" "CONTROL DISPLAY SAVE"
+   270 *-*   Address "TSO"
+   271 *-*   /*       "CLS"*/
+   272 *-*   "LV  '"dsname"' ALL "
+   273 *-*   Address "ISPEXEC" "CONTROL DISPLAY RESTORE"
+   274 *-*  End
+   275 *-* When edfcmd = "DE"
+       *-*  Then
+       *-*  Do
+   276 *-*   Address "ISPEXEC" "CONTROL DISPLAY SAVE"
+   277 *-*   Address "TSO"
+   278 *-*   "DELETE  '"dsname"' ALL "
+   279 *-*   Address "ISPEXEC" "CONTROL DISPLAY RESTORE"
+   280 *-*  End
+   281 *-* When edfcmd = "BR" | edfcmd = "ED"
+       *-*  Then
+       *-*  Do
+   282 *-*   Address "ISPEXEC" opt "DATASET('"dsname"')"
+   283 *-*   If rc ¬= 0
+       *-*    Then
+       *-*    Do
+   284 *-*     zedsmsg = opt "Not done.."
+   285 *-*     zedlmsg = opt "for "dsname "had a rc("rc").."
+   286 *-*    End
+   287 *-*   Else
+       *-*    Call QF_it dsname
+   288 *-*  End
+   289 *-* Otherwise
+       *-*  Nop
+   290 *-* End /* End of Select ... */
+   291 *-* Address "ISPEXEC" "SETMSG MSG(ISRZ000)"
+   292 *-* Return
+   294 *-* QF_it:
+   295 *-* Arg dsname
+   296 *-* Address "ISPEXEC" "vget qfedit profile"
+   297 *-* x =  "'"dsname"'"
+   298 *-* If Wordpos(x,qfedit) = 0
+       *-*  Then
+       *-*  Do
+   299 *-*   qfedit = "'"dsname"'" qfedit
+   300 *-*   Address "ISPEXEC" "vput qfedit profile"
+   301 *-*  End
+   302 *-* Return
+   304 *-* Do_catalyst:
+   305 *-* Address "TSO"
+   306 *-* "ALLOC FI(DD1) DA(CNTL(@DIR)) SHR REUSE "
+   307 *-* "EXECIO * DISKW DD1   (STEM DSN. FINIS  "
+   308 *-* "FREE FI(DD1) "
+   309 *-* ppdsn2 = "Y"
+   310 *-* lpt3 = "Y"
+   311 *-* ftm = ""
+   312 *-* pdsn2="CNTL(@DIR)"
+   313 *-* Address "ISPEXEC"
+   314 *-* "VPUT (PPDSN2 LPT3 FTM pdsn2) PROFILE "
+   315 *-* Call  Catalyst
+   316 *-* Return
+   318 *-* Initialize:
+   319 *-* "PROCESS RANGE X"
+   320 *-* "(rcmd) = RANGE_CMD"
+   321 *-* Select
+   322 *-* When rcmd = "X"
+       *-*  Then
+       *-*  Do
+   323 *-*   "(firstlin) = Linenum .ZFRANGE"
+   324 *-*   "(lastline)  = Linenum .ZLRANGE"
+   325 *-*  End
+   326 *-* Otherwise
+       *-*  Do
+   327 *-*   "(LCRS CCRS) = CURSOR"
+   328 *-*   "(NAME) = LINE .ZCSR"
+   329 *-*   firstlin = lcrs
+   330 *-*  End
+   331 *-* End /* End of Select ... */
+   332 *-* If opt = ""  & nocheck = ""
+       *-*  Then
+       *-*  Do
+   333 *-*   subrou  =  "YES"
+   334 *-*   Address "ISPEXEC" "VGET (opt nocheck ) SHARED  "
+   335 *-*  End
+   336 *-* Address "ISPEXEC" "CONTROL ERRORS Return"
+   337 *-* nocheck = 0
+   338 *-* Upper   opt
+   339 *-* Upper   nocheck
+   340 *-* If Abbrev(nocheck,"NO",2) > 0
+       *-*  Then
+       *-*  nocheck = 1
+   341 *-* opt = Left(Opt,1)
+   342 *-* opt# = Wordpos(opt,"B C E L") + (Wordpos(opt,"B C E L") = 0)
+   343 *-* opt  = Word("BROWSE C EDIT LV",opt#)
+   344 *-* "(DSNAME) = DATASET"
+   345 *-* "(MEM)    = MEMBER "
+   346 *-* dsname_w = Translate(dsname,"",".")
+   347 *-* crnames = "CLIST REXX SYSPROC SYSEXEC PDFCLIB ISPCLIB"
+   348 *-* clist_rexx = 0+(Wordpos(Word(dsname_w,Words(dsname_w)),crnames)>0)
+   349 *-* If mem ¬= "" & mem ¬= "MEMBER"
+       *-*  Then
+   350 *-*  dsname = dsname"("Space(mem,0)")"
+   351 *-* If opt = "C"
+       *-*  Then
+       *-*  Do
+   352 *-*   catalyst = 1
+   353 *-*   Call Catalyst_msgs
+   354 *-*  End
+   355 *-* Else
+       *-*  Do
+   356 *-*   dsn. = ""
+   357 *-*   dsn.0 = 0
+   358 *-*   catalyst = 0
+   359 *-*  End
+   360 *-* /*                                                                         If  opt = "L"            Then opt = "LV "
+                           Else If  opt =  "C" Then opt = "C"                                      Else If opt = "E"  Then opt = "E
+DIT "                                   Else opt = "BROWSE "                                                 */
+   366 *-* x = Msg(OFF)
+   367 *-* dash = "----"
+   368 *-* Return
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Built-In+/External use                               Reference: C(315)
+
+Built-In+/External use  ABBREV                       Reference: F(340)
+
+Address Envir.Constant: ADDRESS "ISPEXEC"            Reference: 178 313
+
+Address Envir.Constant: ADDRESS "TSO"                Reference: 161 270 277 305
+
+Address Envir.Constant: ADDRESS 'ISPEXEC' <cmd>      Reference: 40 81 98 231 269 273 276 279 282 291 296 300 334 336
+
+Address Envir.Constant: ADDRESS 'ISREDIT'            Reference: 21
+
+Address Envir.Constant: ADDRESS 'ISREDIT' <cmd>      Reference: 236
+
+Label (internal label)  ADD_DSN_TO_TABLE             Defined  : 79
+Label (int. label ref)  ADD_DSN_TO_TABLE             Reference: C(105) C(140)
+
+Label (internal label)  BROWSE_THEM                  Defined  : 249
+Label (int. label ref)  BROWSE_THEM                  Reference: C(57) C(195) C(227)
+
+Variable (set w/rexx)   catalyst                     Assigned : 352 358
+Variable (used in/rexx) catalyst                     Reference: 42 52 315
+
+Label (internal label)  CATALYST_MSGS                Defined  : 65
+Label (int. label ref)  CATALYST_MSGS                Reference: C(353)
+
+Variable (set w/rexx)   cc                           Assigned : 181 186
+Variable (used in/rexx) cc                           Reference: 182 188
+
+Variable (NEVER SET)    CCRS                         Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) CCRS                         Reference: 32
+
+Variable (set w/rexx)   clist_rexx                   Assigned : 348
+Variable (used in/rexx) clist_rexx                   Reference: 119
+
+Built-In+/External use  COPIES                       Reference: F(72) F(73)
+
+Variable (set w/rexx)   copyf                        Assigned : 92 100
+Variable (used in/rexx) copyf                        Reference: 92 212 240 242 243 254
+
+Variable (set w/rexx)   crnames                      Assigned : 347
+Variable (used in/rexx) crnames                      Reference: 348
+
+Variable (set w/rexx)   dash                         Assigned : 367
+Variable (used in/rexx) dash                         Reference: 88
+
+Built-In+/External use  DATATYPE                     Reference: F(35) F(49) F(194)
+
+Label (internal label)  DISPL_IT                     Defined  : 176
+Label (int. label ref)  DISPL_IT                     Reference: C(45) C(58)
+
+Label (internal label)  DO_CATALYST                  Defined  : 304
+Label (int. label ref)  DO_CATALYST                  Reference: C(43) C(53)
+
+Variable (set w/rexx)   dsn                          Assigned : 88 114 117 126 131 133 134 135 136 139
+Variable (used in/rexx) dsn                          Reference: 80 85 86 88 91 125 126 133 134 135 138 139
+
+Variable (set w/rexx)   dsn01                        Assigned : 212
+Variable (NEVER USED)   dsn01                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn02                        Assigned : 212
+Variable (NEVER USED)   dsn02                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn03                        Assigned : 212
+Variable (NEVER USED)   dsn03                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn04                        Assigned : 212
+Variable (NEVER USED)   dsn04                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn05                        Assigned : 212
+Variable (NEVER USED)   dsn05                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn06                        Assigned : 212
+Variable (NEVER USED)   dsn06                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn07                        Assigned : 212
+Variable (NEVER USED)   dsn07                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn08                        Assigned : 212
+Variable (NEVER USED)   dsn08                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn09                        Assigned : 212
+Variable (NEVER USED)   dsn09                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn10                        Assigned : 212
+Variable (NEVER USED)   dsn10                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn11                        Assigned : 212
+Variable (NEVER USED)   dsn11                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn12                        Assigned : 212
+Variable (NEVER USED)   dsn12                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn13                        Assigned : 212
+Variable (NEVER USED)   dsn13                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn14                        Assigned : 212
+Variable (NEVER USED)   dsn14                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn15                        Assigned : 212
+Variable (NEVER USED)   dsn15                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn16                        Assigned : 212
+Variable (NEVER USED)   dsn16                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn17                        Assigned : 212
+Variable (NEVER USED)   dsn17                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn18                        Assigned : 212
+Variable (NEVER USED)   dsn18                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn19                        Assigned : 212
+Variable (NEVER USED)   dsn19                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn20                        Assigned : 212
+Variable (NEVER USED)   dsn20                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn21                        Assigned : 212
+Variable (NEVER USED)   dsn21                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn22                        Assigned : 212
+Variable (NEVER USED)   dsn22                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn23                        Assigned : 212
+Variable (NEVER USED)   dsn23                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn24                        Assigned : 212
+Variable (NEVER USED)   dsn24                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn25                        Assigned : 212
+Variable (NEVER USED)   dsn25                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn26                        Assigned : 212
+Variable (NEVER USED)   dsn26                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn27                        Assigned : 212
+Variable (NEVER USED)   dsn27                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn28                        Assigned : 212
+Variable (NEVER USED)   dsn28                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn29                        Assigned : 212
+Variable (NEVER USED)   dsn29                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn30                        Assigned : 212
+Variable (NEVER USED)   dsn30                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn31                        Assigned : 212
+Variable (NEVER USED)   dsn31                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn32                        Assigned : 212
+Variable (NEVER USED)   dsn32                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn33                        Assigned : 212
+Variable (NEVER USED)   dsn33                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn34                        Assigned : 212
+Variable (NEVER USED)   dsn34                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn35                        Assigned : 212
+Variable (NEVER USED)   dsn35                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn36                        Assigned : 212
+Variable (NEVER USED)   dsn36                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn37                        Assigned : 212
+Variable (NEVER USED)   dsn37                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn38                        Assigned : 212
+Variable (NEVER USED)   dsn38                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn39                        Assigned : 212
+Variable (NEVER USED)   dsn39                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn40                        Assigned : 212
+Variable (NEVER USED)   dsn40                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn41                        Assigned : 212
+Variable (NEVER USED)   dsn41                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn42                        Assigned : 212
+Variable (NEVER USED)   dsn42                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn43                        Assigned : 212
+Variable (NEVER USED)   dsn43                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn44                        Assigned : 212
+Variable (NEVER USED)   dsn44                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn45                        Assigned : 212
+Variable (NEVER USED)   dsn45                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn46                        Assigned : 212
+Variable (NEVER USED)   dsn46                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn47                        Assigned : 212
+Variable (NEVER USED)   dsn47                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn48                        Assigned : 212
+Variable (NEVER USED)   dsn48                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn49                        Assigned : 212
+Variable (NEVER USED)   dsn49                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn50                        Assigned : 212
+Variable (NEVER USED)   dsn50                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn51                        Assigned : 212
+Variable (NEVER USED)   dsn51                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn52                        Assigned : 212
+Variable (NEVER USED)   dsn52                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn53                        Assigned : 212
+Variable (NEVER USED)   dsn53                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn54                        Assigned : 212
+Variable (NEVER USED)   dsn54                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn55                        Assigned : 212
+Variable (NEVER USED)   dsn55                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn56                        Assigned : 212
+Variable (NEVER USED)   dsn56                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn57                        Assigned : 212
+Variable (NEVER USED)   dsn57                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn58                        Assigned : 212
+Variable (NEVER USED)   dsn58                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn59                        Assigned : 212
+Variable (NEVER USED)   dsn59                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn60                        Assigned : 212
+Variable (NEVER USED)   dsn60                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn61                        Assigned : 212
+Variable (NEVER USED)   dsn61                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn62                        Assigned : 212
+Variable (NEVER USED)   dsn62                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn63                        Assigned : 212
+Variable (NEVER USED)   dsn63                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn64                        Assigned : 212
+Variable (NEVER USED)   dsn64                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn65                        Assigned : 212
+Variable (NEVER USED)   dsn65                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn66                        Assigned : 212
+Variable (NEVER USED)   dsn66                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn67                        Assigned : 212
+Variable (NEVER USED)   dsn67                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn68                        Assigned : 212
+Variable (NEVER USED)   dsn68                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn69                        Assigned : 212
+Variable (NEVER USED)   dsn69                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn70                        Assigned : 212
+Variable (NEVER USED)   dsn70                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn71                        Assigned : 212
+Variable (NEVER USED)   dsn71                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn72                        Assigned : 212
+Variable (NEVER USED)   dsn72                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn73                        Assigned : 212
+Variable (NEVER USED)   dsn73                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn74                        Assigned : 212
+Variable (NEVER USED)   dsn74                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn75                        Assigned : 212
+Variable (NEVER USED)   dsn75                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn76                        Assigned : 212
+Variable (NEVER USED)   dsn76                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn77                        Assigned : 212
+Variable (NEVER USED)   dsn77                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn78                        Assigned : 212
+Variable (NEVER USED)   dsn78                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn79                        Assigned : 212
+Variable (NEVER USED)   dsn79                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsn80                        Assigned : 212
+Variable (NEVER USED)   dsn80                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   dsname                       Assigned : 199 203 254 295 350
+Variable (used in/rexx) dsname                       Reference: 68 230 240 257 262 272 278 282 285 287 297 299 346 350
+
+Variable (set w/rexx)   dsname_w                     Assigned : 346
+Variable (used in/rexx) dsname_w                     Reference: 348
+
+Variable (set w/rexx)   edfcmd                       Assigned : 30
+Variable (used in/rexx) edfcmd                       Reference: 191 266 268 275 281
+
+Label (internal label)  ENDPGM                       Defined  : 235
+Label (int. label ref)  ENDPGM                       Reference:
+
+Variable (set w/rexx)   firstlin                     Assigned : 35 102 329
+Variable (used in/rexx) firstlin                     Reference: 32 35 49 102 103 106
+
+Variable (set w/rexx)   ftm                          Assigned : 311
+Variable (NEVER USED)   ftm                          No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  GET_LINE                     Defined  : 109
+Label (int. label ref)  GET_LINE                     Reference: F(104)
+
+Variable (set w/rexx)   i                            Assigned : 74 83 99 130
+Variable (used in/rexx) i                            Reference: 76 83 131 142
+Variable (in Stem Set)  i                            Assigned : 75 91
+Variable (in Stem Ref)  i                            Reference: 75 92
+
+Label (internal label)  INITIALIZE                   Defined  : 318
+Label (int. label ref)  INITIALIZE                   Reference: C(24)
+
+Variable (set w/rexx)   lastline                     Assigned : 49
+Variable (used in/rexx) lastline                     Reference: 49 102
+
+Built-In+/External use  LASTPOS                      Reference: F(153)
+
+Variable (NEVER SET)    LCRS                         Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) LCRS                         Reference: 329
+
+Built-In+/External use  LEFT                         Reference: F(30) F(111) F(112) F(125) F(158) F(341)
+
+Built-In+/External use  LENGTH                       Reference: F(86) F(167)
+
+Built-In+/External use  LISTDSI                      Reference: F(162) F(163)
+
+Variable (set w/rexx)   lpt3                         Assigned : 310
+Variable (NEVER USED)   lpt3                         No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   mem                          Assigned : 165 166
+Variable (used in/rexx) mem                          Reference: 167 349 350
+
+Built-In+/External use  MSG                          Reference: F(366)
+
+Variable (NEVER SET)    NAME                         Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) NAME                         Reference: 111 112 113 114 116 117 130 131
+
+Variable (set w/rexx)   nocheck                      Assigned : 337 339 340
+Variable (used in/rexx) nocheck                      Reference: 84 256 332 340
+
+Variable (NEVER SET)    OFF                          Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) OFF                          Reference: 366
+
+Variable (set w/rexx)   opt                          Assigned : 191 192 338 341 343
+Variable (used in/rexx) opt                          Reference: 30 192 282 284 285 332 341 342 351
+
+Variable (set w/rexx)   opt#                         Assigned : 342
+Variable (used in/rexx) opt#                         Reference: 343
+
+Variable (set w/rexx)   parms                        Assigned : 179
+Variable (used in/rexx) parms                        Reference: 183 190
+
+Label (internal label)  PARSEFL                      Defined  : 211
+Label (int. label ref)  PARSEFL                      Reference: C(180)
+
+Variable (set w/rexx)   pdsn2                        Assigned : 312
+Variable (NEVER USED)   pdsn2                        No Ref.  : If actually referenced, it must be via a cmd.
+
+Built-In+/External use  POS                          Reference: F(113) F(116) F(133) F(134) F(135) F(149) F(158) F(164) F(240) F(262)
+
+Variable (set w/rexx)   ppdsn2                       Assigned : 309
+Variable (NEVER USED)   ppdsn2                       No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  PROCESS_CLIST_REXX           Defined  : 129
+Label (int. label ref)  PROCESS_CLIST_REXX           Reference: C(120)
+
+Label (internal label)  PROCESS_MAIN                 Defined  : 29
+Label (int. label ref)  PROCESS_MAIN                 Reference: C(25)
+
+Variable (set w/rexx)   qfedit                       Assigned : 299
+Variable (used in/rexx) qfedit                       Reference: 298 299
+
+Label (internal label)  QF_IT                        Defined  : 294
+Label (int. label ref)  QF_IT                        Reference: C(287)
+
+SpecialVar(set no-XREF) RC                            *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RC                           Reference: 82 186 283 285
+
+Variable (NEVER SET)    RCMD                         Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) RCMD                         Reference: 322
+
+Built-In+/External use  RIGHT                        Reference: F(125)
+
+Label (internal label)  SEARCH_BROWSE_THEM           Defined  : 226
+Label (int. label ref)  SEARCH_BROWSE_THEM           Reference: C(200) C(205)
+
+Label (internal label)  SEARCH_WORD                  Defined  : 239
+Label (int. label ref)  SEARCH_WORD                  Reference: F(227)
+
+Label (internal label)  SETUP_DISPLAY                Defined  : 97
+Label (int. label ref)  SETUP_DISPLAY                Reference: C(36) C(50)
+
+Built-In+/External use  SPACE                        Reference: F(158) F(167) F(350)
+
+Built-In+/External use  STRIP                        Reference: F(68) F(139)
+
+Variable (set w/rexx)   subrou                       Assigned : 333
+Variable (used in/rexx) subrou                       Reference: 236
+
+Built-In+/External use  SUBSTR                       Reference: F(75) F(88) F(158) F(167) F(242)
+
+Built-In+/External use  SYSDSN                       Reference: F(85) F(198) F(257)
+
+Variable (NEVER SET)    SYSDSNAME                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSDSNAME                    Reference: 167
+
+Variable (set w/rexx)   totaldsn                     Assigned : 90 101
+Variable (used in/rexx) totaldsn                     Reference: 38 57 90
+
+Built-In+/External use  TRANSLATE                    Reference: F(139) F(346)
+
+Label (internal label)  VALID_DSNAME                 Defined  : 145
+Label (int. label ref)  VALID_DSNAME                 Reference: F(133) F(134) F(135)
+
+Variable (set w/rexx)   vdsn                         Assigned : 146 147 150 151 154 158
+Variable (used in/rexx) vdsn                         Reference: 149 150 151 153 154 158 162 163 164 165
+
+Built-In+/External use  WORD                         Reference: F(131) F(192) F(242) F(254) F(343) F(348)
+
+Built-In+/External use  WORDPOS                      Reference: F(191) F(243) F(298) F(342) F(348)
+
+Built-In+/External use  WORDS                        Reference: F(130) F(348)
+
+Variable (set w/rexx)   x                            Assigned : 86 240 297 366
+Variable (used in/rexx) x                            Reference: 87 88 241 242 298
+
+Variable (set w/rexx)   x1                           Assigned : 242
+Variable (used in/rexx) x1                           Reference: 243
+
+Variable (set w/rexx)   zcmd                         Assigned : 56 190 243
+Variable (used in/rexx) zcmd                         Reference: 194 197 198 199 203 254
+
+Variable (set w/rexx)   zedlmsg                      Assigned : 230 285
+Variable (NEVER USED)   zedlmsg                      No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   zedsmsg                      Assigned : 39 229 255 266 284
+Variable (NEVER USED)   zedsmsg                      No Ref.  : If actually referenced, it must be via a cmd.
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 DSN.       Assigned : 356
+Stem-1 DSN.#      Assigned : 67 68 69 70 71 72 73
+Stem-1 DSN.0      Assigned : 66 357
+Stem-1 DSN.0      Reference: 74 99
+Stem-1 DSN.i      Assigned : 75 91
+Stem-1 DSN.i      Reference: 75 92
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

@@ -1,0 +1,527 @@
+//SFRH66RX JOB 0,RHUMPHRIS@IOT.IN.GOV,MSGCLASS=S,CLASS=S,NOTIFY=SFRH66
+//*              ---------------------
+//*
+//*
+//* When editing this JCL enter, enter following edit cmd on cmd line:
+//*           HILITE JCL
+//*           ----------
+//* This will greatly improve readability of this jcl.
+//*
+//*
+//* (one time changes)
+//* (----------------)
+//* ----------------------------------------------------
+//*    1.  use "HILITE JCL" command
+//*
+//*    2.  change "SET" for NEWHLQ below
+//*           change to your HLQ for output pds's.
+//*
+//   SET NEWHLQ='SFRH66.PUBLIC' hlq for output pds(s)
+//*
+//*
+//*    3.  then see comments for "standard changes"
+//*        ----------------------------------------
+//*
+//*    (note:  &NEWHLQ used for following)
+//*    ===================================
+//*
+//*        a.  output pds's will become:
+//*                &NEWHLQ..REXXXREF.SCAN
+//*                &NEWHLQ..REXXXREF.XREF
+//*
+//*        b.  output members will become:
+//*                &NEWHLQ..REXXXREF.SCAN(&REXXMEMB)
+//*                &NEWHLQ..REXXXREF.XREF(&REXXMEMB)
+//*            see "specifying rexx exec" for more info.
+//*
+//*        c.  Note:  output pds's will remain to accumulate
+//*            future xref output and/or future review.
+//*
+//* -----------------------------------------------------------
+//* -----------------------------------------------------------
+//*
+//* Tip:  You'll probably scan rexx members from multiple
+//*     pds libraries.
+//*
+//*       Therefore, don't change prior PDS name specifications
+//*     but COMMENT them out instead (so you don't have to retype
+//*     it in the future.
+//*
+//* Tip:  Likewise, you may want to have member names you've used
+//*     from that pds... commented out under that pds name.
+//*
+//*       -----------------------------------------------------
+//*       -----------------------------------------------------
+//*
+//*
+//* -----------------------------------------------------------
+//*
+//* (standard changes)
+//* (----------------)
+//*
+//* Specifying rexx exec (pds library and member name) for xref
+//* -----------------------------------------------------------
+//*
+//*
+//* 1. Enter "HILITE JCL" edit command.  It hilight's real jcl
+//* from commented jcl (very useful).
+//*
+//*
+//* 2. Find SET REXXLIBR='your.pds.name'
+//*    a.  find SET REXXLIBR for input pds you want to use
+//*        1) uncomment REXXLIB (if commented)
+//*        2) Then find/add a REXXMEMR for input rexx member name.
+//*        3) comment any other uncommented SET REXXLIBR statements
+//*        4) comment any other uncommented SET REXXMEMB statements
+//*
+//*   OR:
+//*        1) add a new REXXLIBR for input rexx pds name
+//*        2) And add a REXXLIBM for input rexx member name.
+//*        3) comment any other uncommented SET REXXLIBR statements
+//*        4) comment any other uncommented SET REXXMEMB statements
+//*
+//* 3. Submit job
+//*
+//* 4. Look for output in &NEWHLQ..REXXXREF.SCAN(&REXXMEMB)
+//*                       &NEWHLQ..REXXXREF.XREF(&REXXMEMB)
+//*
+//* ---------------------------------------------------------------
+//*
+//*
+//*
+//*   export symbols for use in " DD *,SYMBOLS=JCLONLY" datasets
+//   EXPORT SYMLIST=(DEBUG,REXXLINE,REXXLIBR,REXXMEMB,XREFLIB,SCANLIB,
+//        WIDTH,BLANK)
+//*
+//*   DEBUG option.
+//*    DEBUG will show you rexx lines as the are parsed by the exec
+//*    ... and which variables/stems references/definitions are
+//*    ... being created (including labels).
+//*
+//*    When on, to see debug output, view SYSTSPRT from step //XREF.
+//*
+//   SET DEBUG=OFF /* set debug = ON or oFF */
+//*
+//*   REXXLINE option.
+//*    REXXLINE, is another debug option.  If set to a number > 0,
+//*    it will cause the exec to turn on TRACE R tracing while
+//*    processing line x from the input exec.
+//*
+//*    This allows you to see what functions/labels/etc are being
+//*    referenced/defined/assigned values, etc.  As that line is
+//*    being processed.
+//*
+//*    A value of 0 turns this option off.
+//*
+//*    When active, view SYSTSPRT from step //XREF to see trace output.
+//*
+//   SET REXXLINE=0       /* set to 0 (off) or # to activate trace.
+//*
+//*   WIDTH option.
+//*    To control width of xref listing only (the scan of the rexx
+//*    exec and it's output is unaffected by this option).
+//*    Must be set to 130 (or higher).  Default is 150.
+//   SET WIDTH=150        /* set to 130 or higher */
+//*
+//*   BLANK option:
+//*    To control xref output use BLANK=value
+//*       BLANK='BYVAR' (default, gives you a blank line between
+//*                        different groups of variables/labels
+//*                        in XREF listing)
+//*
+//*       BLANK='NONE'  (has no blank lines in XREF listing.
+//*
+//   SET BLANK='BYVAR'    /* set to BYVAR or NONE */
+//*  --------------------------------------------------
+//*
+//*   find REXXLIBR... for specifying rexx library w/your exec
+//*   find REXXMEMB... for specifying member name of your exec
+//*
+//* -------------------------------------------------------------------
+//* ---- output datasets (define once; and keep for future use) -------
+//* -------------------------------------------------------------------
+//*     These are typically, one time sets (for output)
+//*     -----------------------------------------------
+//*
+// SET SCANLIB=&NEWHLQ..REXXXREF.SAMPLE.SCAN
+//*      - original rexx exec will be UN-changed.
+//*      - this pds is for modified version of original rexx exec.
+//*      - this pds member for the original rexx exec contains:
+//*         - a prolog contains comments of where original rexx exec
+//*          resides.  And date/time of when xref job created this
+//*          member.
+//*         - adds:  trace 's'  instruction to execute this to get a
+//*          rexx scan output for original rexx exec.
+//*         - serialization numbers removed from original rexx exec.
+//*         - new member is always 'vb'.  Will be converted from fb, if
+//*          neccessary.
+//*         - scan is required for producing xref for original rexx
+//*          exec; this member can be executed to get rexx scan output.
+//*
+// SET XREFLIB=&NEWHLQ..REXXXREF.SAMPLE.XREF
+//*      - Member created will have the result from the rexx scan
+//*       followed by the XREF we create for the exec.
+//*      - The rexx scan creates line numbers as part of the scan.
+//*      - The xreference will refer to these line numbers.
+//*
+//*
+//*
+//* -------------------------------------------------------------------
+//* ---- INPUT dataset/member name                              -------
+//* ----     SET REXXLIBR = source.pds.w/rexx.code              -------
+//* ----     SET REXXMEMR = member name in &REXXLIBR            -------
+//* ----                                                        -------
+//* ---- Note:  I find it useful to just comment out past       -------
+//* ----     REXXLIBR/REXXMEMB names (so I can easily uncomment -------
+//* ----     and reuse them on future submits).                 -------
+//* -------------------------------------------------------------------
+//*
+//*     These are changed to process rexx exec's (as input)
+//*     ---------------------------------------------------
+//*
+//*  SET REXXLIBR='SFRH66.PUBLIC.REXXXREF.REXX' ains rexx exec
+//*   SET REXXMEMB='REX$XREF'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='PRETRACE'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='PSTTRACE'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*
+//*  SET REXXLIBR='SFRH66.CNTL.DB2'         contains rexx exec
+//*   SET REXXMEMB='STOPSHUT'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='SHUTTCAS'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='PARTSHUT'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='FULLSHUT'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*
+//   SET REXXLIBR='SFRH66.REXX'             contains rexx exec
+//*   SET REXXMEMB='NONSENSE'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='$SYNTAX'      dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='CHKAPF00'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='DB2SKEL'      dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='DB2$L508'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='IEFBR14Y'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='STRANGE'      dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='STAT2'        dsn=&REXXLIBR(&REXXMEMB) to scan
+//    SET REXXMEMB='ATEST'        dsn=&REXXLIBR(&REXXMEMB) to scan
+//*
+//*
+//*  SET REXXLIBR='SFRH66.CNTL.RACFDB2.PDS' contains rexx exec
+//*   SET REXXMEMB='RACFDB2T'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='RACFDB2'      dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='RACLOGIC'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*
+//*  SET REXXLIBR='SFRH66.CNTL.RACFDB2'     contains rexx exec
+//*   SET REXXMEMB='RACFDB2T'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='RACFDB2'      dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='FIXOWNER'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='GENREVKE'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*
+//*
+//*  SET REXXLIBR='SFRH48.CBT.REXXEXEC.PDS'      contains rexx exe
+//*   SET REXXMEMB='EDF'          dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='CMDTBLUP'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='MEMLIST'      dsn=&REXXLIBR(&REXXMEMB) to scan
+//*
+//*  SET REXXLIBR='SFRH48.VBREXX.EXEC'      contains rexx exec
+//*   SET REXXMEMB='CHKAPF00'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*
+//*
+//*  SET REXXLIBR='SFRH48.REXX.EXEC'        contains rexx exec
+//*   SET REXXMEMB='ZEQAJCL'      dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='QWCMDS'       dsn=&REXXLIBR(&REXXMEMB) to scan
+//*
+//*  SET REXXLIBR='SFRCICDS.AFO340.RKANCMD'      contains rexx exe
+//*   SET REXXMEMB='$$OGINIT'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='SCNDOC1#'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='SCNDOC15'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//*   SET REXXMEMB='IDMDPRT2'     dsn=&REXXLIBR(&REXXMEMB) to scan
+//* --------------------------------------------------------------
+//* --------------------------------------------------------------
+//*
+//* process:
+//* --------
+//* --------
+//* create step:
+//*    OUT1 (make sure we have (output) &XREFLIB (MOD,CATLG)
+//*    OUT2 (make sure we have (output) &SCANLIB  (MOD,CATLG)
+//*    + Allocate temp datasets
+//*
+//* MODIFY step:  create rexx exec w/"trace s" in our output pds
+//*         &SCANLIB.(&REXXMEMB)
+//*
+//* SCAN   step:  scan rexx exec:
+//*     run rexx  from      dataset &SCANLIB(&REXXMEMB)
+//*     output scan to temp dataset &&SCANOUT(TEMPSCAN)
+//*
+//* SCAN2  step:  read      dataset &&SCAN01(TEMPSCAN)
+//*               create    dataset &&SCAN02(TEMPSCAN)
+//*     run exec PSTTRACE to fix scan line numbers
+//*
+//* if scan RC > 4
+//* then do
+//*    SCANBAD1 step (create status)
+//*    SCANBAD2 step (take status + scan output) and create
+//*       output in:
+//*         &XREFLIB.(&REXXMEMB)
+//* end
+//* else do
+//*    XREF     step (create xref results from scan)
+//*    SCANOK1  step (create status)
+//*    SCANOK2  step (take status + xref output) and create
+//*       output in:
+//*         &XREFLIB.(&REXXMEMB)
+//* end
+//*
+//*
+//*
+//CREATE  EXEC PGM=IEFBR14
+//*
+//* OUT1/OUT2  create new (permanent) OUTPUT PDS's if they don'e exist
+//*
+//OUT1     DD  DISP=(MOD,CATLG), create, if it doesn't exist
+//     DSN=&XREFLIB,
+//     UNIT=SYSDA,SPACE=(CYL,(1,1,10)),
+//     DCB=(RECFM=VB,LRECL=4000,BLKSIZE=24000),
+//     DSNTYPE=LIBRARY
+//*
+//OUT2     DD  DISP=(MOD,CATLG), create, if it doesn't exist
+//     DSN=&SCANLIB,
+//     UNIT=SYSDA,SPACE=(CYL,(1,1,10)),
+//     DCB=(RECFM=VB,LRECL=4000,BLKSIZE=24000),
+//     DSNTYPE=LIBRARY
+//*
+//* create temporary PDS's for use in job
+//*
+//TEMPPDS1 DD  DISP=(NEW,PASS), (temp) for trace 's' output
+//     DSN=&&SCAN01,
+//     UNIT=SYSDA,SPACE=(CYL,(1,1,10)),
+//     DCB=(RECFM=VB,LRECL=4000,BLKSIZE=24000),
+//     DSNTYPE=LIBRARY
+//*
+//TEMPPDS2 DD  DISP=(NEW,PASS), (temp) for modified trace 's' output
+//     DSN=&&SCAN02,
+//     UNIT=SYSDA,SPACE=(CYL,(1,1,10)),
+//     DCB=(RECFM=VB,LRECL=4000,BLKSIZE=24000),
+//     DSNTYPE=LIBRARY
+//*
+//TEMPPDS3 DD  DISP=(NEW,PASS), (temp) for xref output
+//     DSN=&&RESULT,
+//     UNIT=SYSDA,SPACE=(CYL,(1,1,10)),
+//     DCB=(RECFM=VB,LRECL=4000,BLKSIZE=24000),
+//     DSNTYPE=LIBRARY
+//*
+//TEMPPDS4 DD  DISP=(NEW,PASS), (temp) for status output
+//     DSN=&&STATUS,
+//     UNIT=SYSDA,SPACE=(CYL,(1,1,10)),
+//     DCB=(RECFM=VB,LRECL=4000,BLKSIZE=24000),
+//     DSNTYPE=LIBRARY
+//*
+//       IF ABEND=FALSE & RC <= 4 THEN
+//*      -----------------------------
+//*       (run step :  MODIFY)
+//*
+//* Now run exec to create copy of exec we wish to run a scan
+//* with.  It will add a trace 's' to beginning of rexx exec.
+//* Plus information about input library(member) etc.
+//*
+//* Save new (modified exec w/trace 's' command in our library
+//*    &SCANLIB.(&REXXMEMB)
+//*
+//* now run the PRETRACE rexx exec for this purpose.
+//* ----------------------------------------------------------
+//MODIFY   EXEC PGM=IKJEFT01,DYNAMNBR=20
+//SYSEXEC  DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.REXX
+//SYSTSPRT DD  SYSOUT=*
+//SYSPRINT DD  SYSOUT=*
+//SYSTSIN  DD  *,SYMBOLS=JCLONLY create "trace 's'" exec
+    PRETRACE VERIFY
+//VERIFY   DD  *,SYMBOLS=JCLONLY
+   /* look at input/output libraries */
+   REXXLIB  &REXXLIBR
+   REXXMEMB &REXXMEMB
+   SCANLIB  &SCANLIB
+   XREFLIB  &XREFLIB
+//IN       DD  DISP=SHR,DSN=&REXXLIBR.(&REXXMEMB) exec to xref
+//OUT      DD  DISP=SHR,DSN=&SCANLIB.(&REXXMEMB) rexx w/trace s
+//*
+//       ENDIF  (endif for MODIFY step)
+//*      -----
+//*      -----
+//*
+//*
+//     IF ABEND=FALSE & RC <= 4 THEN
+//*    -----------------------------
+//*       (run steps:  SCAN, SCANBAD1, SCANBAD2        )
+//*       ( or steps:  SCAN, XREF,     SCANOK1, SCANOK2)
+//*
+//* now run the scan from:
+//*    &SCANLIB.(&REXXMEMB)
+//*
+//* and put output in temp pds:
+//*    &&SCANOUT(TEMPSCAN)
+//* ----------------------------------------------------------
+//SCAN    EXEC PGM=IKJEFT01,DYNAMNBR=20,COND=(4,LT)
+//SYSEXEC  DD  DISP=SHR,DSN=&SCANLIB  has rexx w/trace 's'
+//SYSPRINT DD  SYSOUT=*
+//SYSTSIN  DD  *,SYMBOLS=JCLONLY  execute rexx w/trace 's'
+    &REXXMEMB
+//SYSTSPRT DD  DISP=(SHR,PASS),DSN=&&SCAN01(TEMPSCAN)
+//*
+//*
+//*
+//* postscan
+//*
+//* now run PSTTRACE from:
+//*    SFRH66.PUBLIC.REXXXREF.REXX
+//*
+//* and read in scan output:
+//*    &&SCAN01(TEMPSCNA)
+//* and write modified scan output into
+//*    &&SCAN02(TEMPSCAN)
+//* ----------------------------------------------------------
+//      IF SCAN.RUN THEN
+//SCAN2   EXEC PGM=IKJEFT01,DYNAMNBR=20
+//SYSEXEC  DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.REXX
+//SYSPRINT DD  SYSOUT=*
+//SYSTSPRT DD  SYSOUT=*
+//SYSTSIN  DD  *   fix line numbers in scan output
+    PSTTRACE
+//IN       DD  DISP=(SHR,PASS),DSN=&&SCAN01(TEMPSCAN)
+//OUT      DD  DISP=(SHR,PASS),DSN=&&SCAN02(TEMPSCAN)
+//      ENDIF
+//*
+//*
+//       IF SCAN.RC > 4 | SCAN2.RC > 4 THEN
+//*      ----------------------------------
+//*       (run steps:  SCANBAD1, SCANBAD2 )
+//*
+//* create status info
+//* create status info
+//* ------------------
+//SCANBAD1 EXEC PGM=IEBGENER
+//SYSUT1   DD   *,SYMBOLS=JCLONLY
+   ==> Scan of exec failed (probably a syntax error)
+   -------------------------------------------------
+    1) See full (trace 's') exec in pds:
+        &SCANLIB.(&REXXMEMB)
+
+    2) And instead of xref listing this contains the output
+      from the failing trace 's' output in this member
+      in:
+        &XREFLIB.(&REXXMEMB)
+
+    3) Note:  trace 's' got rc> 4: probably syntax error
+
+    Failing (trace 's') output follows, go to end of
+    this member to see the syntax error.
+   -----------------------------------------
+
+/*
+//*
+//*  output comments
+//SYSUT2   DD   DISP=(SHR,PASS),DSN=&&STATUS(STATUS)
+//SYSPRINT DD   SYSOUT=*
+//SYSIN    DD   *
+    GENERATE MAXFLDS=1
+    RECORD FIELD=(80,1,,1)
+/*
+//*
+//*
+//          IF SCAN2.RUN & ¬SCAN2.ABEND THEN
+//*         --------------------------------
+//*       (run steps:  SCANBAD2)
+//*
+//* create xref member from status + (modified) scan output
+//* create xref member from status + (modified) scan output
+//* -------------------------------------------------------
+//SCANBAD2 EXEC PGM=IEBGENER
+//SYSUT1   DD   DISP=(SHR,PASS),DSN=&&STATUS(STATUS) comment
+//         DD   DISP=(SHR,PASS),DSN=&&SCAN02(TEMPSCAN) scan
+//*
+//SYSUT2   DD   DISP=SHR,DSN=&XREFLIB(&REXXMEMB)
+//SYSPRINT DD   SYSOUT=*
+//SYSIN    DD   *
+//*
+//          ELSE
+//*         ----
+//*       (run steps:  SCANBAD3)
+//*
+//* create xref member from status + scan output
+//* create xref member from status + scan output
+//* --------------------------------------------
+//SCANBAD3 EXEC PGM=IEBGENER
+//SYSUT1   DD   DISP=(SHR,PASS),DSN=&&STATUS(STATUS) comment
+//         DD   DISP=(SHR,PASS),DSN=&&SCAN01(TEMPSCAN) scan
+//*
+//SYSUT2   DD   DISP=SHR,DSN=&XREFLIB(&REXXMEMB)
+//SYSPRINT DD   SYSOUT=*
+//SYSIN    DD   *
+//          ENDIF (end of sequence:  SCANBAD1, SCANBAD2) ...or
+//*         ----- (end of sequence:  SCANBAD1, SCANBAD3)
+//*         -----
+//       ENDIF (end of sequence:  SCANBAD1, SCANBAD2/SCANBAD3)
+//*      -----
+//*      -----
+//*
+//       IF ABEND=FALSE & RC <= 4 THEN
+//*      -----------------------------
+//*            (run steps:  XREF, SCANOK1, SCANOK2)
+//*
+//*
+//* now run the REX$XREF exec against the scan (when good scan)
+//* now run the REX$XREF exec against the scan (when good scan)
+//* -----------------------------------------------------------
+//XREF    EXEC PGM=IKJEFT01,DYNAMNBR=20,COND=(4,LT)
+//SYSEXEC  DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.REXX
+//SYSTSPRT DD  SYSOUT=*
+//SYSPRINT DD  SYSOUT=*
+//SYSTSIN  DD  *,SYMBOLS=JCLONLY
+  REX$XREF DEBUG=&DEBUG REXXLINE=&REXXLINE WIDTH=&WIDTH BLANK=&BLANK
+//*              use scan output to create xref
+//SCANINP  DD  DISP=(SHR,PASS),DSN=&&SCAN02(TEMPSCAN)
+//*
+//*              this output pds has scan/xref
+//RESULTS  DD  DISP=(SHR,PASS),DSN=&&RESULT(&REXXMEMB)
+//*
+//*
+//* create status info
+//* create status info
+//* ------------------
+//SCANOK1 EXEC PGM=IEBGENER
+//SYSUT1   DD   *,SYMBOLS=JCLONLY
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          &SCANLIB.(&REXXMEMB)
+
+    2) Trace listing + XREF listing in:
+          &XREFLIB.(&REXXMEMB)
+   -----------------------------------------
+
+/*
+//*
+//*  output comments
+//SYSUT2   DD   DISP=(SHR,PASS),DSN=&&STATUS(STATUS)
+//SYSPRINT DD   SYSOUT=*
+//SYSIN    DD   *
+    GENERATE MAXFLDS=1
+    RECORD FIELD=(80,1,,1)
+/*
+//*
+//*
+//* create xref member from:  status + xref listing
+//* create xref member from:  status + xref listing
+//* -----------------------------------------------
+//SCANOK2 EXEC PGM=IEBGENER
+//SYSUT1   DD   DISP=(SHR,PASS),DSN=&&STATUS(STATUS) comment
+//         DD   DISP=(SHR,PASS),DSN=&&RESULT(&REXXMEMB) scan/xref
+//*
+//SYSUT2   DD   DISP=SHR,DSN=&XREFLIB(&REXXMEMB)
+//SYSPRINT DD   SYSOUT=*
+//SYSIN    DD   *
+//*
+//       ENDIF (end of step sequence (XREF, SCANOK1, SCANOK2)
+//*      -----
+//*      -----
+//     ENDIF (end of sequence SCAN, SCANBAD1, SCANBAD2        )
+//*    ----- (             or SCAN, XREF,     SCANOK1, SCANOK2)
+//*    -----
+//*
+//*

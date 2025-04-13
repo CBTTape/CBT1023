@@ -1,0 +1,31 @@
+   (see $SAMPIDX for sample documentation index).
+
+$SAMP01 - XREF job handling a syntax error... in xref for a rexx exec.
+----------------------------------------------------------------------
+
+   In order to faciliate our xref process, we require a rexx scan for the exec we
+   will generate a XREF for.
+
+   BUT, the rexx scan will also detect rexx syntax errors.
+
+   When a rexx scan fails, we don't bother even trying to generate a XREF as a good
+   portion of the rexx exec (we wanted an XREF for) is probably missing.
+
+   But what we do generate is:
+       1)  a copy of the rexx exec (at scan time), modified with our prefix, in
+       the library hlq.REXXXREF.TREX(rexx-member-name)
+
+       2)  a copy of the failing scan (illustrating syntax error), in
+       the library hlq.REXXXREF.XREF(rexx-member-name)
+
+   Sample library shows the results of such a failure from an exec named "$SYNTAX".
+
+   View output created by the xref job when it tried to create a XREF for an exec named: "$SYNTAX".
+   ------------------------------------------------------------------------------------------------
+          SFRH66.PUBLIC.SAMPLE.REXXXREF.TREX($SYNTAX)  (prefix code) followed by original exec
+        + SFRH66.PUBLIC.SAMPLE.REXXXREF.XREF($SYNTAX)  the failed rexx scan, showing syntax error.
+
+   The original exec, of course, remained untouched in it's original library/pds.
+
+   Note:  scanned exec's in the hlq.REXXXREF.TREX(member) library can almost be considered
+        "backup copies" of an exec at the time the xref job ran.

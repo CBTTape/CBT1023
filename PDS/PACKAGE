@@ -1,0 +1,47 @@
+//SFRH66RX JOB 0,RHUMPHRIS@IOT.IN.GOV,MSGCLASS=S,CLASS=S,NOTIFY=SFRH66
+//*              ---------------------
+//* For my use only (OR for anyone who wants to update this code for
+//* ---------------     the cbt tape).
+//*
+//*   *internal job*  not for normal CBT user use.
+//*
+//*   This takes existing pds's and creates XMI* members in this pds.
+//*      Note:  The $EXPAND job (which CBT users SHOULD execute)
+//*             will take the XMI's and re-create the PDS's on
+//*             their system.
+//*
+//*   After this internal job runs, run FINALPKG (another *internal
+//*   job*) to finish packaging for updating the CBT tape distribution.
+//*
+//*
+//PACKAGE  EXEC PGM=IKJEFT01,DYNAMNBR=20
+//SYSTSPRT DD  SYSOUT=*
+//SYSPRINT DD  SYSOUT=*
+//INDOC    DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.DOC
+//INJCL    DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.JCL
+//INREXX   DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.REXX
+//INSCAN   DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN
+//INXREF   DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF
+//*
+//XMIDOC   DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.$PACKAGE(XMIDOC)
+//XMIJCL   DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.$PACKAGE(XMIJCL)
+//XMIREXX  DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.$PACKAGE(XMIREXX)
+//XMISCAN  DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.$PACKAGE(XMISCAN)
+//XMIXREF  DD  DISP=SHR,DSN=SFRH66.PUBLIC.REXXXREF.$PACKAGE(XMIXREF)
+//*
+//SYSTSIN  DD  *,SYMBOLS=JCLONLY create XMI* members for $EXPAND
+TSOEXEC XMIT JUNKNODE.USER DDNAME(INDOC)      +
+                           NOLOG NONOTIFY PDS +
+                           OUTFILE(XMIDOC)
+TSOEXEC XMIT JUNKNODE.USER DDNAME(INJCL)      +
+                           NOLOG NONOTIFY PDS +
+                           OUTFILE(XMIJCL)
+TSOEXEC XMIT JUNKNODE.USER DDNAME(INREXX)     +
+                           NOLOG NONOTIFY PDS +
+                           OUTFILE(XMIREXX)
+TSOEXEC XMIT JUNKNODE.USER DDNAME(INSCAN)     +
+                           NOLOG NONOTIFY PDS +
+                           OUTFILE(XMISCAN)
+TSOEXEC XMIT JUNKNODE.USER DDNAME(INXREF)     +
+                           NOLOG NONOTIFY PDS +
+                           OUTFILE(XMIXREF)

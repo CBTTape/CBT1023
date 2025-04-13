@@ -1,0 +1,26 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.REXX(IEFBR14Y)"      */
+/*      ---------------------       */
+/*  date/time of XREF was:          */
+/*     20231217 23:03:43            */
+/*      ---------------------       */
+
+/* rexx ... test call command */
+/* ex 'sfrh66.rexx(iefbr14y)' */
+trace ?r
+address 'TSO' "CALL *(IEFBR14) 'JUNKPARM'"
+address ('T'||'S'||'O')
+address ('T'||'S'||'O') "CALL *(IEFBR14) 'JUNKPARM'"
+x = 'TSO'
+address value x
+"CALL *(IEFBR14) 'JUNKPARM'"
+y = 0
+address value 'T' || 'S' || 'O'
+"CALL *(IEFBR14) 'JUNKPARM'"
+y = 0
+address value TSO "CALL *(IEFBR14) 'JUNKPARM'"
+address value 'TSO' "CALL *(IEFBR14) 'JUNKPARM'"
+say '197='dcx

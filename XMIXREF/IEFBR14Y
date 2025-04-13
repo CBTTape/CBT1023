@@ -1,0 +1,188 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(IEFBR14Y)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(IEFBR14Y)
+   -----------------------------------------
+
+READY
+    IEFBR14Y
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.REXX(IEFBR14Y)"      */
+    Generated scan code/comment:   /*      ---------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:          */
+    Generated scan code/comment:   /*     20231217 23:03:43            */
+    Generated scan code/comment:   /*      ---------------------       */
+     1 *-* /* rexx ... test call command */
+     2 *-* /* ex 'sfrh66.rexx(iefbr14y)' */
+     3 *-* trace ?r
+     4 *-* address 'TSO' "CALL *(IEFBR14) 'JUNKPARM'"
+     5 *-* address ('T'||'S'||'O')
+     6 *-* address ('T'||'S'||'O') "CALL *(IEFBR14) 'JUNKPARM'"
+     7 *-* x = 'TSO'
+     8 *-* address value x
+     9 *-* "CALL *(IEFBR14) 'JUNKPARM'"
+    10 *-* y = 0
+    11 *-* address value 'T' || 'S' || 'O'
+    12 *-* "CALL *(IEFBR14) 'JUNKPARM'"
+    13 *-* y = 0
+    14 *-* address value TSO "CALL *(IEFBR14) 'JUNKPARM'"
+    15 *-* address value 'TSO' "CALL *(IEFBR14) 'JUNKPARM'"
+    16 *-* say '197='dcx
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Address Envir.Constant: ADDRESS '(' <cmd>                                  Reference: 5 6
+
+Address Envir.Constant: ADDRESS 'TSO' <cmd>                                Reference: 4
+
+Address Envir.ValueExp: ADDRESS VALUE 'T' || 'S' || 'O'                    Reference: 11
+
+Address Envir.ValueExp: ADDRESS VALUE 'TSO' "CALL *(IEFBR14) 'JUNKPARM'"   Reference: 15
+
+Address Envir.ValueExp: ADDRESS VALUE TSO "CALL *(IEFBR14) 'JUNKPARM'"     Reference: 14
+
+Address Envir.ValueExp: ADDRESS VALUE X                                    Reference: 8
+
+Variable (NEVER SET)    DCX                                                Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) DCX                                                Reference: 16
+
+Variable (NEVER SET)    TSO                                                Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) TSO                                                Reference: 14
+
+Variable (set w/rexx)   x                                                  Assigned : 7
+Variable (used in/rexx) x                                                  Reference: 8
+
+Variable (set w/rexx)   y                                                  Assigned : 10 13
+Variable (NEVER USED)   y                                                  No Ref.  : If actually referenced, it must be via a cmd.
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

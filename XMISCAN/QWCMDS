@@ -1,0 +1,1059 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH48.REXX.EXEC(QWCMDS)"      */
+/*      ------------------------       */
+/*  date/time of XREF was:             */
+/*     20231217 23:07:05               */
+/*      ------------------------       */
+
+/*************************** REXX ************************************/
+/*                                                                   */
+/*                                                                   */
+/*                        Q W C M D S                                */
+/*                                                                   */
+/*                        Release 8.4                                */
+/*                                                                   */
+/*      This exec checks for presence of QW or QWS command           */
+/*      in SYSTEM or SITE command table, reports findings            */
+/*      to user, and offers option of updating existing              */
+/*      command table or creating new SITE command table.            */
+/*                                                                   */
+/*                                                                   */
+/*********************************************************************/
+
+
+   REL = '8.4'                    /* Current Release Number Variable */
+
+/* Trace ?R */                    /* For tracing (if needed)         */
+
+
+  Arg TMPJCL TMPTYPE                 /* Possible Argument from QWIAD */
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Initialization/House Keeping                      */
+/*                                                                   */
+/*********************************************************************/
+
+  If SYSVAR(SYSISPF) <> "ACTIVE" Then
+    Do
+      Say "THIS REXX EXEC MUST BE EXECUTED UNDER ISPF - TRY AGAIN"
+      Exit
+    End
+
+  Address ISPEXEC
+  Parse Source P1 P2 P3 P4 P5 P6 P7 P8
+  JCLDSN = P5                                   /* JCL Data Set Name */
+
+  If JCLDSN = "?" Then
+    Do
+      JCLDSN = TMPJCL
+      If JCLDSN = '' Then
+        Do
+          Say "QWCMDS MUST BE EXECUTED EXPLICITLY AS SHOWN HERE:"
+          Say "    EXEC 'xxx.xxx.xxx(QWCMDS)'"
+          Say "WHERE xxx.xxx.xxx IS THE NAME OF THE MVS/QuickRef"
+          Say "JCL LIBRARY"
+          Exit
+        End
+    End
+
+  "LIBDEF ISPPLIB DATASET ID('"JCLDSN"') STACK"   /* LIBDEF Panels   */
+  "LIBDEF ISPMLIB DATASET ID('"JCLDSN"') STACK"   /* LIBDEF Messages */
+
+  Address TSO
+  MSGVAL = MSG('OFF')
+  "FREE F(QWICMDUD)"
+  MSGVAL = MSG(MSGVAL)
+  "ALLOC FILE(QWICMDUD) NEW DELETE",
+      "DSORG(PO) RECFM(F B) LRECL(80) BLKSIZE(6160)",
+      "UNIT(SYSDA)",
+      "SPACE(4,2) TRACKS DIR(2)"
+
+  OPENSW = 'N'                              /* Set File Open Switch  */
+  STEPS = 'WL'                              /* Set for Welcome Panel */
+
+
+  /*********************************************************/
+  /*                                                       */
+  /*                 - Panel Table -                       */
+  /*                                                       */
+  /*********************************************************/
+  /*                                                       */
+  /*   Contains panel name suffixes and descriptions.      */
+  /*                                                       */
+  /*   The panel name suffix is also the step indicator.   */
+  /*                                                       */
+  /*   So the panel name for the Welcome Panel is QWCMPWL  */
+  /*   and the step indicator is WL.                       */
+  /*                                                       */
+  /*   You can find references to a step or panel with     */
+  /*   FIND xx WORD where xx is the panel name suffix.     */
+  /*                                                       */
+  /*   In most cases, there is one panel per step and      */
+  /*   one step per panel.                                 */
+  /*                                                       */
+  /*   Some steps may not have an associated panel and     */
+  /*   some steps may utilize more than one panel.         */
+  /*                                                       */
+  /*********************************************************/
+  /*                                                       */
+  /*     Suffix           Panel Description                */
+  /*     ------   -------------------------------          */
+  /*       BC     Make Backup Copy                         */
+  /*       CC     Create Complete                          */
+  /*       CD     Current Command Table Dsn                */
+  /*       CF     Confirm Command Definition               */
+  /*       CO     Create Storage Options                   */
+  /*       CP     Specify Command Parameters               */
+  /*       DC     Delete Commands                          */
+  /*       SC     Show Current Commands                    */
+  /*       SD     Show Current Commands (DBO)              */
+  /*       SN     Show No Existing Commands                */
+  /*       SP     Show Command Parameters                  */
+  /*       SU     Show Commands In Update Table            */
+  /*       TC     Termination (Create Table)               */
+  /*       TU     Termination (Update Table)               */
+  /*       UC     Update Complete                          */
+  /*       UD     Updated Command Table DSN                */
+  /*       UO     Update Storage Options                   */
+  /*       WL     Welcome Panel                            */
+  /*                                                       */
+  /*********************************************************/
+
+
+
+/*********************************************************************/
+/*                                                                   */
+/*                     Panel Processing                              */
+/*                                                                   */
+/*********************************************************************/
+
+
+  Do Forever                          /* Outer Do forces inner DO to */
+                                      /* process next panel in STEPS */
+
+
+  Do Forever                          /* Inner Do processes current  */
+                                      /*      panel in steps         */
+
+
+  Select                        /* Select the current panel in STEPS */
+
+
+
+/*********************************************************************/
+/*                                                                   */
+/*                     Welcome Panel                                 */
+/*                                                                   */
+/*********************************************************************/
+  When RIGHT(STEPS,2) = 'WL' Then           /* Welcome Panel?        */
+    Do                                      /* Yes                   */
+      Address ISPEXEC
+      "DISPLAY PANEL(QWCMPWL)"
+      If RC > 4 Then                         /* END or RETURN?       */
+        If OPENSW = 'Y' Then
+          Call WrapUp
+        Else
+          Do
+            Address ISPEXEC
+            "LIBDEF ISPPLIB"
+            "LIBDEF ISPMLIB"
+            Exit
+          End
+
+      OPENSW   = 'Y'
+      CFONDCMD = ' '
+      CCMDINV  = ' '
+      CQWACT   = ' '
+      CQWDESC  = ' '
+      CQWSACT  = ' '
+      CQWSDESC = ' '
+      FCMDDSN  = ' '
+      Address ISPEXEC
+      "VGET (ZSCTPREF) ASIS"
+      If (RC = 0 & ZSCTPREF /= '' & ZSCTPREF /= ' ') Then
+        Do
+          "VGET (ZSCTSRCH) ASIS"
+          If ZSCTSRCH = 'B' Then
+            Do
+              Call CkSites
+              If CFONDCMD = ' ' Then
+                Call CkSystem
+            End
+          Else
+            Do
+              Call CkSystem
+              If CFONDCMD = ' ' Then
+                Call CkSites
+             End
+        End
+      Else
+        Call CkSystem
+      If CFONDCMD <> ' ' Then
+        STEPS = STEPS || 'SC'
+      Else
+        STEPS = STEPS || 'SN'
+      Leave
+    End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Show Current Commands                             */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'SC' Then
+   Do
+     QCMDINV = CCMDINV
+     Address ISPEXEC
+     "VPUT (QCMDINV) SHARED"
+     If CQWACT = ' ' Then
+       CQWACT = 'QW is not defined in this table'
+     If CQWSACT = ' ' Then
+       CQWSACT = 'QWS is not defined in this table'
+     Address ISPEXEC
+     If TMPTYPE = 'F' Then
+       "DISPLAY PANEL(QWCMPSC)"
+     Else
+       "DISPLAY PANEL(QWCMPSD)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     If USECUR = 'Y' | TMPTYPE = 'D' Then
+       Call WrapUp
+     STEPS = STEPS || 'CF'
+     Leave
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Show No Existing Commands                         */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'SN' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPSN)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     If TMPTYPE = 'D' Then
+       Call WrapUp
+     STEPS = STEPS || 'CF'
+     Leave
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Confirm Command Definition                        */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'CF' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPCF)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     If UPDOPT = 'N' Then
+       Call WrapUp
+     STEPS = STEPS || 'CP'
+     Leave
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Specify Command Parameters                        */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'CP' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPCP)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     UCMDMEM = 'ISPCMDS'
+     UTYPTB = 'system'
+     UCMDINV = 'LIBDEF'
+     UPDACT = 'updated'
+     If UINVTNQ = 'N' Then
+       UCMDINV = 'non-LIBDEF'
+     If UPDTYP <> 'S' Then
+       Do
+         UCMDMEM = USAI || 'CMDS'
+         UTYPTB = 'site'
+       End
+     If UPDTYP = 'C' Then
+       Do
+         UPDACT = 'created'
+         STEPS = STEPS || 'SP'
+       End
+     Else
+       STEPS = STEPS || 'CD'
+     UCMPRD = UCMDMEM || '.'
+     QCMDINV = UCMDINV
+     Address ISPEXEC
+     "VPUT (QCMDINV) SHARED"
+     Leave
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Current Command Table DSN                         */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'CD' Then
+   Do
+     If FCMDDSN = ' ' Then
+         If CTYPTB = UTYPTB Then
+           FCMDDSN = CCMDDSN
+         Else
+           Do
+             CCMDMEM = UCMDMEM
+             Call FindTble
+             FCMDDSN = CCMDDSN
+           End
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPCD)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     QTDDSN = "'"||FCMDDSN||"'"
+     MSGVAL = MSG('OFF')
+     LISTVAR = LISTDSI(QTDDSN)
+     MSGVAL = MSG(MSGVAL)
+     If LISTVAR > 4 Then
+       Do
+         ERRDSN = SUBSTR(QTDDSN,2,LENGTH(QTDDSN)-2)
+         "SETMSG MSG(QWCMD000)"
+         Leave
+       End
+     "LMINIT DATAID(WFID) DATASET("QTDDSN")"
+     "LMOPEN DATAID(&WFID)"
+     "LMMFIND DATAID(&WFID) MEMBER("CCMDMEM")"
+     SRC = RC
+     "LMCLOSE DATAID(&WFID)"
+     "LMFREE DATAID(&WFID)"
+     If SRC > 0 Then
+       Do
+         ERRDSN = SUBSTR(QTDDSN,2,LENGTH(QTDDSN)-2)
+         "SETMSG MSG(QWCMD001)"
+         Leave
+       End
+     FROMMEM = UCMDMEM
+     FROMDSN = FCMDDSN
+     TOMEM = '$QWICMDS'
+     TODD = 'QWICMDUD'
+     Call Cpyrnm
+     Address ISPEXEC
+     "TBOPEN $QWICMDS LIBRARY(QWICMDUD)"
+     CQWACT   = 'QW is not defined in this table'
+     CQWDESC  = ' '
+     CQWSACT  = 'QWS is not defined in this table'
+     CQWSDESC = ' '
+     ZCTVERB  = 'QW'
+     "TBTOP $QWICMDS"
+     "TBSCAN $QWICMDS ARGLIST(ZCTVERB)"
+     If RC = 0 Then
+       Do
+         CQWACT  = ZCTACT
+         CQWDESC = ZCTDESC
+       End
+     ZCTVERB = 'QWS'
+     "TBTOP $QWICMDS"
+     "TBSCAN $QWICMDS ARGLIST(ZCTVERB)"
+     If RC = 0 Then
+       Do
+         CQWSACT  = ZCTACT
+         CQWSDESC = ZCTDESC
+       End
+     "TBCLOSE $QWICMDS LIBRARY(QWICMDUD)"
+     If LEFT(CQWACT,17) = 'QW is not defined' &,
+        LEFT(CQWSACT,18) = 'QWS is not defined' Then
+       STEPS = STEPS || 'BC'
+     Else
+       STEPS = STEPS || 'SU'
+     Leave
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Show Commands In Update Table                     */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'SU' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPSU)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     STEPS = STEPS || 'BC'
+     Leave
+   End
+
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Make Backup Copy                                  */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'BC' Then
+   Do
+     IF BCMDDSN = 'BCMDDSN' Then
+       BCMDDSN = FCMDDSN
+     BCMDMEM = SUBSTR(UCMDMEM,1,LENGTH(UCMDMEM)-1) || 'B'
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPBC)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     If BKUPOP = 'N' Then
+       Do
+         STEPS = STEPS || 'SP'
+         Leave
+       End
+     ERRDSN = BCMDDSN
+     QTDDSN = "'"||BCMDDSN||"'"
+     MSGVAL = MSG('OFF')
+     LISTVAR = LISTDSI(QTDDSN)
+     MSGVAL = MSG(MSGVAL)
+     If LISTVAR > 4 Then
+       Do
+         "SETMSG MSG(QWCMD000)"
+         Leave
+       End
+     If BKUPOP = 'Y' Then
+       Do
+         "LMINIT DATAID(WFID) DATASET("QTDDSN")"
+         "LMOPEN DATAID(&WFID)"
+         "LMMFIND DATAID(&WFID) MEMBER("BCMDMEM")"
+         SRC = RC
+         "LMCLOSE DATAID(&WFID)"
+         "LMFREE DATAID(&WFID)"
+         If SRC = 0 Then
+           Do
+             ERRMEM = BCMDMEM
+             ERRMSG = 'change backup option or change member name'
+             "SETMSG MSG(QWCMD002)"
+             Leave
+           End
+       End
+     QTDDSNF = "'"||FCMDDSN||"'"
+     "LMINIT DATAID(WFI2) DATASET("QTDDSN") ENQ(SHRW)"
+     "LMOPEN DATAID(&WFI2) OPTION(OUTPUT)"
+     If RC > 0 Then
+       Do
+         "LMFREE DATAID(&WFI2)"
+         ERRMSG = 'check update authority'
+         "SETMSG MSG(QWCMD003)"
+         Leave
+       End
+     "LMCLOSE DATAID(&WFI2)"
+     "LMINIT DATAID(WFID) DATASET("QTDDSNF")"
+     "LMCOPY FROMID(&WFID) FROMMEM("UCMDMEM"),
+             TODATAID(&WFI2) TOMEM("BCMDMEM") REPLACE"
+     "LMFREE DATAID(&WFID)"
+     "LMFREE DATAID(&WFI2)"
+     STEPS = STEPS || 'SP'
+     Leave
+   End
+
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Show Command Parameters                           */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'SP' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPSP)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     Call TmpAOC
+     Address TSO
+     MSGVAL = MSG('OFF')
+     "FREE F(QWICMDUD)"
+     MSGVAL = MSG(MSGVAL)
+     "ALLOC FILE(QWICMDUD) NEW DELETE",
+     "DSORG(PO) RECFM(F B) LRECL(80) BLKSIZE(6160)",
+     "UNIT(SYSDA)",
+     "SPACE(4,2) TRACKS DIR(2)"
+
+     If UPDTYP = 'C' Then
+       Do
+         Address ISPEXEC
+         "TBCREATE $QWICMDS WRITE LIBRARY(QWICMDUD)",
+            "NAMES(ZCTVERB ZCTTRUNC ZCTACT ZCTDESC)"
+       End
+     Else
+       Do
+         FROMMEM = UCMDMEM
+         FROMDSN = FCMDDSN
+         TOMEM = '$QWICMDS'
+         TODD = 'QWICMDUD'
+         Call Cpyrnm
+         Address ISPEXEC
+         "TBOPEN $QWICMDS WRITE LIBRARY(QWICMDUD)"
+       End
+
+     If UPDTYP <> 'C' Then
+       Do
+         ZCTVERB = 'QW'
+         "TBTOP $QWICMDS"
+         Call DelCmds
+         If BKUP = 'Y' Then
+           Do
+             "TBCLOSE $QWICMDS"
+             Leave
+           End
+         ZCTVERB = 'QWS'
+         "TBTOP $QWICMDS"
+         Call DelCmds
+         If BKUP = 'Y' Then
+           Do
+             "TBCLOSE $QWICMDS"
+             Leave
+           End
+       End
+
+     "TBTOP $QWICMDS"
+     If UCMDIND <> 'S' Then
+       Do
+         ZCTVERB  = 'QW'
+         ZCTTRUNC = '0'
+         ZCTACT  = 'SELECT PGM(QWIKREF1)',
+                   'PARM(&ZPARM) NEWAPPL(QWIK)'
+         ZCTDESC = 'INVOKE QUICKREF AS POPUP APPLICATION'
+         If UINVTNQ = 'L' Then
+             ZCTACT = "SELECT CMD(%QW PRM('&ZPARM'))",
+                      "NEWAPPL(QWIK)"
+         "TBADD $QWICMDS"
+       End
+     If UCMDIND <> 'Q' Then
+       Do
+         ZCTVERB  = 'QWS'
+         ZCTACT  =  'SELECT PGM(ISPSTRT)',
+                    'PARM(PGM(QWIKREF1) PARM(&ZPARM)',
+                    'NEWAPPL(QWIK) SCRNAME(QWS))'
+         ZCTDESC = 'INVOKE QUICKREF AS NEW SCREEN SPLIT'
+         If UINVTNQ = 'L' Then
+             ZCTACT  = "SELECT PGM(ISPSTRT)",
+                       "PARM(CMD(%QW PRM('&ZPARM'))",
+                       "NEWAPPL(QWIK) SCRNAME(QWS))"
+         "TBADD $QWICMDS"
+       End
+     "TBCLOSE $QWICMDS LIBRARY(QWICMDUD)"
+
+     If UPDTYP = 'C' Then
+       STEPS = STEPS || 'CC'
+     Else
+       STEPS = STEPS || 'UC'
+     Leave
+  End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Create Complete                                   */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'CC' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPCC)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     STEPS = STEPS || 'CO'
+     Leave
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Update Complete                                   */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'UC' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPUC)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     STEPS = STEPS || 'UO'
+     Leave
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Create Storage Options                            */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'CO' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPCO)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     STEPS = STEPS || 'UD'
+     Leave
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Update Storage Options                            */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'UO' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPUO)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     STEPS = STEPS || 'UD'
+     Leave
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Updated Command Table DSN                         */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'UD' Then
+   Do
+     If UCMDDSN = 'UCMDDSN' Then
+       UCMDDSN = ' '
+     If UCMDDSN = ' ' Then
+       If UPDTYP <> 'C' Then
+         UCMDDSN = FCMDDSN
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPUD)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     ERRDSN = UCMDDSN
+     QTDDSN = "'"||UCMDDSN||"'"
+     MSGVAL = MSG('OFF')
+     LISTVAR = LISTDSI(QTDDSN)
+     MSGVAL = MSG(MSGVAL)
+     If LISTVAR > 4 Then
+       Do
+         "SETMSG MSG(QWCMD000)"
+         Leave
+       End
+     If RPLOP = 'N' Then
+       Do
+         "LMINIT DATAID(WFID) DATASET("QTDDSN")"
+         "LMOPEN DATAID(&WFID)"
+         "LMMFIND DATAID(&WFID) MEMBER("UCMDMEM")"
+         SRC = RC
+         "LMCLOSE DATAID(&WFID)"
+         "LMFREE DATAID(&WFID)"
+         If SRC = 0 Then
+           Do
+             ERRMEM = UCMDMEM
+             ERRMSG = 'change replace option or change PDS'
+             "SETMSG MSG(QWCMD002)"
+             Leave
+           End
+       End
+     "LMINIT DATAID(WFI2) DATASET("QTDDSN") ENQ(SHRW)"
+     "LMOPEN DATAID(&WFI2) OPTION(OUTPUT)"
+     If RC > 0 Then
+       Do
+         "LMFREE DATAID(&WFI2)"
+         ERRMSG = 'check update authority'
+         "SETMSG MSG(QWCMD003)"
+         Leave
+       End
+     "LMCLOSE DATAID(&WFI2)"
+     "LMINIT DATAID(WFID) DDNAME(QWICMDUD)"
+     "LMCOPY FROMID(&WFID) FROMMEM($QWICMDS),
+             TODATAID(&WFI2) TOMEM("UCMDMEM") REPLACE"
+     "LMFREE DATAID(&WFID)"
+     "LMFREE DATAID(&WFI2)"
+
+     If UPDTYP = 'C' Then
+       STEPS = STEPS || 'TC'
+     Else
+       STEPS = STEPS || 'TU'
+     Leave
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Termination (Create Table)                        */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'TC' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPTC)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     Call WrapUp
+   End
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Termination (Update Table)                        */
+/*                                                                   */
+/*********************************************************************/
+ When RIGHT(STEPS,2) = 'TU' Then
+   Do
+     Address ISPEXEC
+     "DISPLAY PANEL(QWCMPTU)"
+     Call PostPnl
+     If BKUP = 'Y' Then
+       Leave
+     Call WrapUp
+   End
+
+
+
+  End                                 /* Select for Panels           */
+  End                                 /* Inner DO Forever for panels */
+  End                                 /* Outer Do Forever for panels */
+
+/*********************************************************************/
+/*                                                                   */
+/*                 End of Panel Processing                           */
+/*                                                                   */
+/*********************************************************************/
+
+
+/*********************************************************************/
+/*                                                                   */
+/*                      Subroutines                                  */
+/*                                                                   */
+/*********************************************************************/
+
+
+
+/*********************************************************************/
+/*                                                                   */
+/*             Standard Post Panel Display Processing                */
+/*                                                                   */
+/*********************************************************************/
+PostPnl:
+  BKUP = 'N'
+  If RC > 4 Then                              /* END or RETURN?      */
+    Do                                        /* Yes                 */
+      "VGET (ZVERB)"
+      If ZVERB =  'RETURN' | ZVERB = '' Then  /* Termination?        */
+        Call WrapUp                           /* Yes                 */
+      ELSE
+        Do                                    /* Its END             */
+          STEPS = LEFT(STEPS,LENGTH(STEPS)-2) /* Remove Current Step */
+          BKUP = 'Y'                          /* Set for backing up  */
+        End
+    End
+  Return
+
+/*********************************************************************/
+/*                                                                   */
+/*           Check System Command Table                              */
+/*                                                                   */
+/*********************************************************************/
+CkSystem: Nop
+
+  CCMDMEM = 'ISPCMDS'
+  Call FindTble
+  If CCMDDSN <> ' ' Then
+    Do
+      FINDCMD = 'QW'
+      Call FindCmd
+      FINDCMD = 'QWS'
+      Call FindCmd
+    End
+
+  Return
+
+/*********************************************************************/
+/*                                                                   */
+/*           Check for Site Commands                                 */
+/*                                                                   */
+/*********************************************************************/
+CkSites:  Nop
+
+  Address ISPEXEC
+  "VGET (ZSCTPREF) ASIS"
+  If (RC = 0 & ZSCTPREF /= '' & ZSCTPREF /= ' ') Then
+    Do
+      SITEPFX = ZSCTPREF
+      Call CkSite
+      If CFONDCMD = ' ' Then
+        Do
+          "VGET (ZSCTPRE2) ASIS"
+          If (RC = 0 & ZSCTPRE2 /= '' & ZSCTPRE2 /= ' ') Then
+            Do
+              SITEPFX = ZSCTPRE2
+              Call CkSite
+              If CFONDCMD = ' ' Then
+                Do
+                  "VGET (ZSCTPRE3) ASIS"
+                  If (RC = 0 & ZSCTPRE3 /= '' & ZSCTPRE3 /= ' ') Then
+                    Do
+                      SITEPFX = ZSCTPRE3
+                      Call CkSite
+                    End
+                End
+
+            End
+        End
+    End
+
+  Return
+
+/*********************************************************************/
+/*                                                                   */
+/*           Check Specified Site Table                              */
+/*                                                                   */
+/*********************************************************************/
+CkSite:   Nop
+
+  CCMDMEM = SITEPFX||'CMDS'
+  Call FindTble
+  If CCMDDSN <> ' ' Then
+    Do
+      FINDCMD = 'QW'
+      Call FindCmd
+      FINDCMD = 'QWS'
+      Call FindCmd
+    End
+
+  Return
+
+
+/*********************************************************************/
+/*                                                                   */
+/*                 Find Specified Command Table                      */
+/*                                                                   */
+/*      CCMDMEM must contain member name of command table to be      */
+/*              found (SITE command table name or ISPCMDS)           */
+/*                                                                   */
+/*      Upon return, CCMDDSN contains dsn of library containing      */
+/*           CCMDMEM or blanks if CCMDMEM not found                  */
+/*********************************************************************/
+
+FindTble: Nop
+  TRAPVAR = OUTTRAP("OUTLNE.")
+  Address TSO
+  "LISTALC STATUS"
+  TRAPVAR = OUTTRAP("MSGVAR",0)
+  ALLDSN = ''
+  I = 2
+  Do While I <= OUTLNE.0
+    CCCSN = OUTLNE.I
+    IF SUBSTR(CCCSN,1,2) = '  ' Then
+      Do
+        IF SUBSTR(CCCSN,3,8) = 'ISPTLIB ' Then
+          Do
+            J = I - 1
+            ALLDSN = OUTLNE.J
+            I = I + 2
+            Do While i <= OUTLNE.0
+              CCCSN = OUTLNE.I
+              If SUBSTR(CCCSN,1,4) = '    ' Then
+                Do
+                  J = i - 1
+                  CCCSN = OUTLNE.J
+                  ALLDSN = ALLDSN CCCSN
+                  I = I + 2
+                End
+              Else I = I + OUTLNE.0
+            End    /* ALL ENTRIES FOUND */
+          End     /* DDNAME CHECK */
+      End      /* DDNAME TYPE ENTRY */
+    I = I + 1
+  End
+
+  CCMDDSN = ' '
+  Address ISPEXEC
+  Do Until CCMDDSN /= ' '
+    If ALLDSN = '' Then Return
+    Parse Var ALLDSN CURDSN REMDSN
+    ALLDSN = REMDSN
+    QTDDSN = "'"||CURDSN||"'"
+    "LMINIT DATAID(WFID) DATASET("QTDDSN")"
+    "LMOPEN DATAID(&WFID)"
+    "LMMFIND DATAID(&WFID) MEMBER("CCMDMEM")"
+    If RC = 0 Then CCMDDSN = CURDSN
+    "LMCLOSE DATAID(&WFID)"
+    "LMFREE DATAID(&WFID)"
+  End
+
+  Return
+
+
+/*********************************************************************/
+/*            Find Specified Command                                 */
+/*                                                                   */
+/*    FINDCMD must contain command to search for                     */
+/*    CCMDMEM must contain name of command table to be searched      */
+/*    CCMDDSN must contain dsn containing CCMDMEM                    */
+/*                                                                   */
+/*    Upon return, CFONDCMD is set to FINDCMD if command found       */
+/*                 CCMDINV is set to LIBDEF or non-LIBDEF            */
+/*                 Depending upon the command being processed:       */
+/*                   CQWACT or CQWSACT is set to command action      */
+/*                   CQWDESC or CQWSACT is set to command description*/
+/*                                                                   */
+/*********************************************************************/
+FindCmd:  Nop
+  FROMMEM = CCMDMEM
+  FROMDSN = CCMDDSN
+  TOMEM = '$QWICMDS'
+  TODD = 'QWICMDUD'
+  Call Cpyrnm
+  Address ISPEXEC
+  "TBOPEN $QWICMDS LIBRARY(QWICMDUD)"
+  ZCTVERB = FINDCMD
+  "TBSCAN $QWICMDS ARGLIST(ZCTVERB)"
+  If RC = 0 Then
+    Do
+      If CCMDMEM = 'ISPCMDS' Then
+        CTYPTB = 'system'
+      Else
+        CTYPTB = 'site'
+      If CFONDCMD = ' ' Then
+        CFONDCMD = FINDCMD
+      If FINDCMD = 'QW' Then
+        Do
+          CQWACT = ZCTACT
+          CQWDESC = ZCTDESC
+        End
+      Else
+        Do
+          CQWSACT = ZCTACT
+          CQWSDESC = ZCTDESC
+        End
+      If CCMDINV = ' ' Then
+        If WORDPOS('CMD(%QW',ZCTACT) > 0 |,
+           WORDPOS('PARM(CMD(%QW',ZCTACT) > 0 Then
+          CCMDINV = 'LIBDEF'
+        Else
+          CCMDINV = 'non-LIBDEF'
+    End
+  "TBCLOSE $QWICMDS LIBRARY(QWICMDUD)"
+
+  Return
+
+/*********************************************************************/
+/*                   Copy/Rename command table                       */
+/*                                                                   */
+/*     FROMMEM must contain name of command table to be copied       */
+/*     FROMDSN must contain dsn containing FROMMEM                   */
+/*     TOMEM  must contain new member name                           */
+/*     TODD   must contain ddname to copy to                         */
+/*                                                                   */
+/*     Note: Before searching or updating a command table,           */
+/*           this exec makes a copy of the command table             */
+/*           under a different name.                                 */
+/*           This is necessary because ISPF will not let             */
+/*           you TBOPEN a table (like ISPCMDS) that is               */
+/*           already open - even if your copy of the table           */
+/*           is coming from a different data set.                    */
+/*********************************************************************/
+
+Cpyrnm:   Nop
+
+  Address ISPEXEC
+  QTDDSN = "'"FROMDSN"'"
+  "LMINIT DATAID(WFID) DATASET("QTDDSN")"
+  "LMINIT DATAID(WFI2) DDNAME("TODD")"
+  "LMCOPY FROMID(&WFID) FROMMEM("FROMMEM"),
+          TODATAID(&WFI2) TOMEM("TOMEM") REPLACE"
+  "LMFREE DATAID(&WFID)"
+  "LMFREE DATAID(&WFI2)"
+
+  Return
+
+/*********************************************************************/
+/*                                                                   */
+/*                   Delete Commands                                 */
+/*                                                                   */
+/*********************************************************************/
+
+DelCmds: Nop
+
+  Do Forever
+    Address ISPEXEC
+    "TBSCAN $QWICMDS ARGLIST(ZCTVERB)"
+    If RC > 0 Then
+      Return
+    If UCMDIND = 'B' |,
+      (UCMDIND = 'Q' & ZCTVERB = 'QW') |,
+      (UCMDIND = 'S' & ZCTVERB = 'QWS') Then
+        "TBDELETE $QWICMDS"
+    Else
+      Do
+        Address ISPEXEC
+        "DISPLAY PANEL(QWCMPDC)"
+        If RC > 4 Then
+          Do
+            "VGET (ZVERB)"
+            If ZVERB = 'RETURN' Then
+              Do
+                "TBCLOSE $QWICMDS"
+                Call WrapUp
+              End
+            BKUP = 'Y'
+            Return
+          End
+        Else
+          If CMDDLTOP = 'Y' Then
+            "TBDELETE $QWICMDS"
+      End
+  End
+
+/*********************************************************************/
+/*                                                                   */
+/*          Allocate and TBOPEN/TBCLOSE Temporary Data Set           */
+/*                                                                   */
+/*    Allocate and TBOPEN/TBCLOSE a temporary data set so QWICMDUD   */
+/*    can be FREEd and reALLOCATEd in case of rerun or backing up    */
+/*********************************************************************/
+
+TmpAOC:
+  Address TSO
+  MSGVAL = MSG('OFF')
+  "FREE F(QWICMDTP)"
+  MSGVAL = MSG(MSGVAL)
+  "ALLOC FILE(QWICMDTP) NEW DELETE",
+      "DSORG(PO) RECFM(F B) LRECL(80) BLKSIZE(6160)",
+      "UNIT(SYSDA)",
+      "SPACE(4,2) TRACKS DIR(2)"
+  CCMDMEM = 'ISPCMDS'
+  Call FindTble
+  FROMMEM = CCMDMEM
+  FROMDSN = CCMDDSN
+  TOMEM = '$QWICMDS'
+  TODD = 'QWICMDTP'
+  Call Cpyrnm
+  Address ISPEXEC
+  "TBOPEN $QWICMDS LIBRARY(QWICMDTP)"
+  "TBCLOSE $QWICMDS LIBRARY(QWICMDTP)"
+  Return
+
+/*********************************************************************/
+/*                                                                   */
+/*                WrapUp/Termination Processing                      */
+/*                                                                   */
+/*********************************************************************/
+
+WrapUp:
+  Address ISPEXEC
+  "LIBDEF ISPPLIB"
+  "LIBDEF ISPMLIB"
+  Call TmpAOC
+
+  Exit

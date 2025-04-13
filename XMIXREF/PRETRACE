@@ -1,0 +1,617 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(PRETRACE)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(PRETRACE)
+   -----------------------------------------
+
+READY
+    PRETRACE
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.PUBLIC.REXXXREF.REXX(PRETRACE)"      */
+    Generated scan code/comment:   /*      -------------------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                          */
+    Generated scan code/comment:   /*     20231217 23:08:16                            */
+    Generated scan code/comment:   /*      -------------------------------------       */
+     1 *-* /* rexx = pretrace */
+     2 *-* /* assumption:  invoked from jcl */
+     3 *-* /*                                              */
+     4 *-* /*   ddname:  IN has a rexx member              */
+     5 *-* /*   ddname:  OUT      has a (new) rexx member  */
+     6 *-* /*                                              */
+     7 *-* /*   after opening IN  for input                */
+     8 *-* /*   after opening OUT for output               */
+     9 *-* /*   ... write /* REXX */ to output file        */
+    10 *-* /*   ... write trace 's'  to output file        */
+    11 *-* /*   copy contents of IN to OUT                 */
+    12 *-* /*                                              */
+    13 *-* /* Input Arguments give us details on datasets  */
+    14 *-* /*    involved.                                 */
+    15 *-* /*                                              */
+    16 *-* /* 1st (only) arg is a ddname where we can read dataset  */
+    17 *-* /*   information.                                        */
+    18 *-* /*                                                       */
+    19 *-* /* we will open and read from that verify dataset:       */
+    20 *-* /*   1) ignoring comments                                */
+    21 *-* /*   2) expect 4 lines (any order) with                  */
+    22 *-* /*        REXXLIB  pds-name                              */
+    23 *-* /*        REXXMEMB member-name                           */
+    24 *-* /*        SCANLIB  pds-name                              */
+    25 *-* /*        XREFLIB  pds-name                              */
+    26 *-* /*   3) if missing 1st arg, open/read fails, or          */
+    27 *-* /*        missing data, then exec will fail.             */
+    28 *-* /*   4) if duplicate pds-names are specified then        */
+    29 *-* /*        the exec will fail.  The pds names should be   */
+    30 *-* /*        unique.                                        */
+    31 *-* /*                                                       */
+    32 *-* /* After verification, the exec will commence doing the  */
+    33 *-* /* work it was meant to do.                              */
+    34 *-* /*                                                       */
+    35 *-* parse upper arg verifyDDname .
+    37 *-* /* verification code.  Should this exec do anything ??? */
+    38 *-* /* ---------------------------------------------------- */
+    40 *-* if verifyDDname = '' | length(verifyDDname) > 8
+    41 *-*  then
+       *-*  do
+    42 *-*   say ' '
+    43 *-*   say 'PRETRACE001E:  exec called w/missing or invalid arg'
+    44 *-*   say '   expected a ddname; found "'verifyDDname'"'
+    45 *-*   exit 12
+    46 *-*  end
+    48 *-* say 'processing info from ddname="'verifyDDname'"'
+    49 *-* 'EXECIO * DISKR' verifyDDname '(OPEN STEM VERIFY. FINIS'
+    50 *-* if rc <> 0
+    51 *-*  then
+       *-*  do
+    52 *-*   say ' '
+    53 *-*   say 'PRETRACE002E:  verification problem'
+    54 *-*   say 'error opening and/or reading from ddname="'verifyDDname'"'
+    55 *-*   say 'execio rc='rc
+    56 *-*   say 'aborting exec with rc=12'
+    57 *-*   exit 12
+    58 *-*  end
+    60 *-*  /* valid keywords allowed in VERIFY have a non-null value */
+    61 *-* keyword. = ''
+    62 *-* keyword.REXXLIB = 'INPDS'
+    63 *-* keyword.REXXMEMB= 'INMEMBER'
+    64 *-* keyword.SCANLIB = 'OUTTRACE'
+    65 *-* keyword.XREFLIB = 'OUTPDS'
+    67 *-* /* we will set lineValues based on INPDS, INMEMMBER, OUTTRACE and OUTPDS */
+    68 *-* lineValue. = ''
+    70 *-* PendingRc = 0
+    71 *-* maxLines = min(verify.0,30)
+    72 *-* say 'Read' verify.0 'lines from ddname='verifyDDname'; will process' maxlines 'lines'
+    73 *-* say '-----------------------------------------------================================'
+    74 *-* say 'Line##= "..."'
+    75 *-* say ' '
+    76 *-* do x = 1 by 1 for maxLines
+    77 *-*  say 'Line'right(x,2)'= "'strip(verify.x,'T')'"'
+    78 *-*  /* ignore comments/blank lines */
+    79 *-*  if verify.x = ''
+       *-*   then
+       *-*   iterate
+    80 *-*  if left(word(verify.x,1),1) = '*'
+       *-*   then
+       *-*   iterate
+    81 *-*  if left(word(verify.x,1),2) = '/*'
+       *-*   then
+       *-*   iterate
+    83 *-*  parse upper var verify.x keyword lineValue .
+    84 *-*  if keyword.keyword = ''
+    85 *-*   then
+       *-*   do
+    86 *-*    say ' '
+    87 *-*    say ' PRETRACE003E:  verification error'
+    88 *-*    say '   Each non-comment line should begin with one of the following keywords:'
+    89 *-*    say '      REXXLIB or REXXMEMB or SCANLIB or XREFLIB'
+    90 *-*    say '   Followed by the PDS or member name'
+    91 *-*    say '  '
+    92 *-*    say '   But the following line began with an invalid keyword:'
+    93 *-*    say '   "'strip(verify.x,'T')'"'
+    94 *-*    say ' Pending rc=12'
+    95 *-*    PendingRc = 12
+    96 *-*    iterate
+    97 *-*   end
+    99 *-*   /* keyword is valid.  set lineType based on the keyword */
+   100 *-*  lineType = keyword.keyword
+   102 *-*  /* now look at lineType / lineValue */
+   103 *-*  if linevalue = '' /* ignore now, complain later */
+   104 *-*   then
+       *-*   iterate
+   106 *-*  if lineValue.linetype <> '' & lineValue.lineType <> lineValue
+   107 *-*   then
+       *-*   do /* if same linetype w/different values, an obvious error */
+   108 *-*    say ' '
+   109 *-*    say ' PRETRACE005E:  verification error'
+   110 *-*    say '   There are multiple lines starting with "'keyword'" previously:'
+   111 *-*    say '   There should only be one line for each type'
+   112 *-*    say ' Pending rc=12'
+   113 *-*    PendingRc = 12
+   114 *-*    iterate
+   115 *-*   end
+   116 *-*  lineValue.lineType = lineValue /* remember type + value */
+   117 *-* end
+   119 *-* if lineValue.inpds    = '' , | lineValue.outtrace = '' , | lineValue.outpds   = '' , | lineValue.inmember = ''
+   123 *-*  then
+       *-*  do
+   124 *-*   say ' '
+   125 *-*   say 'PRETRACE006E:  verification error'
+   126 *-*   say '  one or more lines from DDNAME='verifyDDname 'is missing values'
+   127 *-*   say "After reading verification data here's what we know"
+   128 *-*   say '   inPDS    = "'lineValue.inPDS'"'
+   129 *-*   say '   inMember = "'lineValue.inMember'"'
+   130 *-*   say '   outTrace = "'lineValue.outTrace'"'
+   131 *-*   say '   outPDS   = "'lineValue.outPDS'"'
+   132 *-*   say 'Aborting w/rc=12'
+   133 *-*   pendingRc = 12
+   134 *-*  end
+   136 *-*  /* pds names should be valid (used in jcl) so just do logical verifies here */
+   137 *-* say ' '
+   138 *-* say "Input PDS/PDSE dsn w/original rexx code is in:"
+   139 *-* say "         '"LineValue.inpds"("lineValue.inmember")'"
+   140 *-* say ' '
+   141 *-* say "Output PDS/PDSE dsn modified rexx trace's code will be in:"
+   142 *-* say "         '"LineValue.outtrace"("lineValue.inmember")'"
+   143 *-* say ' '
+   144 *-* say "Output PDS/PDSE dsn containing xref will be in:"
+   145 *-* say "         '"LineValue.outpds"("lineValue.inmember")'"
+   146 *-* say ' '
+   148 *-* /* maximize possible error messages, by delaying exit 12 */
+   149 *-* /* ----------------------------------------------------- */
+   150 *-* if lineValue.inpds  = lineValue.outTrace , | lineValue.inpds  = lineValue.outpds   , | lineValue.outpds = lineValue.outT
+race
+   153 *-*  then
+       *-*  do
+   154 *-*   say 'PRETRACE007E:  severe problem'
+   155 *-*   say 'There are one (or more) pds''s with the same name'
+   156 *-*   say 'To prevent problems, we will abort process with rc=12'
+   157 *-*   pendingRc = 12
+   158 *-*  end
+   160 *-* if pendingRc > 0
+   161 *-*  then
+       *-*  exit PendingRc /* severe error already, abort now */
+   163 *-*  /* ---------------------- */
+   164 *-*  /* end verification code. */
+   165 *-*  /* ---------------------- */
+   167 *-*  /* ------------------------------------------------ */
+   168 *-*  /* no initial problems detected.  let's continue on */
+   169 *-*  /* ------------------------------------------------ */
+   171 *-* 'EXECIO 100 DISKR IN (OPEN STEM IN.'
+   172 *-* INRc = rc
+   173 *-* if INRc = 0 | INRc = 2
+   174 *-*  then
+       *-*  nop
+   175 *-* else
+       *-*  do
+   176 *-*   say 'PRETRACE008E:  severe error'
+   177 *-*   say 'error opening file IN rc='INRc
+   178 *-*   say 'exit with rc=8'
+   179 *-*   'EXECIO 0 DISKR IN (FINIS'
+   180 *-*   exit 8
+   181 *-*  end
+   183 *-* rc= listdsi('IN FILE')
+   184 *-* if rc <> 0
+   185 *-*  then
+       *-*  do
+   186 *-*   say 'PRETRACE009E:  severe error'
+   187 *-*   say "LISTDSI('IN FILE') got rc="rc"; exiting with rc=12"
+   188 *-*   exit 12
+   189 *-*  end
+   190 *-* recfm = left(sysrecfm,1) /* F, V or U */
+   192 *-* dsname = lineValue.inpds'('lineValue.inmember')'
+   193 *-* out.1 = '/* rexx */'
+   194 *-* out.2 = "  trace 's'"
+   195 *-* out.3 = ' '
+   196 *-* out.4 = '/*  rexx member for scan/xref was: */'
+   197 *-* out.5 = '/*     "'dsname'"      */'
+   198 *-* out.6 = '/*      'left('',length(dsname),"-")'       */'
+   200 *-* out.7 = '/*  date/time of XREF was:'
+   201 *-* out.7 = left(out.7,max(length(out.7),length(out.5)-2))'*/'
+   203 *-* out.8 = '/*     'date('S') time()
+   204 *-* out.8 = left(out.8,max(length(out.8),length(out.5)-2))'*/'
+   206 *-* out.9 = out.6
+   207 *-* out.10 = ' '
+   208 *-* 'EXECIO 10 DISKW OUT (OPEN STEM OUT.'
+   209 *-* OUTRc = rc
+   210 *-* if OUTRc = 0
+   211 *-*  then
+       *-*  nop
+   212 *-* else
+       *-*  do
+   213 *-*   say 'PRETRACE010E:  severe error'
+   214 *-*   say 'error opening/writing to file OUT rc='OUTRc
+   215 *-*   say 'exit with rc=8'
+   216 *-*   'EXECIO 0 DISKR IN (FINIS'
+   217 *-*   'EXECIO 0 DISKW OUT(FINIS'
+   218 *-*   exit 8
+   219 *-*  end
+   221 *-* /* speed test for V vs. F */
+   222 *-* fixed.  = 0 /* default is false */
+   223 *-* fixed.F = 1 /* true  */
+   224 *-* fixed.FB= 1 /* true  */
+   225 *-* if in.0 > 0
+   226 *-*  then
+       *-*  if fixed.recfm = 0 & length(strip(left(in.1,8))) = 8 & datatype(left(in.1,8),'W')=1
+   227 *-*   then
+       *-*   sequence = 1 /* variable rec and sequence # on left ==> need to remove sequence numbers */
+   228 *-*  else
+       *-*   if fixed.recfm = 1 & length(strip(right(in.1,8)))= 8 & datatype(right(in.1,8),'W')=1
+   229 *-*    then
+       *-*    sequence = 1 /* fixed rec and sequence # on right ==> need to remove sequence numbers */
+   230 *-*   else
+       *-*    sequence = 0 /* no sequence numbers, fast copy  */
+   232 *-*  /* we have sequence numbers to remove, have to look at every line */
+   233 *-*  /* -------------------------------------------------------------- */
+   234 *-* if sequence = 1 /* if sequence numbers, set some variables/stems */
+   235 *-*  then
+       *-*  do         /* ... for copy loop below.                      */
+   236 *-*   if fixed.recfm         /* if fixed */
+   237 *-*    then
+       *-*    newlrecl = syslrecl - 8 /* lose last 8 bytes */
+   238 *-*    /* variable, we lose first 8 bytes */
+   239 *-*  end
+   241 *-*  /* copy loop to copy the rexx exec to a temporary dataset */
+   242 *-*  /* ------------------------------------------------------ */
+   243 *-* do forever
+   244 *-*  if in.0 = 0
+   245 *-*   then
+       *-*   leave
+   247 *-*  if sequence /* if we have to strip off sequence numbers? */
+   248 *-*   then
+       *-*   do     /* then update the input block               */
+   249 *-*    /* yes, modify every line in block */
+   250 *-*    do in = 1 by 1 for in.0
+   251 *-*     if fixed.recfm
+   252 *-*      then
+       *-*      in.in = left(in.in,newlrecl) /* fixed, lose  last 8 bytes */
+   253 *-*     else
+       *-*      in.in = substr(in.in,9)   /* variable, lose first 8 bytes */
+   254 *-*    end
+   255 *-*    /* now we can write out the block. */
+   256 *-*   end
+   258 *-*   /* write entire input buffer to OUT file */
+   259 *-*  'EXECIO' in.0 'DISKW OUT (STEM IN.'
+   260 *-*  OUTRc = rc
+   261 *-*  if OUTRc = 0
+   262 *-*   then
+       *-*   nop
+   263 *-*  else
+       *-*   do
+   264 *-*    say 'PRETRACE011E:  severe error'
+   265 *-*    say 'error writing file OUT rc='OUTRc
+   266 *-*    say 'exit with rc=8'
+   267 *-*    'EXECIO 0 DISKR IN (FINIS'
+   268 *-*    'EXECIO 0 DISKW OUT(FINIS'
+   269 *-*    exit 8
+   270 *-*   end
+   272 *-*  /* can we get another input buffer? */
+   273 *-*  if inRc = 2 /* if we already processed the last buffer */
+   274 *-*   then
+       *-*   leave  /* then leave, can't read another block */
+   276 *-*   /* get next input buffer */
+   277 *-*  'EXECIO 100 DISKR IN (STEM IN.'
+   278 *-*  inRc = rc
+   279 *-*  if inRc = 0 | inRc = 2
+   280 *-*   then
+       *-*   iterate /* go process the next input buffer */
+   282 *-*   /* error handling */
+   283 *-*   /* -------------- */
+   284 *-*  say 'PRETRACE012E:  severe error'
+   285 *-*  say 'error reading file IN; rc='inRc
+   286 *-*  say 'exit with rc=8'
+   287 *-*  'EXECIO 0 DISKR IN (FINIS'
+   288 *-*  'EXECIO 0 DISKW OUT(FINIS'
+   289 *-*  exit 8
+   290 *-* end
+   292 *-* /* close input file */
+   293 *-* 'EXECIO 0 DISKR IN (FINIS'
+   294 *-* inRc = rc
+   295 *-* if inRc <> 0
+   296 *-*  then
+       *-*  do
+   297 *-*   /* error handling */
+   298 *-*   /* -------------- */
+   299 *-*   say 'PRETRACE013E:  severe error'
+   300 *-*   say 'error closing file IN; rc='inRc
+   301 *-*   say 'exit with rc=8'
+   302 *-*   'EXECIO 0 DISKW OUT(FINIS'
+   303 *-*   if OUTRc = 0
+   304 *-*    then
+       *-*    nop
+   305 *-*   else
+       *-*    do
+   306 *-*     say 'PRETRACE014E:  severe error'
+   307 *-*     say 'error closing file OUT rc='OUTRc
+   308 *-*     say 'exit with rc=8'
+   309 *-*    end
+   310 *-*   exit 8
+   311 *-*  end
+   313 *-*  /* close output file */
+   314 *-* 'EXECIO 0 DISKW OUT (FINIS'
+   315 *-* if OUTRc = 0
+   316 *-*  then
+       *-*  nop
+   317 *-* else
+       *-*  do
+   318 *-*   /* error handling */
+   319 *-*   /* -------------- */
+   320 *-*   say 'error closing file OUT rc='OUTRc
+   321 *-*   say 'exit with rc=8'
+   322 *-*   exit 8
+   323 *-*  end
+   325 *-* /* normal end */
+   326 *-* exit 0
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Built-In+/External use  DATATYPE          Reference: F(226) F(228)
+
+Built-In+/External use  DATE              Reference: F(203)
+
+Variable (set w/rexx)   dsname            Assigned : 192
+Variable (used in/rexx) dsname            Reference: 197 198
+
+Variable (NEVER SET)    F                 Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  F                 Assigned : 223
+
+Variable (NEVER SET)    FB                Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  FB                Assigned : 224
+
+Variable (set w/rexx)   in                Assigned : 250
+Variable (in Stem Set)  in                Assigned : 252 253
+Variable (in Stem Ref)  in                Reference: 252 253
+
+Variable (NEVER SET)    INMEMBER          Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Ref)  INMEMBER          Reference: 119 129 139 142 145 192
+
+Variable (NEVER SET)    INPDS             Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Ref)  INPDS             Reference: 119 128 139 150 192
+
+Variable (set w/rexx)   inrc              Assigned : 172 278 294
+Variable (used in/rexx) inrc              Reference: 173 177 273 279 285 295 300
+
+Variable (set w/rexx)   keyword           Assigned : 83
+Variable (used in/rexx) keyword           Reference: 110
+Variable (in Stem Ref)  keyword           Reference: 84 100
+
+Built-In+/External use  LEFT              Reference: F(80) F(81) F(190) F(198) F(201) F(204) F(226) F(252)
+
+Built-In+/External use  LENGTH            Reference: F(40) F(198) F(201) F(204) F(226) F(228)
+
+Variable (set w/rexx)   linetype          Assigned : 100
+Variable (in Stem Set)  linetype          Assigned : 116
+Variable (in Stem Ref)  linetype          Reference: 106
+
+Variable (set w/rexx)   linevalue         Assigned : 83
+Variable (used in/rexx) linevalue         Reference: 103 106 116
+
+Built-In+/External use  LISTDSI           Reference: F(183)
+
+Built-In+/External use  MAX               Reference: F(201) F(204)
+
+Variable (set w/rexx)   maxlines          Assigned : 71
+Variable (used in/rexx) maxlines          Reference: 72 76
+
+Built-In+/External use  MIN               Reference: F(71)
+
+Variable (set w/rexx)   newlrecl          Assigned : 237
+Variable (used in/rexx) newlrecl          Reference: 252
+
+Variable (NEVER SET)    OUTPDS            Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Ref)  OUTPDS            Reference: 119 131 145 150
+
+Variable (set w/rexx)   outrc             Assigned : 209 260
+Variable (used in/rexx) outrc             Reference: 210 214 261 265 303 307 315 320
+
+Variable (NEVER SET)    OUTTRACE          Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Ref)  OUTTRACE          Reference: 119 130 142 150
+
+Variable (set w/rexx)   pendingrc         Assigned : 70 95 113 133 157
+Variable (used in/rexx) pendingrc         Reference: 160 161
+
+SpecialVar(set no-XREF) rc                 *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(set w/ code) rc                Assigned : 183
+SpecialVar(used w/rexx) rc                Reference: 50 55 172 184 187 209 260 278 294
+
+Variable (set w/rexx)   recfm             Assigned : 190
+Variable (in Stem Ref)  recfm             Reference: 226 228 236 251
+
+Variable (NEVER SET)    REXXLIB           Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  REXXLIB           Assigned : 62
+
+Variable (NEVER SET)    REXXMEMB          Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  REXXMEMB          Assigned : 63
+
+Built-In+/External use  RIGHT             Reference: F(77) F(228)
+
+Variable (NEVER SET)    SCANLIB           Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  SCANLIB           Assigned : 64
+
+Variable (set w/rexx)   sequence          Assigned : 227 229 230
+Variable (used in/rexx) sequence          Reference: 234 247
+
+Built-In+/External use  STRIP             Reference: F(77) F(93) F(226) F(228)
+
+Built-In+/External use  SUBSTR            Reference: F(253)
+
+Variable (NEVER SET)    SYSLRECL          Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSLRECL          Reference: 237
+
+Variable (NEVER SET)    SYSRECFM          Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) SYSRECFM          Reference: 190
+
+Built-In+/External use  TIME              Reference: F(203)
+
+Variable (set w/rexx)   verifyddname      Assigned : 35
+Variable (used in/rexx) verifyddname      Reference: 40 44 48 49 54 72 126
+
+Built-In+/External use  WORD              Reference: F(80) F(81)
+
+Variable (set w/rexx)   x                 Assigned : 76
+Variable (used in/rexx) x                 Reference: 77
+Variable (in Stem Ref)  x                 Reference: 77 79 80 81 83 93
+
+Variable (NEVER SET)    XREFLIB           Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  XREFLIB           Assigned : 65
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 FIXED.                  Assigned : 222
+Stem-1 FIXED.F                 Assigned : 223
+Stem-1 FIXED.FB                Assigned : 224
+Stem-1 FIXED.recfm             Reference: 226 228 236 251
+
+Stem-1 IN.#                    Reference: 226 228
+Stem-1 IN.0                    Reference: 225 244 250 259
+Stem-1 IN.in                   Assigned : 252 253
+Stem-1 IN.in                   Reference: 252 253
+
+Stem-1 KEYWORD.                Assigned : 61
+Stem-1 KEYWORD.keyword         Reference: 84 100
+Stem-1 KEYWORD.REXXLIB         Assigned : 62
+Stem-1 KEYWORD.REXXMEMB        Assigned : 63
+Stem-1 KEYWORD.SCANLIB         Assigned : 64
+Stem-1 KEYWORD.XREFLIB         Assigned : 65
+
+Stem-1 LINEVALUE.              Assigned : 68
+Stem-1 LINEVALUE.INMEMBER      Reference: 119 129 139 142 145 192
+Stem-1 LINEVALUE.INPDS         Reference: 119 128 139 150 192
+Stem-1 LINEVALUE.linetype      Assigned : 116
+Stem-1 LINEVALUE.linetype      Reference: 106
+Stem-1 LINEVALUE.OUTPDS        Reference: 119 131 145 150
+Stem-1 LINEVALUE.OUTTRACE      Reference: 119 130 142 150
+
+Stem-1 OUT.#                   Assigned : 193 194 195 196 197 198 200 201 203 204 206 207
+Stem-1 OUT.#                   Reference: 201 204 206
+
+Stem-1 VERIFY.0                Reference: 71 72
+Stem-1 VERIFY.x                Reference: 77 79 80 81 83 93
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

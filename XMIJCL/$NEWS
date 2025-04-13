@@ -1,0 +1,147 @@
+-----------------------------------------------------------------------------
+   This is, hopefully, a very useful rexx cross reference tool.  But there
+are a number of things you should be aware of.
+
+
+| | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
+V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V
+-----------------------------------------------------------------------------
+
+(1)    The REXX "VALUE" function is very nice and very flexible.  And as such
+there is no attempt by this tool of trying to identify what variables and/or
+stems may be created or altered by the VALUE function.
+
+     a)  That said, variables used in the value function itself will be in
+       the cross reference.
+
+     b)  For example:  value('XYZ'k) at line 420 will generate 2 lines in
+       the xreference:
+
+          1)  a xref to where the "VALUE" function was used
+          2)  a xref to where the variable "k" was used
+
+Label (referenced):     VALUE                          Reference: F420
+Variable (used)         K                              Reference: 420
+
+
+| | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
+V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V
+-----------------------------------------------------------------------------
+
+(2)    Missing from the cross reference.
+
+       Variables and/or stems specified within quotes will be ignored; as
+they are simply part of a literal string and WILL NOT be identified as
+variables.
+
+       Thus, EXECIO statements may not have any variable references as they
+are typically written in quotes.
+
+
+| | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
+V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V
+-----------------------------------------------------------------------------
+
+(3)    This is just weirdness, and illustrated for completeness.
+
+       When using rexx "keywords" as variables, code may or may not identify
+keywords vs. variables correctly (all the time).  This code sometimes does
+a good job with that.
+       It will identify, for example, that the keywords "IF", "THEN" and
+"ELSE" are actually used as variables in the following rexx assignment
+statement.  So the following assignment statement is legal.  And will set
+the variable E to a zero (for example) when variables (a, then, if, b,
+c, else, d and f) were never assigned a value:
+
+    Statement looks like this:
+    e =5  if a = 1 then if b =2 then c =3 else d =4 f=6
+
+    With variables not set, it is equivelent to this statement:
+    e ="5 IF A" = "1 THEN IF B" = "2 THEN C" = "3 ELSE D" = "4 F" = "6"
+
+    Which is the same as saying:
+    e = 0
+
+In this case, you can find this exact statement in line 59
+in dataset:
+     'hlq.SAMPLE.REXXXREF.SCAN(NONSENSE)
+
+And then find the scan statement in logical line 59 in the
+dataset:
+     'hlq.SAMPLE.REXXXREF.XREF(NONSENSE)
+
+and find the variables in the cross reference to statement 59
+
+Constant(no stem use): ELSE         Reference: 59
+Constant(no stem use): IF           Reference: 59
+Constant(no stem use): THEN         Reference: 59
+Variable (set)          A            Assigned : 32 36 45 67
+Variable (used)         A            Reference: 29 30 31 49 59 62 80
+Variable (set)          B            Assigned : 45 49 68
+Variable (used)         B            Reference: 36 59 63 80
+Variable (set)          C            Assigned : 45 64
+Variable (used)         C            Reference: 59
+Variable (set)          D            Assigned : 45 65
+Variable (used)         D            Reference: 59
+Variable (set)          E            Assigned : 49 59
+Variable (used)         E            Reference: 69
+Variable (set)          F            Assigned : 49
+Variable (used)         F            Reference: 59
+
+
+| | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
+V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V
+-----------------------------------------------------------------------------
+
+(4)    Stem variables in cross reference:
+
+       An effort is made to give you some good information about how stem
+variables were created and/or referenced.  However, if a variable used as
+part of the stem value, contains a "period" then that period effectively
+becomes part of the stem value.  I.e. the period used in a stem value can
+be external (a period between two variables) or internal within a variable
+but to rexx it is the same value either way.
+
+       For example consider the following rexx code:
+             firstName = 'Richard'
+             lastName  = 'Humphris'
+             fullName  = 'Richard.Humphris'
+
+       then either of these stem references refer to the SAME rexx stem:
+             name.firstName.LastName = 'ok'
+         or  name.fullName           = 'ok'
+       This is because everthing to the right of the first period is
+       evaluated FIRST.  And then that literal (case sensitive) is the
+       value used to set and/or reference the approriate "NAME." stem variable.
+
+This may or may not be news to you.  I was surprised by this behavior years ago.
+
+| | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
+V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V
+-----------------------------------------------------------------------------
+
+       The cross reference has 3 sections;
+
+xref 1 of 1:
+------------
+   Any variables (or labels) that are referenced and/or defined.  But not set.
+
+   I.e. variables used as themselves.
+
+   How, the variable and/or label (can be both a label and a variable) is
+   reported depends on how it was used.
+
+   For labels:  it will be defined (once) for a line#.
+                References will be of a character||line# depending on
+              How the label was used:
+                    signal   label reference is:  S#
+                    call     label reference is:  C#
+                    function label reference is:  F#
+   example:
+Label (defined):        RATS         Defined  : 83
+Label (referenced):     RATS         Reference: F69
+
+   For variables (never set directly (execio may be indirect)) they
+   are reported as "constants" (equal to themselves).  But they may
+   be used by themselves or as part of a stem variable (or both)
+   like this:

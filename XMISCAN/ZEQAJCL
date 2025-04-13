@@ -1,0 +1,1332 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH48.REXX.EXEC(ZEQAJCL)"      */
+/*      -------------------------       */
+/*  date/time of XREF was:              */
+/*     20231217 23:06:56                */
+/*      -------------------------       */
+
+/* This REXX EQAJCL will invoke the IBM Debug Tool JCL Wizard        */
+/*********************************************************************/
+/*                                                                   */
+/* Licensed Materials - Property of IBM                              */
+/*                                                                   */
+/* 5724-T07: IBM z/OS Debugger                                       */
+/* Copyright IBM Corp. 2015, 2016 All Rights Reserved                */
+/*                                                                   */
+/* US Government Users Restricted Rights - Use, duplication          */
+/* or disclosure restricted by GSA ADP Schedule Contract             */
+/* with IBM Corp.                                                    */
+/*                                                                   */
+/*********************************************************************/
+/* >>> Installation by redirecting the code to other library  <<<    */
+/*********************************************************************/
+/*                                                                   */
+/* This exec member name is EQAJCL and is expected to be found       */
+/* in the TSO logon procedure's SYSEXEC or SYSPROC concatenation.    */
+/* If this is not true, you will need to create a REXX exec in       */
+/* a data set that is in your TSO logon procedure's SYSEXEC or       */
+/* SYSPROC and invoke EQAJCL from there. To do that,                 */
+/* select a command name that you do not currently use (for example, */
+/* DEBUG), and install a REXX exec by that name into an existing     */
+/* data set in your TSO Logon procedure's SYSEXEC or SYSPROC DDs.    */
+/* The REXX exec should look like this (with hlq being changed to    */
+/* the high level qualifier that you use for the Debug Tool          */
+/* libraries):                                                       */
+/*                                                                   */
+/* /* This REXX exec will invoke the Debug Tool EQAJCL ISPF macro */ */
+/* "EX 'hlq.EXEC(EQAJCL)'"                                           */
+/* EXIT                                                              */
+/*                                                                   */
+/*********************************************************************/
+/* >>> Installation Customization <<<                                */
+/*                                                                   */
+/* If you are installing this tool for your site then please change  */
+/* the following variables to indicate the dataset qualifiers and    */
+/* names used for the Debug Tool product.                            */
+/*                                                                   */
+/*                                                                   */
+/* Inst_DT_ShpHLQ  -High-level qualifier for Debug Tool data sets    */
+/* Inst_DT_NATLANG -National language used. Valid values are         */
+/*                   ENU - mixed case English                        */
+/*                   UEN - upper case English                        */
+/*                   JPN - Japanese                                  */
+/*                   KOR - Korean                                    */
+/*   Note: If you use code page 930 (Japanese Katakana-Kanji),       */
+/*         you need to choose UEN language code.                     */
+/*                                                                   */
+/*********************************************************************/
+/* ========== Start of customization section ========================*/
+/* High-Level Qualifier for Debug Tool datasets                      */
+
+/* ===>> Note1 Note1 Note1 Note1 Note1 Note1 Note1 Note1 Note1  <=== */
+/* High-Level Qualifier for Debug Tool datasets                      */
+                                                             /*12@L1D*/
+  Inst_DT_SHPHLQ   = 'EQAW';                                   /*@L1A*/
+  Inst_DT_NATLANG  = 'ENU';                                    /*@L1A*/
+/*                                                                   */
+/*                                                                   */
+/* ===>> End of Note1 - End of Note1 - End of Note1 - End Note1 <=== */
+
+/* ===>> Note2 Note2 Note2 Note2 Note2 Note2 Note2 Note2 Note2  <=== */
+/* The variable below should be modified based on the EQAOPTS data   */
+/* If code coverage is not defined in EQAOPTS, set                   */
+/*  CODE_COVERAGE_SETUP = 'YES'                                      */
+/* This will generate the statements below:                          */
+/*  EQAXOPT  CCOUTPUTDSN,'&&USERID.DBGTOOL.CCOUTPUT'                 */
+/*  EQAXOPT  CCOUTPUTDSNALLOC,'MGMTCLAS(STANDARD)                    */
+/*                STORCLAS(DEFAULT) LRECL(255) BLKSIZE(0) RECFM(V,B) */
+/*                DSORG(PS) SPACE(2,2) CYL'                          */
+/*  EQAXOPT  CCPROGSELECTDSN,'&&USERID.DBGTOOL.CCPRGSEL'             */
+/*  EQAXOPT END                                                      */
+  CODE_COVERAGE_SETUP = 'YES'
+/* ===>> End of Note2 - End of Note2 - End of Note2 - End Note2 <=== */
+/*********************************************************************/
+/* END OF INSTALLATION CUSTOMIZATION                                 */
+/*                                                                   */
+/* Do not make any more changes after this point.                    */
+/*********************************************************************/
+/*********************************************************************/
+/* $Mod(EQAJCL  ) Comp(DTWZ)     Prod(EQA): JCL Wizard               */
+/*                                                                   */
+/* Flag Reason  Release  Date       Origin    Description            */
+/* ---- ------- -------- ---------- ------    ---------------------- */
+/* $00= f10552  v13r1    2015/02/23 Rice    : JCL Wizard             */
+/* $01= f10552  v13r1    2015/03/18 Rice    : Improve error msg      */
+/* $02= f10552  v13r1    2015/06/15 Rice    : Fix bug with commented */
+/*                                          : PGM=EQANMDBG line (DLN)*/
+/* $L1= f10564  v13r1    2015/07/09 Lin     : NLS support            */
+/* $03= f10552a v13r1    2015/07/31 Young   : Terminology and cleanup*/
+/* $04= f10552b v13r1    2015/09/11 Rice    : extraneous line        */
+/*                                            SET AUTO ON BOTH       */
+/*                                            when Delay Debug       */
+/* $05= f10552c v13r1    2015/09/14 Young   : Source -> Debug        */
+/* $06= f10552d v13r1    2015/09/25 Rice    : More DEBUG -> EQAJCL   */
+/* $07= f10552e v13r1    2015/09/28 Rice    : Non-LE cmt //CEEOPTS   */
+/* $08= r17822  v14r0    2016/10/05 Rice    : DBMDT support          */
+/* $09= r80720  v14r1    2018/10/10 Rice    : Fixed DBMDT for Assem  */
+/* $L2= r82173  v14r0    2019/03/12 Lin     : CONTROL SAVE/RESTORE   */
+/*********************************************************************/
+
+
+  Address ISPEXEC
+
+  /* x = trace("?r") */
+
+  if Inst_DT_NATLANG /= 'ENU' &,                               /*@L1A*/
+     Inst_DT_NATLANG /= 'UEN' &,                               /*@L1A*/
+     Inst_DT_NATLANG /= 'JPN' &,                               /*@L1A*/
+     Inst_DT_NATLANG /= 'KOR' then do                          /*@L1A*/
+    zedsmsg = 'INVALID NATLANG'                                /*@L1A*/
+    zedlmsg = 'THE DEBUG TOOL JCL WIZARD WAS NOT CUSTOMIZED',  /*@L1A*/
+             'WITH VALID NATIONAL LANGUAGE CODE',              /*@L1A*/
+             '(ENU,JPN,KOR,OR UEN).'                           /*@L1A*/
+     'SETMSG MSG(ISRZ001)'
+     EXIT(1)                                                   /*@L1A*/
+  end                                                          /*@L1A*/
+
+  DT_SEQAEXEC = Inst_DT_ShpHLQ'.SEQAEXEC';                     /*@L1A*/
+  if Inst_DT_NATLANG = 'UEN' then do
+    DT_ISPPLIB  = Inst_DT_ShpHLQ'.SEQAP'||'ENP';               /*@L1A*/
+  end
+  else do
+    DT_ISPPLIB  = Inst_DT_ShpHLQ'.SEQAP'||Inst_DT_NATLANG;     /*@L1A*/
+  end
+
+  call Initialize
+  call Process_input_parm
+  if abv_parm <> 'R' then do
+     Call Process_popup_Panels
+  end
+  Call Remove_old_lines           /* remove old lines unconditionally */
+  if abv_parm = 'R' then Call Exit_routine /* Exit if Remove requested*/
+  call Verify_no_CEEOPTS_EQANMDBG /* Verify no existing Debug DDs */
+  rc = Check_Zdest()              /* Check for A/B line command */
+  if zdest = 0 then do            /* No A/B found  */
+     call Table_Program_Name      /* Get all EXEC PGM=xxxx pgm names */
+     call Set_Label_For_Insert_Lines   /* Set labels for insert      */
+  end
+  Call Insert_Debug_Lines         /* Insert the Debug statements */
+  Call Exit_routine               /* put cursor on home line and exit */
+
+Initialize:
+
+  "ISPEXEC LIBDEF ISPPLIB DATASET ID ('"DT_ISPPLIB"') STACK"    /*@L1C*/
+  eqauser =  sysvar(sysuid)
+  DD_Statements = '//CEEOPTS //EQADEBUG //EQACMD //EQANMDBG //INSPLOG'
+  "VPUT (EQAUSER) PROFILE"
+  'ISREDIT MACRO (PARM1) NOPROCESS'       /* NOPROCESS needed for A/B */
+  "ISREDIT (FIRSTL) = LINENUM .ZFIRST"    /* set variable FIRSTL   */
+  if firstl = 0 then do
+     zedsmsg = 'NO LINES'                                      /*@L1C*/
+     zedlmsg = 'MEMBER IS EMPTY. NO PROCESSING PERMITTED.'     /*@L1C*/
+     'SETMSG MSG(ISRZ001)'
+     Call Exit_Routine
+  end
+  "ISREDIT CURSOR = 1 1"
+  "ISREDIT (LASTL) = LINENUM .ZLAST"      /* Set variable LASTL */
+  "ISREDIT SCAN OFF"
+  /* Variables and table for Program selection panel      */
+  panelist = 'lcmd Seq Program Stepname linenum'
+  'tbcreate paneltab names(&panelist) nowrite replace'
+
+  /* Variables and table for EQADEBUG library panel      */
+  EqaDlist = 'lcmd2 EQAlibr'
+  'tbcreate EqaDltab names(&EqaDlist) nowrite replace'
+
+  /* Variables and table for EQADEBUG library panel      */
+  EqaMlist = 'lcmd3 EQAmsg2 eqambr'
+  'tbcreate EqaMltab names(&EqaMlist) nowrite replace'
+
+  'ISREDIT (CURMEM) = MEMBER'  /* set CURMEM as member name */
+  POP_UP = 'NO'
+  EQA_Pgms = ''         /* List of all programs for LDD command */
+  EQAlibrs = ''   /* List of all libraries for EQADEBUG   */
+  Lidx = 0        /* Table index for program entries      */
+  sourcedata = '' /* List of program, sourcelib, member entries */
+  Num_Eqalibs = 0 /* Number of EQADEBUG libraries */
+  ProcStepOverride = ''
+  BELOW = '//*!LINES BELOW CREATED BY THE EQAJCL COMMAND FOR PGM '
+  ABOVE = '//*!LINES ABOVE CREATED BY THE EQAJCL COMMAND FOR PGM '
+  BELOW_OLD = '//*!LINES BELOW CREATED BY THE DEBUG COMMAND FOR PGM '
+  ABOVE_OLD = '//*!LINES ABOVE CREATED BY THE DEBUG COMMAND FOR PGM '
+  LASTLINE = '//!* THIS LINE IS TEMPORARILY ADDED AND REMOVED'
+/* There are three variables used in this rexx routine for program    */
+/* EQAPGM = Application program name, provided on Input Panel         */
+/*    For non-DB2 and non-IMS, and non-LE, programs, it is the same   */
+/* program = Program name populated in the list of EXEC PGM=xxxxx     */
+
+  MFIC1 = ' COMMENT TO VIEW THE SOURCE OF A SUBPROGRAM',        /*@L1C*/
+     ' FOLLOW THE STEPS BELOW:;'                                /*@L1C*/
+  MFIC2 = ' COMMENT 1) ENTER A "STEP" COMMAND;'                 /*@L1C*/
+  MFIC3 = ' COMMENT 2) ENTER "QUALIFY PROGRAM" PGMNAME;'        /*@L1C*/
+  MFIC4 = ' COMMENT 3) IF THE LOAD MODULE NAME IS NOT THE ',    /*@L1C*/
+     'SAME AS PROGRAM NAME:;'                                   /*@L1C*/
+  MFIC5 = ' COMMENT -- ENTER "QUALIFY PROGRAM LOADMOD::>PGMNAME";'
+
+  GUIC1 = ' /* TO VIEW THE SOURCE OF A SUBPROGRAM',             /*@L1C*/
+     ' FOLLOW THE STEPS BELOW: */'                              /*@L1C*/
+  GUIC2 = ' /* 1) LEFT CLICK THE "STEP INTO" ICON */' /*@L1C*/
+  GUIC3 = ' /* 2) IN THE DEBUG TOOL ENGINE COMMAND PANE, ENTER: */'
+  GUIC4 = ' /* 3) QUALIFY PROGRAM PGMNAME;  OR */'              /*@L1C*/
+  GUIC5 = ' /*    QUALIFY PROGRAM LOADMOD::>PGMNAME',           /*@L1C*/
+     ' (IF LOADMOD NOT = PGMNAME) */'                           /*@L1C*/
+  GUIC6 = ' /* 4) CLICK ON THE MODULES PANE */'                 /*@L1C*/
+  GUIC7 = ' /* 5) DOUBLE CLICK THE SOURCE DATASET(MEMBER)',     /*@L1C*/
+     'TO VIEW THE SOURCE */'                                    /*@L1C*/
+  GUIC8 = ' /* 6) SET THE BREAKPOINT IN THE SUBPROGRAM */'      /*@L1C*/
+  GUIC9 = ' /* 7) CLICK ON THE "STEP INTO" ICON TO RETURN TO THE',
+     'CALLING PROGRAM */'                                       /*@L1C*/
+  GUIC10 = ' /* 8) CONTINUE WITH THE DEBUG SESSION */'          /*@L1C*/
+  return(0)
+
+Process_input_parm:
+  /* Process the input parameter following the DEBUG command */
+  abv_parm = translate(parm1)                                  /*@08c*/
+  if abv_parm = '' then do     /* Display menu when no parm used     */
+     'addpop column(0) row(0)'
+     POP_UP = 'YES'
+     'display panel(eqajp02)'  /* Get selection menu */
+     if rc = 8 then do
+        'rempop all'
+         Call Exit_routine
+     end
+     "VGET (EQAMethd) asis"
+     abv_parm = EqaMethd
+  end
+  select
+     /* Process remaining parameters */
+     when abv_parm = 'G1' | abv_parm = 'G2' | abv_parm = 'T' then do
+        EQAMethd = abv_parm
+        Call PopUp_GUI_MFI_TIM
+     End
+     when substr(abv_parm,1,1) = 'R' then do
+        nop
+     End
+     when substr(abv_parm,1,1) = 'C' then do
+        EQAMethd = abv_parm
+     End
+     when substr(abv_parm,1,1) = 'D' then do
+        EQALE = 'YES'
+        EQAMethd = abv_parm
+        call Invoke_DTU_Delay_Debug  /*  invoke DTU for option B */
+     End
+     otherwise do
+        zedsmsg = 'INVALID PARAMETER'                          /*@L1C*/
+        zedlmsg = 'INVALID PARAMETER' parm1'. ENTER G1,G2,T,R,D, OR C',
+                  ' FOR THE PARAMETER.'                        /*@08c*/
+        'SETMSG MSG(ISRZ001)'
+        call exit_routine
+     end
+  end
+  if EQALE = 'NO' then do
+     'addpop column(0) row(0)'  /* Get non-LE initial program */
+     POP_UP = 'YES'
+     'display panel(eqajp10)'
+     if rc = 8 then do
+        'rempop all'
+         Call Exit_routine
+     end
+  end
+  else do
+     EQAPGM = ''  /* Set non-le pgm to null if Language environment */
+  end
+  return(0)
+
+Invoke_DTU_Delay_Debug:
+                                                             /*8@L1D*/
+  /* Pop-up routine for Delayed Debugging Instructions */
+  if POP_UP = 'YES' then "rempop all"
+  POP_UP = 'NO'
+  'display panel(eqajp13)'
+  if rc = 8 then do
+     Call Exit_routine
+  end
+ "ISPEXEC LIBDEF ISPPLIB DATASET ID ('"DT_ISPPLIB"') STACK"     /*@L1C*/
+  ADDRESS TSO "EXEC '"DT_SEQAEXEC"(EQASTART)' ",                /*@L1C*/
+     "'NATLANG("Inst_DT_NATLANG")'"                             /*@L1A*/
+  /* Re-instate the LIBDEF for our panels */
+ "ISPEXEC LIBDEF ISPPLIB DATASET ID ('"DT_ISPPLIB"') STACK"     /*@L1C*/
+  return(0)
+
+Process_popup_Panels:
+  if EQALIBS = '/' then do
+     'addpop column(0) row(0)'  /* Get EQADEBUG libraries */
+     POP_UP = 'YES'
+     'display panel(eqajp03)'
+     if rc = 8 then do
+        'rempop all'
+         Call Exit_routine
+     end
+  end
+  /* Determine if EQALIB specified is cataloged */
+  if EQALIBS = '/' then do
+     if Validate_EQALIB(eqalib1) <> 0 then Call Exit_routine
+     if Validate_EQALIB(eqalib2) <> 0 then Call Exit_routine
+     if Validate_EQALIB(eqalib3) <> 0 then Call Exit_routine
+     if Validate_EQALIB(eqalib4) <> 0 then Call Exit_routine
+     if Validate_EQALIB(eqalib5) <> 0 then Call Exit_routine
+     if Validate_EQALIB(eqalib6) <> 0 then Call Exit_routine
+  end
+  if EQAPGMS = '/' then do      /* Is the LDD Pgms requested? */
+     'addpop column(0) row(0)'  /* Get LDD non-LE programs */
+     POP_UP = 'YES'
+     'display panel(eqajp04)'
+     if rc = 8 then do
+        'rempop all'
+         Call Exit_routine
+     end
+  end
+  if EQAPGMS = '/' then do  /* Set EQA_Pgms to all LDD pgm requests */
+     EQA_Pgms = EQAPGM01 EQAPGM02 EQAPGM03 EQAPGM04 EQAPGM05,
+                EQAPGM06 EQAPGM07 EQAPGM08 EQAPGM09
+  end
+  /* Is AT ENTRY request specified? */
+  if EQAATENT = '/' then do
+     'addpop column(0) row(0)'  /* Get LDD non-LE programs */
+     POP_UP = 'YES'
+     /* If the previous member is not the same as the current mbr */
+     /*  then clear the AT ENTRY fields */
+     "VGET (EQAPMEM) ASIS"
+     if EQAPMEM <> curmem then do
+        EQALMD01 = '';EQALMD02 = '';EQALMD03 = '';
+        EQALMD04 = '';EQALMD05 = '';EQALMD06 = '';
+        EQALMD07 = '';EQALMD08 = '';EQALMD09 = '';
+        EQALPG01 = '';EQALPG02 = '';EQALPG03 = '';
+        EQALPG04 = '';EQALPG05 = '';EQALPG06 = '';
+        EQALPG07 = '';EQALPG08 = '';EQALPG09 = '';
+        /* If the fields are cleared, populate the program names */
+        /*  with the LDD fields. Omit the first program */
+
+        mm = 0
+        do epidx = 1 to words(EQA_Pgms)
+           nn = right(epidx,2,0)
+           if EQAPGM <> value('EQAPGM'nn) then do
+              mm = mm + 1; mm = right(mm,2,0)
+              interpret 'EQALPG'mm '= EQAPGM'nn
+           end
+        end
+
+     end
+     /* Display panel for AT ENTRY breakpoints */
+     'display panel(eqajp05)'
+     if rc = 8 then do
+        'rempop all'
+         Call Exit_routine
+     end
+  end
+  if POP_UP = 'YES' then "rempop all"
+  POP_UP = 'NO'
+  if EQALIBS = '/' then do
+     /* Verify if the member is found in the EQALIBS */
+     Call Verify_Source_data_found
+  end
+  return(0)
+
+Remove_old_lines:
+  /* Remove the comments and all lines in between */
+  "ISREDIT FIND '"below"' 1"
+  DEBUG_EQAJCL = ''     /* which line was used initially         @06A*/
+  if rc = 0 then do
+     DEBUG_EQAJCL = 'EQAJCL'                                   /*@06A*/
+  end                                                          /*@06A*/
+  "ISREDIT FIND '"BELOW_OLD"' 1"   /* look for the old syntax    @06A*/
+  if rc = 0 then do                                            /*@06A*/
+     DEBUG_EQAJCL = 'DEBUG'                                    /*@06A*/
+  end                                                          /*@06A*/
+  if DEBUG_EQAJCL <> '' then do                                /*@06A*/
+     "ISREDIT (LINE) = LINE .ZCSR"
+     parse value line with 54 PREVPGM .
+     "ISREDIT LABEL .ZCSR = .EQABL  0"
+     If DEBUG_EQAJCL = 'EQAJCL' then do                        /*@06A*/
+        "ISREDIT FIND '"above"' 1 "
+     end                                                       /*@06A*/
+     else do                                                   /*@06A*/
+        "ISREDIT FIND '"ABOVE_OLD"' 1 "                        /*@06A*/
+     end                                                       /*@06A*/
+     if rc = 0 then do
+        "ISREDIT LABEL .ZCSR = .EQAAB 0"
+        "ISREDIT DELETE .EQABL .EQAAB"
+        /* Double && needed to stop variable substitution */
+        if SUBSTR(PREVPGM,1,1) = '&' then PREVPGM = '&'PREVPGM
+        "ISREDIT CHANGE 'PGM=EQANMDBG' 'PGM="PREVPGM"' PREV"
+     end
+     zedsmsg = 'DEBUG STATEMENTS REMOVED'                      /*@L1C*/
+     zedlmsg = 'THE DEBUG STATEMENTS WERE SUCCESSFULLY REMOVED'/*@L1C*/
+    'SETMSG MSG(ISRZ000)'
+  end
+  return(0)
+
+Create_Code_Coverage_Only:
+  /* Create code coverage for non-debug session */
+  LINE1 = '//'ProcStepOverride'CEEOPTS  DD  *  !INVOCATION FOR'
+  LINE2 = 'TEST(ALL,*,PROMPT,MFI:*),ENVAR("EQA_STARTUP_KEY=CC")'
+  BELOWX = BELOW || program EQAPGM
+  "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (BELOWX)"
+  Insert_line# = Insert_line# + 1
+  'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE1)'
+  Insert_line# = Insert_line# + 1
+  'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE2)'
+  Insert_line# = Insert_line# + 1
+  ABOVEX = ABOVE || program EQAPGM
+  "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (ABOVEX)"
+  "ISREDIT CURSOR = " Insert_line# "1"
+  program = Find_or_Change_PGM_name('FIND')
+  return(0)
+
+PopUp_GUI_MFI_TIM:
+  /* Panel names end in the same character as the input parm. */
+  panel = 'EQAJP'abv_parm
+  'addpop column(0) row(0)'  /* Get info for GUI, MFI, or TIM */
+  POP_UP = 'YES'
+  'display panel('panel')'
+  if rc = 8 then do
+     'rempop all'
+      Call Exit_routine
+  end
+  return(0)
+
+Verify_no_CEEOPTS_EQANMDBG:
+  /* Verify no other Debug commands are found in the JCL */
+  do i = 1 to words(DD_statements)
+     DDNAME = word(DD_statements,i)
+     "ISREDIT FIND FIRST '"DDNAME"' 1 "
+     if rc = 0 then do
+        zedsmsg = DDNAME 'FOUND'                               /*@L1C*/
+        zedlmsg = 'REMOVE ALL DEBUG COMMANDS BEFORE CREATING NEW ONES'
+       'SETMSG MSG(ISRZ001)'
+        Call Exit_routine /* exit macro, and set cursor to command */
+     end
+  end
+
+  "ISREDIT FIND FIRST 'PGM=EQANMDBG'"
+  if rc = 0 then do
+     "ISREDIT (dln,dcol) = CURSOR"
+     "ISREDIT (line) = LINE " dln
+     if substr(line,1,3) <> '//*' then do
+        zedsmsg = 'PROGRAM EQANMDBG FOUND'                     /*@L1C*/
+        zedlmsg = 'REMOVE ALL DEBUG COMMANDS BEFORE CREATING NEW ONES'
+       'SETMSG MSG(ISRZ001)'
+        Call Exit_routine /* exit macro, and set cursor to command */
+     end
+  end
+  Return(0)
+
+Table_Program_Name:
+  /* Scan JCL lines for PGM=, and table program names */
+  "ISREDIT CURSOR = 1 1"
+  Call Look_for_programs
+  select
+     when Lidx = 0 then do /* Program not found */
+        zedsmsg = 'PROGRAM' EQAPGM 'NOT FOUND'                 /*@L1C*/
+        zedlmsg = 'PROGRAM' EQAPGM 'NOT FOUND IN THIS MEMBER'  /*@L1C*/
+        'SETMSG MSG(ISRZ001)'
+        Call Exit_routine /* exit macro, and set cursor to command */
+     end
+     when Lidx > 1 then do  /* Program found multiple times */
+        rc = Display_PGM_List()
+        if rc = 4 then do  /* Cancel command issued */
+           "ISREDIT UP MAX"
+           zedsmsg = 'NO PROGRAM SELECTED'                     /*@L1C*/
+           zedlmsg = 'SELECT A PROGRAM TO DEBUG FROM THE PANEL'/*@L1C*/
+           'SETMSG MSG(ISRZ001)'
+           Call Exit_routine /* exit macro, and set cursor to comman */
+        end
+        linenum = word(Sel_Linenums,1)
+     end
+     otherwise nop
+  end
+  return(0)
+
+Set_Label_For_Insert_Lines:
+  /* Advance to correct line to set the "After" line indicator */
+  /* Variable LINENUM is where the program was found */
+  "ISREDIT CURSOR = "LINENUM" 1"
+  "ISREDIT (linenum,dcol) = CURSOR"
+  dln =linenum
+  do while dln < lastl
+     dln = dln + 1
+     "ISREDIT CURSOR = "dln"      1"
+     "ISREDIT (line) = LINE " dln
+     if substr(line,1,3) = '// ' then iterate  /* comment */
+     if substr(line,1,3) = '//*' then iterate  /* comment */
+     Insert_line# = dln - 1
+     leave
+  end
+  if dln = lastl then do
+     Insert_line# = dln
+  end
+  return(0)
+
+Verify_Source_data_found:
+  /* Verify the LDD member is found in one of the source libraries */
+  EQAlibrs = EQAlibrs EQALIB1 EQALIB2 EQALIB3 EQALIB4,
+     EQALIB5 EQALIB6
+  Eidx = 0
+  do I = 1 to words(EQA_Pgms)
+     EQA_pgm = word(EQA_Pgms,i)
+     program = EQA_pgm
+     min_rc = 4
+     do J = 1 to words(EQAlibrs)
+        EQAlibr = word(EQAlibrs,j)
+        'tbadd EqaDltab'
+        Eidx = Eidx + 1
+        tlib = "'"EQAlibr"("EQA_pgm")'"
+        result = sysdsn(tlib)
+        select
+          when result = 'OK' then do
+             min_rc = min(min_rc,0)
+          end
+          when result = 'MEMBER NOT FOUND' then do
+             min_rc = min(min_rc,4)
+          end
+          otherwise do
+             zedsmsg = 'DEBUG MEMBER ERROR'                    /*@05C*/
+             zedlmsg = 'FILE ' tlib ' NOT FOUND '              /*@L1C*/
+             'SETMSG MSG(ISRZ001)'
+             Call Exit_routine
+          end
+        end
+     end
+     /* If the member is not located, then display selection lists */
+     if min_rc = 4 & (EQAMethd = 'T') then do                  /*@08c*/
+        if Num_Eqalibs = 1 then do
+           Sourcelib = eqalibr
+        end
+        if Num_Eqalibs > 1 then do
+           rc = Display_library_selection_list()
+           if rc = 4 then do  /* Cancel command issued */
+              "ISREDIT UP MAX"
+              zedsmsg = 'REQUEST CANCELED'                     /*@L1C*/
+              zedlmsg = 'DEBUG TOOL WIZARD REQUEST CANCELED'   /*@L1C*/
+              'SETMSG MSG(ISRZ001)'
+              Call Exit_routine /* exit macro, and set cursor to comm */
+           end
+           Sourcelib = word(Sourcelibs,1) /* Get the first one select */
+           /* Delete table entries for next library */
+           'tbtop EqaDltab' /* pointer to top of table       */
+           Do Forever
+              'tbskip EqaDltab number(&ztdtop)'
+              if rc >= 8 then leave
+              "tbdelete EqaDltab"
+           End
+        end
+        results = Display_member_list("'"Sourcelib"'")
+        parse value results with rc member
+        if member <> '' then do
+           sourcedata = sourcedata program Sourcelib member
+        end
+        /* Delete table entries for next set of members */
+        'tbtop EqaMltab' /* pointer to top of table     */
+        Do Forever
+           'tbskip EqaMltab number(&ztdtop)'
+           if rc >= 8 then leave
+           "tbdelete EqaMltab"
+        End
+     end
+  end
+  return(0)
+
+Display_library_selection_list:
+  /* Display the EQADEBUG libraries */
+  Sourcelibs = ''
+  'tbtop EqaDltab' /* pointer to top of table       */
+  cursor2= 'LCMD2' /* initialize cursor row          */
+  csrrow = 1      /* initialize cursor row          */
+  /* ----------------------------- */
+  /* Display table                 */
+  /* ----------------------------- */
+  Do Forever
+     'tbdispl EQADltab Panel(eqajp11) autosel(NO)',
+     'position(crp) csrrow(&csrrow) cursor(&cursor2)'
+     If Rc >= 8 Then Do
+        zedsmsg = 'NO LIBRARY SELECTED'                        /*@L1C*/
+        zedlmsg = 'SELECT A LIBRARY OR CANCEL BEFORE CONTINUING'/*@L1C*/
+        'SETMSG MSG(ISRZ001)'
+     end
+     If Substr(zcmd,1,3) = 'CAN' Then Return(4)
+     /* -------------------------- */
+     /* select                     */
+     /* -------------------------- */
+     Do while ztdsels > 0
+       'control display save'
+       Select
+         when lcmd2 = 'S' | lcmd2 = 's' Then do
+            lcmd2 = ' '
+            Sourcelibs = Sourcelibs eqalibr
+            if words(Sourcelibs) > 1 then do
+               zedsmsg = 'SELECT 1 LIBRARY'                    /*@L1C*/
+               zedlmsg = 'SELECT ONE LIBRARY BEFORE CONTINUING'/*@L1C*/
+               'SETMSG MSG(ISRZ000)'
+            end
+            "tbput EqaDltab"
+            'control display restore'                          /*@L2A*/
+            return(0)  /* this line allows Enter key to process */
+         end
+         Otherwise;
+       end
+       csrrow  = crp
+       If ztdsels > 1 Then do
+          "tbput EqaDltab"
+          'control display restore'
+          'tbdispl EqaDltab position(crp)'
+       end
+       Else
+          ztdsels = 0
+     End
+     'tbtop EqaDltab'                    /* position the table */
+     'tbskip EqaDltab number(&ztdtop)'   /* as the user last saw it */
+  end
+  Return(0)
+
+Display_member_list:
+  /* Display members of the EQADEBUG libraries */
+  /* User selects corresponding member         */
+  arg langxlib
+  members = Get_Members(langxlib) /* routine to get members from dsn */
+  if word(members,1) > 0 then do
+     do m = 2 to words(members)
+        eqambr = word(members,m)
+        "tbadd EqaMltab"
+     end
+  end
+  'tbtop EqaMltab' /* pointer to top of table       */
+  cursor2= 'LCMD3' /* initialize cursor row          */
+  csrrow = 1      /* initialize cursor row          */
+  Sel_members = ''
+  if words(members) = 1 then do  /* no members */
+     zedsmsg = 'NO MEMBERS. PF3 TO EXIT'                       /*@L1C*/
+     zedlmsg = 'NO MEMBERS WERE FOUND IN' langxlib'. PF3 TO EXIT.'
+     'SETMSG MSG(ISRZ001)'
+  end
+  Do Forever
+     'tbdispl EQAMltab Panel(eqajp14) autosel(NO)',
+     'position(crp) csrrow(&csrrow) cursor(&cursor2)'
+      eqamsg1 = ''
+     if rc = 4 then do
+        zedsmsg = 'TWO OR MORE MEMBERS SELECTED'              /*@L1C*/
+        zedlmsg = 'SELECT ONLY ONE MEMBER. "S" IS A TOGGLE.'  /*@L1C*/
+        'SETMSG MSG(ISRZ001)'
+     end
+     if rc = 8 then do
+        select
+           when words(members) = 1 then do /* No members */
+              return(0)
+           end
+           when words(Sel_members) = 0 then do
+              zedsmsg = 'NO MEMBER SELECTED'                  /*@L1C*/
+              zedlmsg = 'SELECT A MEMBER OR CANCEL BEFORE CONTINUING'
+              'SETMSG MSG(ISRZ001)'
+           end
+           when words(Sel_members) > 1 then do
+              zedsmsg = 'TWO OR MORE MEMBERS SELECTED'        /*@L1C*/
+              zedlmsg = 'SELECT ONLY ONE MEMBER. "S" IS A TOGGLE.'
+              'SETMSG MSG(ISRZ001)'
+           end
+           otherwise do
+              return('0' Sel_members)
+           end
+        end
+     end
+     If Substr(zcmd,1,3) = 'CAN' Then do
+        "ISREDIT UP MAX"
+        zedsmsg = 'REQUEST CANCELED'                           /*@L1C*/
+        zedlmsg = 'DEBUG TOOL WIZARD REQUEST CANCELED'         /*@L1C*/
+        'SETMSG MSG(ISRZ001)'
+        Call Exit_routine /* exit macro, and set cursor to command */
+     end
+     Do while ztdsels > 0
+       'control display save'
+       Select
+         When translate(lcmd3) = 'S' Then do  /* Select a member*/
+            if Eqamsg2 <> '*Selected' then do
+               lcmd3 = '*'
+               Eqamsg2 = '*Selected'
+               Sel_members = Sel_members eqambr
+               langxlibnq = strip(translate(langxlib," ","'"))
+               eqamsg1 = 'SET SOURCE ON("'program'")',
+                     langxlibnq'('eqambr')'
+               "tbput EqaMltab"
+            end
+            else do    /* Deselect a member */
+               lcmd3 = '*'
+               x = wordpos(eqambr,Sel_members)
+               if x > 0 then Sel_members = delword(Sel_members,x)
+               Eqamsg2 = '*DeSelect'
+               "tbput EqaMltab"
+            end
+         end
+         when translate(lcmd3) = 'B' then do
+            langxlibnq = strip(translate(langxlib," ","'"))
+            "Browse dataset('"langxlibnq"("eqambr")'"
+         end
+         Otherwise;
+       end
+       csrrow  = crp
+       If ztdsels > 1 Then do
+          "tbput EqaMltab"
+          'control display restore'
+          'tbdispl EqaMltab position(crp)'
+       end
+       Else
+          ztdsels = 0
+     End
+     'tbtop EqaMltab'                    /* position the table */
+     'tbskip EqaMltab number(&ztdtop)'   /* as the user last saw it */
+  end
+  Return(0)
+
+Display_PGM_List:
+  /* Display list of programs where the statements will be inserted */
+  if POP_UP = 'YES' then do
+     'rempop all'
+  end
+  Sel_linenums = ''
+  'tbtop paneltab' /* pointer to top of table       */
+  cursor1= 'LCMD' /* initialize cursor row          */
+  csrrow = 1      /* initialize cursor row          */
+  /* ----------------------------- */
+  /* Display table                 */
+  /* ----------------------------- */
+  Do Forever
+    'tbdispl paneltab Panel(EQAJP08) autosel(NO)',
+    'position(crp) csrrow(&csrrow) cursor(&cursor1)'
+     If Rc >= 8 Then Do
+        zedsmsg = 'NO PROGRAM SELECTED'                        /*@L1C*/
+        zedlmsg = 'SELECT A PROGRAM OR CANCEL BEFORE CONTINUING'/*@L1C*/
+        'SETMSG MSG(ISRZ001)'
+     end
+     If Substr(zcmd,1,3) = 'CAN' Then Return(4)
+     /* -------------------------- */
+     /* select                     */
+     /* -------------------------- */
+     Do while ztdsels > 0
+       'control display save'
+       Select
+        When lcmd = 'S' | lcmd = 's' Then do
+           lcmd = '*'
+           Sel_linenums = Sel_linenums linenum
+           if words(sel_linenums) > 1 then do
+              zedsmsg = 'FIRST PROGRAM USED'                   /*@L1C*/
+              zedlmsg = 'THE FIRST PROGRAM SELECTED WILL BE ', /*@L1C*/
+                 'WHERE THE DEBUG TOOL STATEMENTS ARE INSERTED'/*@L1C*/
+              'SETMSG MSG(ISRZ000)'
+           end
+           "tbput paneltab"
+           'control display restore'                           /*@L2A*/
+           return(0)  /* this line allows Enter key to process */
+        end
+        When lcmd = '*' Then nop
+        Otherwise;
+       End
+       csrrow  = crp
+       If ztdsels > 1 Then do
+          "tbput paneltab"
+          'control display restore'
+          'tbdispl paneltab position(crp)'
+       end
+       Else
+          ztdsels = 0
+     End
+     'tbtop paneltab'                    /* position the table */
+     'tbskip paneltab number(&ztdtop)'   /* as the user last saw it */
+  end
+  Return(0)
+
+Look_for_programs:
+  /* Issue FIND to locate programs in the JCL or procedure or include */
+  do forever
+     "ISREDIT FIND PGM= 1 72"
+     if rc = 0 then do
+        "ISREDIT (dln,dcol) = CURSOR"
+        "ISREDIT (line) = LINE " dln
+        parse value line with label operator operand
+        if substr(label,1,3) <> '//*' & operator = 'EXEC' then do
+           program = Get_PGMNAME_from_line()
+           stepname = substr(word(line,1),3)
+           linenum = right(strip(dln,'L','0'),8,' ')
+           Lidx = Lidx + 1
+           seq = Lidx
+           'tbadd paneltab'
+        end
+     end
+     else do
+        leave
+     end
+  end
+  return(0)
+
+Get_PGMNAME_from_line:
+  /* Get the program name from the line where EXEC PGM= is found */
+  x = pos(',',line,dcol + 4)
+  if x = 0 then x = pos(' ',line,dcol+4)
+  if x > 0 then do
+     program = substr(line,dcol+4,x - dcol - 4)
+  end
+  return(program)
+
+Check_Zdest:
+  /* If the A/B line command is found, set LINENUM to the line where */
+  /* the code is to be inserted. The same variable is used when pgm  */
+  /* selection is used to identify where the lines are inserted      */
+  zdest = 0
+  'ISREDIT PROCESS DEST'
+  Select
+    When rc = 0 Then do
+       'ISREDIT (zdest) = LINENUM .ZDEST'
+       /* For LE programs, display panel for Procedure override var */
+       if EQALE = 'YES' then do
+          'addpop column(0) row(0)'
+          POP_UP = 'YES'
+          'display panel(eqajp06)'
+          if rc = 8 then do
+             'rempop all'
+             Call Exit_routine
+          end
+          if EQAPROCO <> '' then do
+             ProcStepOverride = EQAPROCO'.'
+          end
+       end
+    end
+    When rc <= 8 Then /* No A or B entered */
+      return(4)
+    When rc < 20 Then /* Conflicting line commands - edit sets messa */
+      Exit 12
+    When rc = 20 Then
+      zdest = 0
+    Otherwise
+      Exit 12
+  End
+  return(0)
+
+Insert_Debug_Lines:
+  /* Insert_line# is the line before all the JCL is inserted */
+  if zdest > 0 then do
+     Insert_line# = zdest  /* Set to insert line DD */
+     "ISREDIT CURSOR = " Insert_Line# " 1"
+  end
+  /* Send instructions for Non-LE DB2 program invocation */
+  program = Find_or_Change_PGM_name('FIND')
+  if EQALE = 'NO' & program = 'IKJEFT01' then do
+     'Addpop column(0) row(0)'  /* Get error panel */
+     POP_UP = 'YES'
+     'display panel(eqajp09)'
+     if rc = 8 then do
+        'rempop all'
+         Call Exit_routine
+     end
+     zedsmsg = 'NON-LE AND DB2 UNSUPPORTED'                    /*@L1C*/
+     zedlmsg = 'DEBUG TOOL WIZARD DOES NOT SUPPORT NON-LE' || ,/*@L1C*/
+               ' AND DB2 PROGRAM INVOCATION'
+     'SETMSG MSG(ISRZ000)'
+     "ISREDIT LOCATE 0"
+     Call Exit_routine
+  end
+  if EQAMethd = 'C' then do
+     call Create_Code_Coverage_only
+     Call Create_Code_Coverage_statements
+  end
+  else do
+     if EQALE = 'YES' then do
+        call Insert_CEEOPTS_data
+     end
+     else do
+        call Insert_EQANMDBG_data
+     end
+  end
+  zedsmsg = 'DT STATEMENTS ADDED'                              /*@L1C*/
+  zedlmsg = 'DEBUG TOOL STATEMENTS ADDED'                      /*@L1C*/
+  'SETMSG MSG(ISRZ000)'
+  return(0)
+
+Insert_CEEOPTS_data:
+  /* Insert CEEOPTS (LE) statements to invoke Debug Tool */
+  LINE1 = '//'ProcStepOverride'CEEOPTS  DD  *  !INVOCATION FOR'
+  select
+    when EQAMethd = 'G1' then do   /* Remote GUI */            /*@08c*/
+      LINE1 = LINE1 'REMOTE GUI'
+      LINE2 = 'TEST(,EQACMD,,TCPIP&'EQAIPADR'%'EQAPORT':)'
+    end
+    when EQAMethd = 'G2' then do   /* Remote GUI */            /*@08a*/
+      LINE1 = LINE1 'REMOTE GUI'                               /*@08a*/
+      LINE2 = 'TEST(,EQACMD,,DBMDT%'EQAUSER':)'                /*@08a*/
+    end                                                        /*@08a*/
+                                                              /*8@08d*/
+    when EQAMethd = 'T' then do   /* Terminal Interface Mgr */
+      LINE1 = LINE1 'TERMINAL INTERFACE MANAGER'
+      LINE2 = 'TEST(,EQACMD,,VTAM%'EQAUSER':)'
+    end
+    when EQAMethd = 'D' then do   /* Delayed Debug */
+      LINE1 = LINE1 'DELAYED DEBUG INVOCATION'
+      LINE2 = 'TEST'
+    end
+    otherwise nop
+  end
+  BELOWX = BELOW || program EQAPGM
+  "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (BELOWX)"
+  Insert_line# = Insert_line# + 1
+  'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE1)'
+  Insert_line# = Insert_line# + 1
+  if EQACC = '/' then do
+     LINE2 = LINE2 || ','
+  end
+  'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE2)'
+  Insert_line# = Insert_line# + 1
+  if EQACC = '/' then do
+     LINE2A = 'ENVAR("EQA_STARTUP_KEY=DCC")'
+     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE2A)'
+     Insert_line# = Insert_line# + 1
+  end
+  if EQAMethd <> 'D' then do  /* not for Delayed Debug */
+     line3 = '//'ProcStepOverride'EQACMD   DD *'
+     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE3)'
+     Insert_line# = Insert_line# + 1
+     if EQAMethd <> 'G1' & EQAMethd <> 'G2' then do            /*@08c*/
+        if EQADTLOG = '/' then do
+           line3a = ' SET LOG ON FILE INSPLOG;'
+           'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE3A)'
+           Insert_line# = Insert_line# + 1
+        end
+        else do
+           line3a = ' SET LOG OFF;'
+           'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE3A)'
+           Insert_line# = Insert_line# + 1
+        end
+     end
+     if EQAAUTOM = '/' then do  /* Automonitor needed */
+        line4 = ' SET AUTO ON BOTH;'
+        'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE4)'
+        Insert_line# = Insert_line# + 1
+     end
+     else do
+        line4 = ' SET AUTO OFF;'
+        'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE4)'
+        Insert_line# = Insert_line# + 1
+     end
+     if EQACC = '/' then  do
+        Call Create_Code_Coverage_statements
+     end
+  end
+  if EQAMethd <> 'D' then do  /* not for Delayed Debug */    /* @04A */
+     if EQAWARN = '/' then do
+        line3x = ' SET WARN ON;'
+     end
+     else do
+        line3x = ' SET WARN OFF;'
+     end
+     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE3X)'
+     Insert_line# = Insert_line# + 1
+     call Add_LDD_for_Subprograms
+  end                                                        /* @04A */
+  call Add_AT_Entry_lines
+  if words(sourcedata) > 0 then do
+     do k = 1 to words(sourcedata) by 3
+        line = ' SET SOURCE ON ("'word(sourcedata,k)'")'
+        'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+        Insert_line# = Insert_line# + 1
+        line = '     'word(sourcedata,k+1)'('word(sourcedata,k+2)');'
+        'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+        Insert_line# = Insert_line# + 1
+     end
+  end
+  call Insert_comments
+  if EQALIBS = '/' then do
+     call Add_EQADEBUG_Libraries
+  end
+  if EQAMethd <> 'G1' & EQAMethd <> 'G2' & EQADTLOG = '/' then do
+     line5 = '//'ProcStepOverride'INSPLOG  DD SYSOUT=*'
+     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE5)'
+     Insert_line# = Insert_line# + 1
+  end
+  ABOVEX = ABOVE || program EQAPGM
+  "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (ABOVEX)"
+  "ISREDIT CURSOR = " Insert_line# "1"
+  program = Find_or_Change_PGM_name('FIND')
+  return(0)
+
+Insert_EQANMDBG_data:
+  /* Insert Non-LE Debug invocation statements. */
+  /* The name of the program is changed to EQANMDBG */
+  LINE1 = '//'ProcStepOverride'EQANMDBG DD  *  !INVOCATION FOR'
+  select
+     when EQAMethd = 'G1' then do                             /*@09c*/
+       LINE1 = LINE1 'REMOTE GUI'
+       LINE2 = EQAPGM',TEST(,EQACMD,,TCPIP&'EQAIPADR'%'EQAPORT':)'
+     end
+
+     when EQAMethd = 'G2' then do                             /*@09a*/
+       LINE1 = LINE1 'REMOTE GUI'                             /*@09a*/
+       LINE2 = EQAPGM',TEST(,EQACMD,,DBMDT%'EQAUSER':)'       /*@09a*/
+     end
+                                                           /*8@08d*/
+     when EQAMethd = 'T' then do
+        LINE1 = LINE1 'TERMINAL INTERFACE MANAGER'
+        LINE2 = EQAPGM',TEST(,EQACMD,,VTAM%'EQAUSER':)'
+     end
+     otherwise nop
+  end
+  /* Add Debug Tool statements to the JCL or procedure  */
+  BELOWX = BELOW || program EQAPGM
+  "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (BELOWX)"
+  Insert_line# = Insert_line# + 1
+  'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE1)'
+  Insert_line# = Insert_line# + 1
+  'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE2)'
+  Insert_line# = Insert_line# + 1
+  line3 = '//'ProcStepOverride'EQACMD   DD *'
+  'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE3)'
+  Insert_line# = Insert_line# + 1
+  if EQAMethd <> 'G1' & EQAMethd <> 'G2' then do               /*@08c*/
+     if EQADTLOG = '/' then do
+        line3a = ' SET LOG ON FILE INSPLOG;'
+        'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE3A)'
+        Insert_line# = Insert_line# + 1
+     end
+     else do
+        line3a = ' SET LOG OFF;'
+        'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE3A)'
+        Insert_line# = Insert_line# + 1
+     end
+  end
+  if EQAAUTOM = '/' then do  /* Automonitor needed */
+     line4 = ' SET AUTO ON BOTH;'
+     'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE4)'
+     Insert_line# = Insert_line# + 1
+  end
+  else do
+     line4 = ' SET AUTO OFF;'
+     'ISREDIT LINE_AFTER ' Insert_line#'  = DATALINE (LINE4)'
+     Insert_line# = Insert_line# + 1
+  end
+  call Add_LDD_for_Subprograms
+  call Add_AT_Entry_lines
+  if words(sourcedata) > 0 then do
+     do k = 1 to words(sourcedata) by 3
+        line = ' SET SOURCE ON ("'word(sourcedata,k)'")'
+        'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+        Insert_line# = Insert_line# + 1
+        line = '     'word(sourcedata,k+1)'('word(sourcedata,k+2)');'
+        'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+        Insert_line# = Insert_line# + 1
+     end
+  end
+  call Insert_comments
+  if EQALIBS = '/' then do
+     call Add_EQADEBUG_Libraries
+  end
+  if EQAMethd <> 'G1' & EQAMethd <> 'G2' & EQADTLOG = '/' then do
+     line5 = '//'ProcStepOverride'INSPLOG  DD SYSOUT=*'
+     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE5)'
+     Insert_line# = Insert_line# + 1
+  end
+  LINE = '//*!UNCOMMENT THE TWO LINES BELOW IF YOU WANT TO DEBUG AN'
+  LINE = LINE 'LE SUBPROGRAM'
+  'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  Insert_line# = Insert_line# + 1
+  LINE  = '//* //'PROCSTEPOVERRIDE'CEEOPTS DD  *'
+  LINE = LINE '!REQUIRED ONLY FOR LE SUBPROGRAM DEBUGGING'
+  'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  Insert_line# = Insert_line# + 1
+  LINE = '//* TEST'
+  'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  Insert_line# = Insert_line# + 1
+  ABOVEX = ABOVE || program EQAPGM
+  "ISREDIT LINE_AFTER " Insert_line# " = DATALINE (ABOVEX)"
+
+  "ISREDIT CURSOR = " Insert_line# "1"
+  program = Find_or_Change_PGM_name('CHANGE EQANMDBG')
+  return(0)
+
+Create_Code_Coverage_statements:
+  /* Create statements to invoke Code Coverage when debugging */
+  line = '//'ProcStepOverride'EQAOPTS DD *'
+  'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+  Insert_line# = Insert_line# + 1
+  if CODE_COVERAGE_SETUP = 'YES' then do
+     line = " EQAXOPT  CCPROGSELECTDSN,'&&USERID.DBGTOOL.CCPRGSEL'"
+     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+     line = " EQAXOPT  CCOUTPUTDSN,'&&USERID.DBGTOOL.CCOUTPUT'"
+     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+     line = " EQAXOPT  CCOUTPUTDSNALLOC,'MGMTCLAS(STANDARD)",
+           copies(' ',24)"+"
+     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+     line = copies(' ',15),
+           "STORCLAS(DEFAULT) LRECL(255) BLKSIZE(0) RECFM(V,B)",
+            copies(' ',4)"+"
+     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+     line = "            DSORG(PS) SPACE(2,2) CYL'"
+     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+     line = " EQAXOPT END"
+     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+  end
+  return(0)
+
+Find_or_Change_PGM_name:
+  /* Subprogram to locate a program in JCL, procedure or include */
+  /* Optionally change program name to EQANMDBG */
+  arg action Tpgm
+  program = ''
+  if zdest > 0 then do
+     "ISREDIT (dln,dcol) = CURSOR"
+     if dln < lastl then do
+        dln = dln + 1
+        "ISREDIT CURSOR = "dln" 1"
+     end
+  end
+  do forever
+     "ISREDIT FIND WORD EXEC PREV"
+     if rc > 0 then leave
+     "ISREDIT (dln,dcol) = CURSOR"
+     "ISREDIT (line) = LINE " dln
+     if substr(line,1,3) = '//*' then iterate
+     x = pos('EXEC',line)
+     dcol = pos('PGM=',line,x)  /* reposition to PGM= */
+     if dcol > 0 then do
+        program = Get_pgmname_from_line()
+        if action = 'CHANGE' then do
+           Spgm = program
+           /* Double && needed to stop variable substitution */
+           if SUBSTR(Spgm,1,1) = '&' then Spgm = '&'Spgm
+           "ISREDIT CHANGE PGM="Spgm" PGM="Tpgm
+        end
+        leave
+     end
+     else leave
+  end
+  return(program)
+
+Add_EQADEBUG_Libraries:
+  /* Add EQADEBUG DD Statements */
+  if EQALIB1 = '' & EQALIB2 = '' & EQALIB3 = '' & ,
+     EQALIB4 = '' & EQALIB5 = '' & EQALIb6 = '' then nop
+  else do
+     EQADEBUG_prefix = '//'ProcStepOverride'EQADEBUG DD'
+     call Process_EQALIB(eqalib1)
+     call Process_EQALIB(eqalib2)
+     call Process_EQALIB(eqalib3)
+     call Process_EQALIB(eqalib4)
+     call Process_EQALIB(eqalib5)
+     call Process_EQALIB(eqalib6)
+  end
+  return(0)
+
+Validate_EQALIB:
+  /* Validate the EQADEBUG library is cataloged */
+  arg eqalib
+  if EQALIB <> '' then do
+     if sysdsn("'"eqalib"'") ¬= OK then do
+        zedsmsg = 'INVALID DT LIB - PF1'                       /*@L1C*/
+        zedlmsg = 'DEBUG TOOL DEBUG LIBRARY' eqalib 'NOT FOUND'/*@05C*/
+        'SETMSG MSG(ISRZ000)'
+        return(8)
+     end
+     Num_Eqalibs = Num_Eqalibs + 1
+  end
+  return(0)
+
+Process_EQALIB:
+  /* Subroutine to insert the EQADEBUG statement */
+  arg eqalib
+  if EQALIB <> '' then do
+     line = EQADEBUG_prefix 'DISP=SHR,DSN='EQALIB
+     EQADEBUG_prefix = '//         DD'
+    'ISREDIT LINE_AFTER ' Insert_line# '  = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+     Num_Eqalibs = Num_Eqalibs + 1
+  end
+  return(0)
+
+Add_LDD_for_Subprograms:
+  /* Insert LDD statements */
+  if EQA_Pgms <> '' then do
+     line = ' SET LDD ALL;'
+    'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+     if wordpos(EQAPGM,EQA_pgms) = 0 then do
+        call Add_LDD_line(EQAPGM)
+     end
+     do Pidx = 1 to words(EQA_pgms)
+        call Add_LDD_line(word(EQA_pgms,Pidx))
+     end
+  end
+  return(0)
+
+Add_LDD_Line:
+  /* Add LDD line subroutine */
+  arg pgm
+  if pgm <> '' then do
+     line = ' LDD' pgm';'
+     'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+  end
+  return(0)
+
+Add_AT_Entry_lines:
+  /* Add AT ENTRY line subprogram */
+  if EQAATENT = '/' then do
+     if EQAATENC = '/' then do
+        line = ' CLEAR AT ENTRY;'
+        'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+        Insert_line# = Insert_line# + 1
+     end
+     do nn = 1 to 9
+        nn = right(nn,2,0)
+        EQALMD = value("EQALMD"nn)
+        if EQALMD = '' then EQALMD = '¬'
+        EQALPG = value("EQALPG"nn)
+        if EQALPG <> '' then rc = Create_AT_Entry_Cmd(EQALMD,EQALPG)
+     end
+  end
+  return(0)
+
+Create_AT_Entry_Cmd:
+  /* Determine which format to use for AT ENTRY command, create line */
+  arg EQALMD,EQALPG
+  if EQALMD = '¬' then do
+     line = " AT ENTRY" EQALPG";"  /* No loadmod defined */
+     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+  end
+  else do
+     line = " AT ENTRY" EQALMD"::>"EQALPG";"
+     'ISREDIT LINE_AFTER ' Insert_line#' = DATALINE (LINE)'
+     Insert_line# = Insert_line# + 1
+  end
+  return(0)
+
+Insert_comments:
+  /* Insert GUI or MFI/TIM comments on how to locate source program */
+  /*  and set a breakpoint prior to invocation */
+  If EQASHOWC = '/' then do
+     /* TIM/MFI shows comments with COMMENT in col 1 */
+                                                           /*8@08d*/
+     /* GUI recognizes comments differently */
+     if EqaMethd = 'G1' | EQAMethd = 'G2' then do              /*@08c*/
+        'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC1)'
+        Insert_line# = Insert_line# + 1
+        'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC2)'
+        Insert_line# = Insert_line# + 1
+        'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC3)'
+        Insert_line# = Insert_line# + 1
+        'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC4)'
+        Insert_line# = Insert_line# + 1
+        'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC5)'
+        Insert_line# = Insert_line# + 1
+        'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC6)'
+        Insert_line# = Insert_line# + 1
+        'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC7)'
+        Insert_line# = Insert_line# + 1
+        'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC8)'
+        Insert_line# = Insert_line# + 1
+        'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC9)'
+        Insert_line# = Insert_line# + 1
+        'ISREDIT LINE_AFTER ' Insert_line# ' = DATALINE (GUIC10)'
+        Insert_line# = Insert_line# + 1
+     end
+  end
+  return(0)
+
+Get_Members:
+/* rexx routine to return members of a PDS */
+  arg orgdsn
+  address ispexec
+  "lminit dataid(ddvar) dataset(&orgdsn) enq(shr)"
+  if  rc ¬= 0 then do
+     "setmsg msg(isru213)"   /* init   error      */
+     Call Exit_routine
+   end
+  "lmopen  dataid(&ddvar) option(input) org(orgvar)"
+  if  rc ¬= 0 then do
+     "lmfree dataid(&ddvar)"
+     "setmsg msg(isru213)"   /* open   error      */
+  end
+  member_list = ''
+  memb = ''
+  idx = 0
+  do forever
+     "lmmlist dataid(&ddvar) option(list) member(memb) stats(no)"
+     select
+        when rc = 0 then do
+           idx = idx + 1
+           member_list = member_list memb
+        end
+        when rc = 4 then do
+           call Get_mem_dataset_close
+           return(0)
+        end
+        when rc = 8 then leave
+        otherwise do
+           call Get_mem_dataset_close
+           "setmsg msg(isru213)"   /* severe error      */
+           Call Exit_routine
+        end
+     end
+  end
+  call Get_mem_dataset_close
+  return(idx member_list)
+
+Get_mem_dataset_close:
+  /* Close data sets */
+  "lmmlist dataid(&ddvar) option(free)"
+  "lmclose dataid(&ddvar)"
+  "lmfree dataid(&ddvar)"
+  return(0)
+
+Exit_routine:
+  /* All exits should route through this routine */
+  EQAPMEM = curmem  /* Current member name */
+  "VPUT (EQAPMEM) PROFILE"
+  'tbend paneltab'
+  'tbend EqaDltab'
+  'tbend EqaMltab'
+  "ISPEXEC LIBDEF ISPPLIB"
+  Exit(1)
+

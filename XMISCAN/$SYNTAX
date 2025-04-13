@@ -1,0 +1,25 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.REXX($SYNTAX)"      */
+/*      --------------------       */
+/*  date/time of XREF was:         */
+/*     20231217 23:02:54           */
+/*      --------------------       */
+
+/* rexx */
+/* nonsense syntax error   */
+if x = y
+then nop
+then why
+forever = 3
+by      = 2
+to      = 1
+do while 6 = forever + by + to
+   say 'forever+by+to='forever+by+to
+   to = 0
+end
+do forever = 1 by 1 while forever < 3
+   say 'forever='forever
+end

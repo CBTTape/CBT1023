@@ -1,0 +1,1848 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.REXX(DB2$L508)"      */
+/*      ---------------------       */
+/*  date/time of XREF was:          */
+/*     20231217 23:03:31            */
+/*      ---------------------       */
+
+/*Rexx*/
+/*                                                                 */
+/* written  by: - Richard Humphris  State of Indiana               */
+/*    for segmented non-UTS tablespaces w/tables > 1               */
+/*                                                                 */
+/*    1)  create tablespace statements                             */
+/*    2)  create move table statements                             */
+/*    3)  create index      statements                             */
+/*    4)  create reorg statements                                  */
+/*    5)  create change 'old-tablepace' 'new-tablespace'           */
+/*           edit commands to update runstats, image copies, etc.  */
+/*    6)  create rebind statements                                 */
+/*    7)  tip:  fetch/delete/insert in same commit group can be    */
+/*           a problem and should be changed to fetch/update       */
+/* --------------------------------------------------------------- */
+/*                                                                 */
+/* --------------------------------------------------------------- */
+/* opened input files:                                             */
+/*    TS#HINT (optional)                                           */
+/*           contains a TS existing (pattern) and suggestion       */
+/*              for a replacment pattern.                          */
+/*           for example actual tables spaces                      */
+/*                       --------------------                      */
+/*              database.tablespace                                */
+/*              DRLDB.DRLA2D11                                     */
+/*              DRLDB.DRLA2D21                                     */
+/*              DRLDB.DRLA2D22                                     */
+/*              DRLDB.DRLA2D31                                     */
+/*              DRLDB.DRLA2D41                                     */
+/*              DRLDB.DRLA2D42                                     */
+/*              DRLDB.DRLA2D43                                     */
+/*              DRLDB.DRLA2D44                                     */
+/*              DRLDB.DRLA2D45                                     */
+/*              DRLDB.DRLA2D51                                     */
+/*              DRLDB.DRLA2D61                                     */
+/*              DRLDB.DRLA2D62                                     */
+/*              DRLDB.DRLA2D63                                     */
+/*              DRLDB.DRLA2D71                                     */
+/*              DRLDB.DRLA2D72                                     */
+/*              DRLDB.DRLA2D81                                     */
+/*           for example tablespace needing to split               */
+/*                                  ----------------               */
+/*              database.tablespace   number of splits             */
+/*              DRLDB.DRLA2D21         3                           */
+/*              DRLDB.DRLA2D41         4                           */
+/*              DRLDB.DRLA2D62         3                           */
+/*                                                                 */
+/*           for example (actual) ts#hint                          */
+/*                       ----------------                          */
+/*              database.tablespace pattern and replacement        */
+/*                                  -----------------------        */
+/*              DRLDB.DRLA2D*       D##A2D*                        */
+/*                                                                 */
+/*           generated database.tablespace(s) for split            */
+/*              DRLDB.D01A2D21         1st split 4 DRLDB.DRLA2D21  */
+/*              DRLDB.D01A2D41         1st       4 DRLDB.DRLA2D41  */
+/*              DRLDB.D01A2D62         1st       4 DRLDB.DRLA2D62  */
+/*                                                                 */
+/*              DRLDB.D02A2D21         2nd split 4 DRLDB.DRLA2D21  */
+/*              DRLDB.D02A2D41         2         4 DRLDB.DRLA2D41  */
+/*              DRLDB.D02A2D62         2         4 DRLDB.DRLA2D62  */
+/*                                                                 */
+/*              DRLDB.D03A3D21         3rd split 4 DRLDB.DRLA2D21  */
+/*              DRLDB.D03A3D41         3         4 DRLDB.DRLA2D41  */
+/*              DRLDB.D03A3D62         3         4 DRLDB.DRLA2D62  */
+/*                                                                 */
+/*              DRLDB.D04A4D41         4th split 4 DRLDB.DRLA2D41  */
+/*                                                                 */
+/*                                                                 */
+/* --------------------------------------------------------------- */
+/* opened output files:                                            */
+/*    SQLSTATS (required) but only written to when variable        */
+/*                          SQLoptions = 'SQL'                     */
+/*                                                                 */
+/*           - this is a vb file.  Writes to it are done via:      */
+/*                x = write2DDvb('SQLSTATS' some text)             */
+/*           - this will contain the sql statements this code      */
+/*           executed.                                             */
+/*                                                                 */
+/*    OUTFILE1 (demonstration)                                     */
+/*           - this is a vb file.  Writes to it are done via:      */
+/*                x = write2DDvb('OUTFILE1' some text)             */
+/*           - for demo, row info is written to file.              */
+/*                                                                 */
+/*    OUTFILE2 (demonstration)                                     */
+/*           - this is a fb 80 file.  Writes to it are done via:   */
+/*                x = write2DDfb80('OUTFILE2' some text)           */
+/*           - for demo, row info is written to file.              */
+/*                                                                 */
+/* --------------------------------------------------------------- */
+/* standard (required) routines:                                   */
+/*                                                                 */
+/*  syntax:    for trapping syntax errors                          */
+/*             1.gives diagnostics                                 */
+/*             2.closes any open output files, if OpenOutputDD called*/
+/*             3.exits with bad rc.                                */
+/*                                                                 */
+/*  startup: 1.start of rexx routine (after setting syntax trap)   */
+/*           2.connects to db2 subsystem                           */
+/*           3.issues command "signal BeginProcessing"             */
+/*                                                                 */
+/*  BeginProcessing:                                               */
+/*           note:  entered from "startup:" via signal command.    */
+/*           1.  <where code should be added>                      */
+/*           2.  when done, issues command "signal cleanup".       */
+/*                                                                 */
+/*  CleanUp:                                                       */
+/*           Note:  entered by "signal cleanup" from:              */
+/*             - "beginProcessing"                                 */
+/*             - and/or from any detected error condition that     */
+/*                 used a "signal cleanup" statement.              */
+/*           Note:  pendingRc either still 0 or set to a bad rc.   */
+/*           1.disconnects from db2 subsystem                      */
+/*           2.closes files                                        */
+/*           3.and returns with rc = pendingRc                     */
+/*                                                                 */
+/*  openOutputDD:  for opening an output dataset                  */
+/*             1.adds ddname to open datasets (so we can close)    */
+/*             2.sets up blocking of output                        */
+/*             3.returns to caller.                                */
+/*                                                                 */
+/*  write2DDfb80 takes a variable length rec to write and makes    */
+/*               it full 80 bytes, so execio won't complain later. */
+/*             1.if output rec > 80 bytes, truncate but give warning*/
+/*             2.ensure it's 80 bytes long                         */
+/*             2.call write2DD                                     */
+/*             3.returns to caller.                                */
+/*                                                                 */
+/*  Write2DDvb: for writting to an output dataset (w/blocking)     */
+/*             (used for variable length rec datasets)             */
+/*             1.adds record to blocked recs for dataset           */
+/*             2.if > 100 records, write out block of records      */
+/*             3.returns to caller.                                */
+/*                                                                 */
+/*  closeDD:   for closing an output dataset.                      */
+/*             1.if file open, writes remaining recs in buffer     */
+/*                             and closes dataset.                 */
+/*             2.returns to caller.                                */
+/*                                                                 */
+/*  oneLineSql:execute sql statement (and do error handling).      */
+/*                                                                 */
+/*  sql:     1.  Either clear new SQL statement                    */
+/*               or add a line to new SQL statement                */
+/*           2.  return (sql statement to be used later in zSQL:)  */
+/*                                                                 */
+/*  zSql:    1.prepare sql statement (created by calls to "SQL:")  */
+/*           2.open cursor (so rows can be fetched later)          */
+/*           3.return to caller                                    */
+/*                                                                 */
+/*  prtSqlCA:  sql statement error diagnostics                     */
+/*                                                                 */
+/* --------------------------------------------------------------- */
+/*                                                                 */
+/* (demo) routines:                                                */
+/*                                                                 */
+/*  Sample:  opens some files, executes some sql; writes data to   */
+/*           output files.                                         */
+/*                                                                 */
+/* --------------------------------------------------------------- */
+/*                                                                 */
+/* Error recovery improvements:                                    */
+/* Error recovery improvements:                                    */
+/*    1.  Default command enviornment changed to TSO               */
+/*                                                                 */
+/*        a.  This improves error recovery as "unknown" commands   */
+/*           are reported under TSO.  Which were "ignored" under   */
+/*           address 'dsnrexx'.                                    */
+/*        b.  Actual db2 commands are executed explicity as:       */
+/*                address 'dsnrexx' ...db2 command ...             */
+/*                                                                 */
+/*    2.  rexx syntax error recovery provided.  Instead of one     */
+/*        line of code, it provides a glimpse into the rexx program*/
+/*        around the line that got the syntax error.               */
+/*                                                                 */
+/*    3.  improvement when sql fails, as we can display sql in     */
+/*        a nicer format.  (see "building SQL has changed).        */
+/*                                                                 */
+/* --------------------------------------------------------------- */
+/*                                                                 */
+/* Building sql has changed:                                       */
+/* Building sql has changed:                                       */
+/*                                                                 */
+/*   BEFORE:                                                       */
+/*   BEFORE:                                                       */
+/*    Before we simply set a variable "SQL" to a sql statement.    */
+/*    And the assignment statement typically was composed of       */
+/*    multiple lines of sql code (ending with rexx commas to       */
+/*    continue the rexx assignment statement.                      */
+/*                                                                 */
+/*    Then we called zsql to prepare and open the cursor, like     */
+/*    this:                                                        */
+/*                                                                 */
+/*        sql = 'line of sql code'  ,                              */
+/*              'line of sql code'  ,                              */
+/*              '...             '  ,                              */
+/*              'line of sql code'                                 */
+/*        call zsql                                                */
+/*                                                                 */
+/*    But this had two problems:                                   */
+/*                                                                 */
+/*        a.  confusing, because sometimes commas were embedded    */
+/*          and meant for SQL code.  And sometimes commas were     */
+/*          "rexx commas" to continue the rexx assignement stmt.   */
+/*                                                                 */
+/*        b.  and if an error occured in zsql, the sql statement   */
+/*          was hard to read as all the "line" formatting          */
+/*          disappeared when rexx created the SQL variable.        */
+/*                                                                 */
+/*   NOW:                                                          */
+/*   NOW:                                                          */
+/*    This was solved by having seperate function calls to "sql"   */
+/*    for each line of sql code.                                   */
+/*                                                                 */
+/*       aa. problem (a) is solved.  No confusing rexx commas to   */
+/*          continue SQL statement.                                */
+/*                                                                 */
+/*       bb. no problems with an extra "ending" rexx comma or      */
+/*          forgetting to add a rexx comma.                        */
+/*                                                                 */
+/*       cc. problem (b) is solved.  The sql function addes code   */
+/*          to automatically allow error recovery to be able to    */
+/*          produce more readable (formatted) sql code that was    */
+/*          executed.  And it also provides all the rexx code      */
+/*          involved with creating the sql statement ... including */
+/*          condional rexx code which may have (or may not have)   */
+/*          contributed to creating the entire sql statement.      */
+/*                                                                 */
+/*       dd.  The SQL option allows you to see the sql as comments */
+/*          in the generated racf rules.  It allows you to see the */
+/*          rexx code (with variables) and the final generated SQL>*/
+/*          This is "especially" nice in that the rexx code may be */
+/*          conditional code (with some optional clauses) that you */
+/*          may (or may not) find in the generated sql code.  In   */
+/*          addition, it is fairly easy to extract the generated   */
+/*          code to run in SPUFI or QMF (etc) if you want to see   */
+/*          what was actually returned to this rexx exec.          */
+/*            In addition, the rexx code/sql code has line numbers */
+/*          so you can easily find which statement in this rexx    */
+/*          exec was executed.  Note:  as a lot of the code is     */
+/*          written as a subroutine, the same sql may be executed  */
+/*          more than once but checking a different authority; for */
+/*          example:  routine sys_attr checks many different       */
+/*          authorities like SYSADMAUTH, SYSOPRAUTH, SYSCTRLAUTH   */
+/*          etc..                                                  */
+/*                                                                 */
+/*    So now the way or preparing a sql statement and opening a    */
+/*    cursor looks like this:                                      */
+/*        x=sql('New statement')      /* required for new stmt*/   */
+/*        x=sql('line of sql code')                                */
+/*        x=sql('line of sql code')                                */
+/*        if something then x=sql('line of sql code')              */
+/*        x=sql('line of sql code')                                */
+/*        x=sql('line of sql code')                                */
+/*        call zsql                                                */
+/*                                                                 */
+/*                                                                 */
+/*    In addition.                                                 */
+/*    ------------ before we only allowed one cursor to be open    */
+/*    at a time.  Now, there is an option on the "New Statement"   */
+/*    that allows you to specify a different cursor.               */
+/*                                                                 */
+/*    The default for x=sql("New Statement") is for cursor 1       */
+/*                                                                 */
+/*    BUT NOW you can explicitly specify cursor 1 like:            */
+/*                    x=sql("New Statement; Stmt/Cursor=1')        */
+/*                                                                 */
+/*    OR you can specify a different cursor like:                  */
+/*                    x=xql("New Statement; Stmt/Cursor=2')        */
+/*                                                                 */
+/*    The only restrictions are:                                   */
+/*           1) Stmt/cursor=#:  the number must be between 1 to 100*/
+/*           2) after the x=('New statement<; Stmt/cursor=#>')     */
+/*          that you must add all sql statements for this cursor   */
+/*          before "call zsql" which will create/open cursor for   */
+/*          this statement.                                        */
+/*           3) when calling prtsqlca it should specify which      */
+/*          cursor the failing sqlerror is for.                    */
+/*                                                                 */
+/*        x=sql('New statement')      /* required for new stmt*/   */
+/*    OR  x=sql('New statement; stmt/cursor=#')                    */
+/*                                                                 */
+/*    then...                                                      */
+/*        x=sql('line of sql code')                                */
+/*        x=sql('line of sql code')                                */
+/*        if something then x=sql('line of sql code')              */
+/*        x=sql('line of sql code')                                */
+/*        x=sql('line of sql code')                                */
+/*        call zsql                                                */
+/*                                                                 */
+/*                                                                 */
+/* --------------------------------------------------------------- */
+/*                                                                 */
+/*                                                             */
+/*  */
+/* set up some important variables and/or stem variables */
+/* set up error routines (signal on syntax)              */
+/* and branch to 'startup'                               */
+
+   connected = 0    /* not connected to db2 subsystem */
+
+   openDDs = 0      /* Number of open output datasets.             */
+                    /* Typically, output datasets where we buffer  */
+                    /* ... the output in groups of 100 records.    */
+                    /* number of open datasets we want closed later*/
+                    /* ... also closed if/when syntax error occurs */
+                    /* used by SYNTAX         routine */
+                    /* used by OpenOutputDD   routine */
+                    /* used by CloseDD        routine */
+                    /* used by write2DD       routine */
+
+   openDDs.=''      /* ddname of open file */
+   openDDsStatus.=''/* status of open file */
+   openDDindex. = 0 /* indexe to openDDs.# */
+   openDDlrecl. = 0 /* did call to writeDDfb80 set this to 80 instead?*/
+   openDDoverflow.=0/* did call to writeDDfb80 overflow lrecl length ?*/
+
+   debugIO = 0 /* issue some extra diagnostics if set to 1 */
+
+   SQLoption = 'SQL' /* write sql to SQLSTATS if SQLOPTION = 'SQL' */
+
+   signal on syntax /* set trap for syntax errors */
+   signal startUp   /* "branch" over the syntax handling routine */
+
+/* -------                 */
+/* syntax:                 */
+/* -------                 */
+/* syntax:  error handling */
+/*                                                                   */
+/*   rc    is set to the syntax error number;                        */
+/*         ... equivelent to IRX00nnL as rc = 00, 01 to 99           */
+/*   sigl  is set to the line number in error                        */
+syntax:
+   trace 'n' /* end tracing immediately */
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+   say 'IRX00'right('00'rc,2)'I Error running exec' ,
+              execName 'line' sigl':' errortext(rc)
+   syntaxLow = max(sigl-7,1)            /* -7 before (or pgm start) */
+   syntaxHigh= min(sigl+7,sourceline()) /* +7 after  (or pgm end)   */
+   do syntaxII = syntaxLow to syntaxHigh/* -7 lines back to +7 lines*/
+      if syntaxII <> sigl
+      then say 'line   ' right(syntaxii,length(syntaxHigh))':' ,
+                     sourceline(syntaxII)
+      else say 'line==>' right(syntaxii,length(syntaxHigh))':' ,
+                     sourceline(syntaxII)
+   end
+
+   /* as there is a syntax error... don't use "cleanup" but do the */
+   /* ...same cleanup work here                                    */
+
+   if connected = 1 /* if we are connected to db2, then disconnect */
+   then do
+      connected = 0
+      call oneLineSQL "DISCONNECT"
+   end
+
+   /* close (most) open files and write last buffer out */
+   /* ------------------------------------------------- */
+   do i = 1 by 1 for openDDs
+      ddname = openDDs.i
+      if ddname = '' then iterate /* if already closed, skip this*/
+      if openDDsStatus.i <> 'OPENED' then iterate
+
+      say ' '
+      if openDDlrecl.i = 0
+      then say 'closing ddname='ddname
+      else do
+         say 'closing ddname='ddname 'fb='openDDlrecl.i
+         if openDDoverflow.i > 0
+         then say 'note:  'openDDoverflow.i 'records were truncated'
+      end
+
+      address 'TSO' "EXECIO" bufferRecs.ddname.0 ,
+          "DISKW" ddname '(FINIS STEM BUFFERRECS.'ddname'.'
+      if rc <> 0
+      then say 'error closing/writting to ddname='ddname ,
+                                   ||';rc='rc
+   end
+
+   say 'exiting exec with rc=12'
+   exit 12
+
+/* --------                                                    */
+/* startUp:    start of pgm... skipped error routine "syntax:" */
+/* --------                                                    */
+Startup:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+   address 'TSO'
+
+   arg theargs
+   say 'called with args: "'strip(theArgs)'"'
+   pendingRc = 0
+
+   parse var theargs . 'SSID='ssid .
+
+     /* Set addressability to DB2 Rexx function */
+   ADDRESS TSO "SUBCOM DSNREXX"
+   If RC = 1 Then S_RC = RXSUBCOM('ADD','DSNREXX','DSNREXX')
+   Else Do
+     Say 'StartUp:  Can not access DB2 Rexx Function.  Ending pgm'
+     Say '    probable cause, steplib missing SDSNLOAD dataset'
+     pendingRc = 8
+     signal cleanUp
+   End
+
+   If ssid="" Then Do
+     Say "SSID for subsystem must be specified, so we can connect" ,
+            'to it'
+     say 'ssid is a 1-4 character subsystem identifier, for a' ,
+            'specific db2 subsystem'
+     pendingRc = 8
+     signal CleanUp
+   End
+
+   address dsnrexx "CONNECT "ssid
+   if rc = 0
+   then connected = 1 /* remember we connected to subsystem */
+   else do
+      /* failing to connect to a subsystem is a problem */
+      say '"CONNECT' ssid'" failed with rc='rc
+      say "either subsystem is down or unavailable, or ssid" ,
+            '"'ssid'" is invalid'
+      say 'aborting with rc=8'
+      pendingRc = 8
+      signal Cleanup
+   end
+
+   /* open our standard "SQLSTATS" file.  */
+   /*   for error messages                */
+   /*   for SQL statement information     */
+   /*   etc.                              */
+   rc = openOutputDD('SQLSTATS')
+
+   signal begin_processing /* skeleton setup complete, begin usercode*/
+
+
+   /* ----------------                                       */
+   /* ----------------                                       */
+   /* begin_processing:                                    */
+   /* ----------------                                       */
+   /* ----------------                                       */
+   /*                                                        */
+   /*            1. work completed.                          */
+   /*            2. close filed and exit with pendingRc      */
+   /*            3. ddname EXCLIST input read and parsed.    */
+   /*            4. output files opened                      */
+begin_processing:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+   /* BUT, Add your user code here.                 */
+   /*      Add your user subroutines/functions at   */
+   /*        then end of this code.                 */
+   /* --------------------------------------------- */
+
+
+   /* sample user code */
+   /* ---------------- */
+   sampleCode = 0 /* execute sample code, change to 0 later */
+                  /*                      ----------------- */
+   if sampleCode = 1
+   then do
+      /* only execute this when sampleCode set to 1 */
+      /* ------------------------------------------ */
+
+      /* open 2 output files, OUTFILE1, OUTFILE2 */
+      rc = openOutputDD('OUTFILE1')
+      rc = openOutputDD('OUTFILE2')
+
+      /* call sample, to do some DB2 SQL code; and write to OUTFILE1 */
+      call sample /* create sql, open cursor, read rows, close cursor*/
+                  /* and write to output file OUTFILE1               */
+      /* ...note, output files will automatically be closed by CleanUp*/
+
+   end
+   /* end sample user code */
+   /* -------------------- */
+
+
+
+
+
+   /* -------------------------------------- */
+   /* db2$L508 code is written in MoveTables */
+   /* -------------------------------------- */
+
+      /* note:  we will open files:  NEWJOB, DATA1, DATA2 in movetables*/
+
+      rc = openOutputDD('OUTFILE1') /* also open this, just like tablespaces*/
+      call moveTables /*create jcl to move tables */
+      /* ...note, output files will automatically be closed by CleanUp*/
+
+
+
+   /* ------------------------ */
+   /* end of your code.        */
+   /* ------------------------ */
+
+   signal Cleanup /* now do cleanup (will close all OPENDD files)*/
+                  /* ...and exit.  Probably with rc=0            */
+
+   /* ----------------                                       */
+   /* ----------------                                       */
+   /* Clean_up:                                            */
+   /* ----------------                                       */
+   /* ----------------                                       */
+   /*                                                        */
+   /*            1. work completed and/or forcing early end  */
+   /*            2. close files and exit with pendingRc      */
+cleanUP:
+   trace 'n' /* end tracing immediately */
+   /* production subroutine; included with skeleton     */
+   /*    will exit with pendingRc (either 0 or non-zero)*/
+   /* --------------------------------------------------*/
+
+   if connected = 1 /* if we are connected to db2, then disconnect */
+   then call OneLineSQL "DISCONNECT"
+
+   /* close (most) open files and write last buffer out */
+   /* ------------------------------------------------- */
+   do i = 1 by 1 for openDDs
+      ddname = openDDs.i
+      if ddname = '' then iterate /* if already closed, skip this*/
+      if openDDsStatus.i <> 'OPENED' then iterate
+
+      rc = closeDD(ddname) /* if file still open, close it */
+      openDDs.i = '' /* ddname no longer open */
+   end
+
+   Exit pendingRc /* either exit w/rc=0 or some error rc */
+
+
+sample:
+     /* issue some SQL code and write to some output files */
+
+     /* this SQL assumes you can select from SYSIBM.SYSTABLES */
+     /*          -------         ---------------------------- */
+
+  x=sql('NEW statement') /* start new sql statement */
+                         /* ----------------------- */
+  x=sql("SELECT T.DBNAME, T.CREATOR, COUNT(*)")
+  x=sql("FROM SYSIBM.SYSTABLES  T")
+  x=sql("GROUP BY T.DBNAME, T.CREATOR")
+  x=sql("WITH UR                     ") /* don't use any locking on SYSTABLES */
+
+  call ZSQL /* executes prepare and opens cursor C1, you can override and open*/
+            /*    a different cursor.  See zSQL for more information          */
+
+  rowsReturned = 0
+  Do Until SQLCODE \= 0
+    address dsnrexx "EXECSQL FETCH C1 INTO :databaseName, :tableCreator, :count"
+    If SQLCODE = 0 Then Do
+      rowsReturned = rowsReturned + 1
+      parse upper var databaseName databaseName .
+      parse upper var tableCreator tableCreator .
+      parse upper var count count .
+
+      cmd='database='left(databaseName,8)', has' right(count,8) 'tables created by' tableCreator
+      x = Write2DDvb('OUTFILE1' cmd)   /* write data to outfile1, a vb file*/
+      x = write2DDfb80('OUTFILE2' cmd) /* write data to outfile2, a fb file*/
+    End
+  End /* do until */
+  call showRowCount /* show rowsReturned */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1' /* generate error diagnostics; and fail exec */
+  call OneLineSQL "EXECSQL CLOSE C1"
+  return
+
+
+MoveTables: /* db2$l508 code */
+            /* db2$l508 code */
+
+  /* read in our hints... so that we can figure out how to create new tablespaces */
+  address TSO 'EXECIO * DISKR TS$HINT (OPEN FINIS STEM TS$HINT.'
+  if rc <> 0
+  then do
+     say 'TS$HINT DD is required, so that we know what hints are available, pending rc=8'
+     pendingRc = 8
+     ts$hint.0 = 0
+  end
+
+  /* go thru hints, group by database name */
+  hintDBTS. = 0
+  do hint = 1 by 1 for ts$hint.0
+     parse upper var ts$hint.hint dbtsHint newpattern .
+     if left(dbtsHint,2) = '--' | dbtsHint = '' then iterate
+     parse var dbtsHint dbHint '.' tsHint
+     if newpattern = '' then iterate
+     if length(dbHint) > 8 | length(tsHint) > 8 | length(newPattern) > 8
+     then do
+        say 'database name, tsname, newpattern (in hint) must be 1-8 chars each'
+        say 'hint ignored is:' strip(ts$hint.hint)
+        pendingRc = 4
+        iterate
+     end
+     if pos('*',dbHint) > 0
+     then do
+        say 'database name (in hint) must be explicit), asterisk not allowed'
+        say 'hint ignored is:' strip(ts$hint.hint)
+        pendingRc = 4
+        iterate
+     end
+     if pos('#',newPattern) < 2 /* must exist, and can't start at position 1 */
+     then do
+        say 'new tablespace pattern (in hint) must contain at least one "#" sign'
+        say '  and # can''t appear in 1st position of the pattern'
+        say 'hint ignored is:' strip(ts$hint.hint)
+        pendingRc = 4
+        iterate
+     end
+     if pos('*',newPattern) = length(newPattern) | pos('*',newPattern) = 0
+     then nop /* asterisk, if specified, can be in last possition of newPattern only */
+     else do
+        say 'new tablespace pattern (in hint) can have an asterisk, but only at end'
+        say '  for remainder of tablespace name'
+        say 'hint ignored is:' strip(ts$hint.hint)
+        pendingRc = 4
+        iterate
+     end
+
+     if 'NUM'tsHint = 'NUM'0 /* of course no tablespace can be zero, but ignore if specified */
+     then iterate
+
+     dbHintNum = hintDbTs.dbhint.0 +1 /* ts "0" obviously, can't exist.  So this is # of hints for dbname +1 */
+     /* now save next tsHint and Pattern for this database */
+     /* -------------------------------------------------- */
+     HintDbTs.dbhint.dbHintNum    = tsHint
+     PatternDBTs.dbhint.dbHintNum = newPattern
+     HintDbTs.dbhint.0 = dbHintNum
+
+  end
+
+
+     /* this SQL assumes you can select from SYSIBM.* tables */
+     /*          -------         --------------------------- */
+
+  x=sql('NEW statement') /* start new sql statement */
+                         /* ----------------------- */
+  x=sql("select a.type                                        ")
+  x=sql("      ,a.dbname                                      ")
+  x=sql("      ,a.name                                        ")
+  x=sql("      ,a.bpool                                       ")
+  x=sql("      ,a.encoding_scheme                             ")
+  x=sql("      ,a.ntables                                     ")
+  x=sql("      ,a.log                                         ")
+  x=sql("      ,p.compress                                    ")
+  x=sql("      ,p.storname                                    ")
+  x=sql("      ,p.pqty                                        ")
+  x=sql("      ,p.sqty                                        ")
+  x=sql("      ,b.creator                                     ")
+  x=sql("      ,b.name as tblname                             ")
+  x=sql("   from sysibm.systablespace a                       ")
+  x=sql("       ,sysibm.systables     b                       ")
+  x=sql("       ,sysibm.systablepart  p                       ")
+  x=sql("   where a.maxpartitions = 0                         ")
+  x=sql("     and a.partitions    = 0                         ")
+  x=sql("     and a.segsize         > 0                       ")
+  x=sql("     and a.ntables         > 1                       ")
+  x=sql("     and a.dbname not in ('DSNDB01', 'DSNDB06')      ")
+  x=sql("     and b.dbname = a.dbname                         ")
+  x=sql("     and b.tsname = a.name                           ")
+  x=sql("     and b.type = 'T'                                ")
+  x=sql("     and p.dbname = a.dbname                         ")
+  x=sql("     and p.tsname = a.name                           ")
+  x=sql("     and p.partition = 0                             ")
+  x=sql("   order by a.type, a.dbname, a.name                 ")
+  x=sql("WITH UR                     ") /* don't use any locking */
+
+  call ZSQL /* executes prepare and opens cursor C1, you can override and open*/
+            /*    a different cursor.  See zSQL for more information          */
+
+  rowsReturned = 0
+
+  type.      = ''
+  dbname.    = ''
+  spacename. = ''
+  bpool.     = ''
+  encoding.  = ''
+  numtables. = ''
+  log.       = ''
+  compress.  = ''
+  storname.  = ''
+  tbcreator. = ''
+  tbname.    = ''
+
+  uniqueDBnames = ''
+  Do Until SQLCODE \= 0
+    address dsnrexx "EXECSQL FETCH C1 INTO :type"     ,
+                                        ", :dbname"   ,
+                                        ", :spaceName",
+                                        ", :bpool"    ,
+                                        ", :encoding" ,
+                                        ", :numTables",
+                                        ", :log"      ,
+                                        ", :compress" ,
+                                        ", :storname" ,
+                                        ", :priqty"   ,
+                                        ", :secqty"   ,
+                                        ", :tbCreator",
+                                        ", :tbName"
+    If SQLCODE = 0 Then Do
+      rowsReturned = rowsReturned + 1
+      parse upper var dbName dbName .
+      parse upper var spaceName SpaceName .
+      parse upper var bpool     bpool     .
+      parse upper var numTables numTables .
+      parse upper var storname  storname  .
+      parse upper var tbCreator TbCreator .
+      parse       var tbName    TbName    . /* tbname can be mixed case */
+
+      cmd='type='type'; dbname.spacename='dbname'.'spacename ,
+                  || '; bpool='bpool'; tbcreator.tbname='tbcreator'.'tbname
+      x = Write2DDvb('OUTFILE1' cmd)   /* write data to outfile1, a vb file*/
+
+      i = rowsReturned
+      /* tablespace info will be resaved "N" times (1 to n) for each table in tablespace) */
+      type.i      = type
+      dbname.i    = dbname
+      spaceName.i = spaceName
+      bpool.i     = bpool
+      if      encoding = 'E' then encoding.i = 'EBCDIC'
+      else if encoding = 'A' then encoding.i = 'ASCII'
+      else if encoding = 'U' then encoding.i = 'UNICODE'
+                             else encoding.i = '?'
+      numtables.i = numtables
+      log.i       = log
+      compress.i  = compress
+      storname.i  = storname
+      priqty.i    = priqty * 4
+      secqty.i    = secqty * 4
+
+      /* save info on this table, in tablespace */
+      /* -------------------------------------- */
+      tbcreator.i = tbcreator
+      tbname.i    = tbname
+
+      /* save unique dbnames */
+      /* ------------------- */
+      if wordpos("'"dbname"'",uniqueDBnames) = 0
+      then uniqueDBnames = uniqueDBnames ", '"dbname"'"
+    End
+  End /* do until */
+  rowInfo.0 = rowsReturned/* save number of tablespaces we collected data for */
+  call showRowCount /* show rowsReturned */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1' /* generate error diagnostics; and fail exec */
+  call OneLineSQL "EXECSQL CLOSE C1"
+
+  /* find all tablespaces for databases involved with this process */
+  /* ------------------------------------------------------------- */
+
+  uniqueDBnames = subword(uniqueDBnames,2) /* throw away 1st comma */
+
+  x=sql('NEW statement') /* start new sql statement */
+                         /* ----------------------- */
+  x=sql("select a.dbname                                      ")
+  x=sql("      ,a.name                                        ")
+  x=sql("   from sysibm.systablespace a                       ")
+  x=sql("   where a.dbname in ("uniqueDBnames")               ")
+  x=sql("   order by a.dbname, a.name                         ")
+  x=sql("WITH UR                     ") /* don't use any locking */
+
+  call ZSQL /* executes prepare and opens cursor C1, you can override and open*/
+            /*    a different cursor.  See zSQL for more information          */
+
+  rowsReturned = 0
+
+  dbTsInUse.      = 0 /* default:  dbname/spaceName is not used (currently) */
+  Do Until SQLCODE \= 0
+    address dsnrexx "EXECSQL FETCH C1 INTO :dbname"   ,
+                                        ", :spaceName"
+    If SQLCODE = 0 Then Do
+      rowsReturned = rowsReturned + 1
+      parse upper var dbName dbName .
+      parse upper var spaceName SpaceName
+
+      dbTsInUse.dbname.spaceName = 1 /* indicate this dbname/tsname is in use */
+    End
+  End /* do until */
+  call showRowCount /* show rowsReturned */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1' /* generate error diagnostics; and fail exec */
+  call OneLineSQL "EXECSQL CLOSE C1"
+
+
+  /* create job */
+  /* ---------- */
+  rc = openOutputDD('NEWJOB')
+  say "creating job where NEWJOB DD points to.  We assume it's in SFRH66.CNTL.DB2(L508"ssid")"
+  x = write2DDfb80('NEWJOB' '//SFRH66PL JOB 0,RHUMPHRIS@IOT.IN.GOV,MSGCLASS=S,CLASS=S,             ')
+  x = write2DDfb80('NEWJOB' '//       NOTIFY=SFRH66,REGION=0M                                      ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//*   job created by exec DB2$L508                                    ')
+  x = write2DDfb80('NEWJOB' '//*   ----------------------------                                    ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//* jcl to move tables from' ssid )
+  x = write2DDfb80('NEWJOB' '//*   note:  certain code has to run under lvl 508                    ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//* setup symbols for use in jcl or "DD *"                            ')
+  x = write2DDfb80('NEWJOB' '//* --------------------------------------                            ')
+  x = write2DDfb80('NEWJOB' '//  EXPORT SYMLIST=(SSID,TX,FUNCTION,DDL)                             ')
+  x = write2DDfb80('NEWJOB' "// SET SSID='"ssid"'" )
+  x = write2DDfb80('NEWJOB' "// SET TX='"right(ssid,1)"'" )
+  x = write2DDfb80('NEWJOB' "// SET FUNCTION='COMMIT' ddl should work, rollback otherwise" )
+  x = write2DDfb80('NEWJOB' "// SET DDL='SFRH66.REXX(DDL8"ssid")' ddl exec DB2$L508 created")
+  x = write2DDfb80('NEWJOB' '//  JCLLIB ORDER=SFRDBMDS.&SSID..PROCLIB <-- &SSID proclib            ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//JOBLIB   DD  DISP=SHR,DSN=SFRDBMDS.&SSID..SDSNEXIT &ssid sdsnexit   ')
+  x = write2DDfb80('NEWJOB' '//         DD  DISP=SHR,DSN=SFRDBMDS.&SSID..SDSNLOAD &ssid sdsnload   ')
+  x = write2DDfb80('NEWJOB' "//*                                                                   ")
+  x = write2DDfb80('NEWJOB' '//* start traces; look for select/delete/insert in same commit group  ')
+  x = write2DDfb80('NEWJOB' '//* - if so, fix before continuing.                                   ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//* DDLSTEP: define new tablespaces, move tables                      ')
+  x = write2DDfb80('NEWJOB' '//* DDLSTEP: define new tablespaces, move tables                      ')
+  x = write2DDfb80('NEWJOB' '//*          -----------------------------------                      ')
+  x = write2DDfb80('NEWJOB' '//DDLSTEP EXEC PGM=IKJEFT01,DYNAMNBR=20,COND=(4,LT)                   ')
+  x = write2DDfb80('NEWJOB' '//SYSTSPRT DD  SYSOUT=*                                               ')
+  x = write2DDfb80('NEWJOB' '//SYSPRINT DD  SYSOUT=*                                               ')
+  x = write2DDfb80('NEWJOB' '//SYSUDUMP DD  SYSOUT=*                                               ')
+  x = write2DDfb80('NEWJOB' '//SYSPROC  DD  DISP=SHR,DSN=SFRH66.REXX  has REXXDDL exec             ')
+  x = write2DDfb80('NEWJOB' '//SYSEXEC  DD  DISP=SHR,DSN=SFRH66.REXX  has REXXDDL exec             ')
+  x = write2DDfb80('NEWJOB' '//SYSTSIN  DD  *,SYMBOLS=JCLONLY run rexx exec REXXDDL                ')
+  x = write2DDfb80('NEWJOB' '  %REXXDDL  &SSID &FUNCTION &DDL                                      ')
+  x = write2DDfb80('NEWJOB' '//INFO     DD  SYSOUT=*                                               ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//  IF RC <= 4 THEN')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//********************************************************************')
+  x = write2DDfb80('NEWJOB' '//* TERMSTEP: TERMINATE PENDING UTILITIES FOR THIS JOB                ')
+  x = write2DDfb80('NEWJOB' '//********************************************************************')
+  x = write2DDfb80('NEWJOB' '//TERMSTEP EXEC PGM=IKJEFT01,DYNAMNBR=20                              ')
+  x = write2DDfb80('NEWJOB' '//SYSOUT    DD SYSOUT=*                                               ')
+  x = write2DDfb80('NEWJOB' '//SYSPRINT  DD SYSOUT=*                                               ')
+  x = write2DDfb80('NEWJOB' '//SYSTSPRT  DD SYSOUT=*                                               ')
+  x = write2DDfb80('NEWJOB' '//SYSUDUMP  DD SYSOUT=*                                               ')
+  x = write2DDfb80('NEWJOB' '//SYSTSIN   DD *                                                      ')
+  x = write2DDfb80('NEWJOB' '  DSN SYSTEM('ssid')                                                  ')
+  x = write2DDfb80('NEWJOB' '  -DIS UTILITY(*)                                                     ')
+  x = write2DDfb80('NEWJOB' '  -TERM UTILITY(REORGMVE.*)                                           ')
+  x = write2DDfb80('NEWJOB' '  END                                                                 ')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//********************************************************************')
+  x = write2DDfb80('NEWJOB' '//* REORGMVE:do reorgs to move tables to single table PBG tables.     ')
+  x = write2DDfb80('NEWJOB' '//*          ----------------------------------------------------     ')
+  x = write2DDfb80('NEWJOB' '//********************************************************************')
+  x = write2DDfb80('NEWJOB' "//REORGMVE EXEC PGM=DSNUTILB,                                         ")
+  x = write2DDfb80('NEWJOB' "//             REGION=0M,                                             ")
+  x = write2DDfb80('NEWJOB' "//             PARM='"ssid",REORGMVE.TABLES'                          ")
+  x = write2DDfb80('NEWJOB' "//*                                                                   ")
+  x = write2DDfb80('NEWJOB' "//*                                                                   ")
+  x = write2DDfb80('NEWJOB' '//SYSIN    DD  DISP=SHR,DSN=SFRH66.CNTL.DB2(MVE8'ssid') reorg stmts'   )
+  x = write2DDfb80('NEWJOB' "//SYSPRINT DD  SYSOUT=*                                               ")
+  x = write2DDfb80('NEWJOB' "//UTPRINT  DD  SYSOUT=*                                               ")
+  x = write2DDfb80('NEWJOB' "//SYSUDUMP DD  SYSOUT=*                                               ")
+  x = write2DDfb80('NEWJOB' "//SYSABEND DD  SYSOUT=*                                               ")
+  x = write2DDfb80('NEWJOB' "//SYSIN    DD  DUMMY                                                  ")
+  x = write2DDfb80('NEWJOB' "//SYSREC   DD  UNIT=SYSDA,SPACE=(CYL,(400,400))                       ")
+  x = write2DDfb80('NEWJOB' "//SYSUT1   DD  UNIT=SYSDA,SPACE=(CYL,(9,90))                          ")
+  x = write2DDfb80('NEWJOB' "//*                                                                   ")
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+  x = write2DDfb80('NEWJOB' '//  ENDIF')
+  x = write2DDfb80('NEWJOB' '//*                                                                   ')
+
+
+  /* now create ddl for DDLSTEP */
+  /* -------------------------- */
+  rc = openOutputDD('DATA1')
+  say "creating DDL where DATA1 DD points to.  We assume it's in SFRH66.REXX(DDL8"ssid")"
+
+  x  = write2DDvb('DATA1' "  SET CURRENT SQLID = 'DB2ENGNR';")
+  x  = write2DDvb('DATA1' "  SET CURRENT APPLICATION COMPATIBILITY = 'V12R1M508';")
+                  /* ----------------------------------------------- */
+                  /* more cards to be created here by exec for data1 */
+                  /* ----------------------------------------------- */
+  priorDBname = ''
+  priorTSname = ''
+  hint4TSname = ''
+  counter = 0
+  do i = 1 by 1 for rowInfo.0
+     say 'i='i'; dbname='dbname.i';spacename='spaceName.i
+     if priorDBname <> dbname.i | priorTSname <> spaceName.i
+     then do
+        priorDBname = dbname.i
+        priorTSname = spaceName.i
+        counter = counter + 1
+        x  = write2DDvb('DATA1' ' ')
+        if counter//10 = 1 & i <> 1
+        then do
+           if counter = 11
+           then x  = write2DDvb('DATA1' '-- Processing the 11th tablespace')
+           else x  = write2DDvb('DATA1' '-- Processing the' counter'st tablespace')
+           x  = write2DDvb('DATA1' '-- -------------------------------')
+        end
+        x  = write2DDvb('DATA1' ' ')
+        x  = write2DDvb('DATA1' '-- move tables from tablespace' dbname.i'.'spaceName.i)
+
+        dbname = dbname.i
+        do hint = 1 by 1 for HintDbTs.dbname.0
+           /* checking only hints for this database name */
+           tsHint     = hintDbTs.dbname.hint
+           newPattern = patternDbTs.dbname.hint
+
+           if tsHint = '*' | tsHint = spaceName.i
+           then leave /* newPattern has been set */
+
+           starPos = pos('*',tsHint)
+
+           if starPos = 0
+           then iterate    /* tsHint didn't match spaceName.i */
+
+           if starPos = 1  /* if hint started with asterisk, check right hand side*/
+           then if right(spaceName.i,length(tsHint)-1) = substr(tsHint,2)
+                then leave /* newPattern has been set */
+                else iterate
+
+           if starPos = length(tsHint) /* ends with asterisk*/
+           then if left(spaceName.i,length(tsHint)-1) = left(tsHint,length(tsHint)-1)
+                then leave /* newPattern has been set */
+                else iterate
+
+           parse var tsHint lhs '*' rhs
+           if left(spaceName.i,length(lhs)) = lhs ,
+            & right(spaceName.i,length(rhs))= rhs
+           then leave   /* newPattern has been set */
+           else iterate
+
+        end
+        if hint > hintDbTs.dbname.0
+        then do
+           say 'missing TS$HINT for' dbname.i'.'spacename.i'; pending rc=8'
+           pendingrc = 8
+           newPattern = '?missing hint#'
+        end
+        startNumSign = pos('#',NewPattern)
+        if      substr(newPattern,StartNumSign,7) = '#######' then numLength = 7
+        else if substr(newPattern,StartNumSign,6) = '######' then numLength = 6
+        else if substr(newPattern,StartNumSign,5) = '#####' then numLength = 5
+        else if substr(newPattern,StartNumSign,4) = '####' then numLength = 4
+        else if substr(newPattern,StartNumSign,3) = '###' then numLength = 3
+        else if substr(newPattern,StartNumSign,2) = '##' then numLength = 2
+        else if substr(newPattern,StartNumSign,1) = '#' then numLength = 1
+
+        LHSPattern = left(NewPattern,startNumSign-1)
+        RHSPattern = substr(NewPattern,startNumSign+numLength)
+        if right(RHSpattern,1) = '*'
+        then do
+           parse var RHSpattern RHSpattern '*' .
+           TrailingNum = 8 - length(LHSpattern) - numLength - length(RHSpattern)
+        end
+        else TrailingNum = 0
+
+        /* LHSpattern = chars for left hand side of TSname */
+        /* # (length = numlength) ... for number part of TSname */
+        /* RHSpattern = chars for right hand side of TSname*/
+        /* (trailing num) = chars from original TSname starting from the right) */
+        NextTsNum = 0
+     end
+
+     say 'newPattern='newPattern
+     /* create tablespace name for new tablespace */
+     do NextTsNum = NextTsnum by 1 while nextTsNum < 10**numLength
+        newTableSpace = lhsPattern || right('0000000'nextTsNum,numLength) ,
+                      ||rhsPattern
+        if trailingnum > 0
+        then newTableSpace = newTableSpace || strip(right(left(spaceName.i,8),trailingNum))
+
+        if dbTsInUse.dbname.NewTableSpace = 0
+        then do
+           dbTsInUse.dbname.NewTableSpace = 1 /* indicate now in use */
+           leave                              /* and we have new ts name */
+        end
+     end
+     if nextTsNum < 10**numLength
+     then newTableSpace.i = NewTableSpace /* set new tablespace name */
+     else do
+        say 'no more tablespaces available for pattern "'newpattern'" for space' spacename.i
+        say 'pending rc=8'
+        pendingRc = 8
+        newTablespace   = NewPattern'(Out of digits)'
+        newTablespace.i = NewPattern'(Out of digits)'
+     end
+     say 'newtablespace='newTableSpace
+
+     x  = write2DDvb('DATA1' '  CREATE TABLESPACE' newTableSpace.i 'IN' dbname.i)
+     x  = write2DDvb('DATA1' '     BUFFERPOOL' bpool.i)
+     x  = write2DDvb('DATA1' '     MAXPARTITIONS 1')
+     x  = write2DDvb('DATA1' '     CCSID' encoding.i)
+     x  = write2DDvb('DATA1' '     DEFINE NO')
+
+     if log.i = 'Y'
+     then x  = write2DDvb('DATA1' '     LOGGED')
+     else x  = write2DDvb('DATA1' '     NOT LOGGED')
+
+       if compress.i = 'Y'
+       then   x  = write2DDvb('DATA1' '     COMPRESS YES')
+       else   x  = write2DDvb('DATA1' '     COMPRESS NO')
+
+     if storname.i <> ''
+     then do
+     x  = write2DDvb('DATA1' '     USING STOGROUP' storName.i)
+       if priqty.i > 0 & secqty.i > 0
+       then do
+        x  = write2DDvb('DATA1' '     PRIQTY' priqty.i 'SECQTY' secqty.i)
+       end
+       else if priqty.i > 0
+       then do
+        x  = write2DDvb('DATA1' '     PRIQTY' priqty.i)
+       end
+     end
+
+     x  = write2DDvb('DATA1' '     ;') /* end of create tablespace */
+
+     /* now create ALTER TABLEPACE commands, to move table to new tablespace */
+     x  = write2DDvb('DATA1' '  ALTER TABLESPACE' dbName.i'.'spaceName.i)
+
+          /* note:  tbname.i can be mixed case, so enclose in double quotes */
+     x  = write2DDvb('DATA1' '     MOVE TABLE' tbCreator.i'."'tbName.i'"')
+
+     x  = write2DDvb('DATA1' '       TO TABLESPACE' dbName.i'.'newTableSpace.i)
+     x  = write2DDvb('DATA1' '     ;')
+  end
+
+  /* now create data for step2 */
+  /* ------------------------- */
+  rc = openOutputDD('DATA2')
+  say "creating REORG stmts where DATA2 DD points to.  We assume it's in SFRH66.CNTL.DB2(MVE8"ssid")"
+
+                  /* ----------------------------------------------- */
+                  /* do reorgs (one per original tablespace)         */
+                  /* ----------------------------------------------- */
+  priorDBname = ''
+  priorTSname = ''
+  x  = write2DDvb('DATA2' ' LISTDEF REORG_LIST')
+  counter = 0
+  do i = 1 by 1 for rowInfo.0
+     if priorDBname = dbname.i & priorTSname = spaceName.i
+     then iterate
+     priorDBname = dbname.i
+     priorTSname = spaceName.i
+
+     /* reorg original tablespace */
+     x  = write2DDvb('DATA2' '   INCLUDE TABLESPACE' dbname.i'.'spaceName.i)
+     counter = counter + 1
+     if counter = 10
+     then do /* add blank line after every 10 reorgs */
+        x  = write2DDvb('DATA2' ' ')
+        counter = 0
+     end
+
+  end
+  x  = write2DDvb('DATA2' ' ')
+  x  = write2DDvb('DATA2' '   TEMPLATE SYSCOPY                                        ')
+  x  = write2DDvb('DATA2' '            DSN(SFRDBMVS.&DB..&SN..&IC..T&TI.)             ')
+  x  = write2DDvb('DATA2' '            DISP (NEW,CATLG,CATLG)                         ')
+  x  = write2DDvb('DATA2' '            UNIT SYSALLDA                                  ')
+  x  = write2DDvb('DATA2' '            SPACE (100,100) CYL                            ')
+  x  = write2DDvb('DATA2' '                                                           ')
+  x  = write2DDvb('DATA2' '   REORG TABLESPACE LIST REORG_LIST SHRLEVEL CHANGE        ')
+  x  = write2DDvb('DATA2' '         LOG NO COPYDDN(SYSCOPY)                           ')
+  x  = write2DDvb('DATA2' '         RBALRSN_CONVERSION EXTENDED                       ')
+  x  = write2DDvb('DATA2' '         RETRY 255 TIMEOUT TERM RETRY_DELAY 1 DRAIN_WAIT 1 ')
+  x  = write2DDvb('DATA2' '         SORTDATA NO SORTDEVT SYSDA NOSYSREC               ')
+  x  = write2DDvb('DATA2' '         KEEPDICTIONARY PARALLEL(6)                        ')
+
+  return
+
+
+OneLineSQL:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+  /* used only for one line of sql code zsql, where we declare */
+  /* a cursor for use... before we prepare/open cursor for a   */
+  /* sql statement.                                            */
+  /*                                                           */
+  /* We didn't want to use prtsqlca for error recovery before  */
+  /* the sql statement was even prepared.  So this is called   */
+  /* like this (from zsql):                                    */
+  /*                                                           */
+  /*        call OneLineSQL "EXECSQL DECLARE C1 CURSOR FOR S1" */
+  /*                                                           */
+  /* always returns if sqlcode >= 0                            */
+  /* Otherwise, it shows diagnostics and rexx exec ends.       */
+  /*                                                           */
+  /*                                                           */
+  parse arg oneLineSQLcode
+
+  if word(oneLineSQLcode,1) = 'CONNECT'    ,
+   | word(oneLineSQLcode,1) = 'DISCONNECT'
+  then nop            /* let us connect/disconnect */
+  else if connect = 0 /* otherwise, if not connected, its an issue */
+  then do
+     say 'OneLineSQLcode:  called to issue sql statement while not connected'
+     say 'OneLineSQLcode:  statement was "'oneLineSQLcode'"'
+     say 'OneLineSQLcode:  called from line:' sigl'; exit w/rc=8'
+     pendingRc = 8
+     signal CleanUP
+  end
+
+  address dsnrexx oneLineSqlCode /* execute it */
+  if sqlcode >= 0
+  then do
+     if sqlOption = 'SQL'
+     then x = write2DDvb('SQLSTATS' ,
+                         'SQL statement "'oneLineSqlCode'"; rc='sqlcode)
+     return
+  end
+
+  /* error recovery for simple sql */
+  say ' '
+  say ' '
+  say ' '
+  say '** --------------------'
+  say '** start error analysis'
+  say '** --------------------'
+  say ' '
+  Say '** Error SQL statement'
+  Say '** failing SQL statement follows:'
+  say oneLineSQLcode
+  say '** end failing SQL statement'
+  say ' '
+  Say 'SQLCODE = 'SQLCODE
+  Say 'SQLERRMC = 'SQLERRMC
+  Say 'SQLERRP = 'SQLERRP
+  Say 'SQLERRD = 'SQLERRD.1',',
+              || SQLERRD.2',',
+              || SQLERRD.3',',
+              || SQLERRD.4',',
+              || SQLERRD.5',',
+              || SQLERRD.6
+
+  Say 'SQLWARN = 'SQLWARN.1',',
+              || SQLWARN.2',',
+              || SQLWARN.3',',
+              || SQLWARN.4',',
+              || SQLWARN.5',',
+              || SQLWARN.6',',
+              || SQLWARN.7',',
+              || SQLWARN.8',',
+              || SQLWARN.9',',
+              || SQLWARN.10
+
+  Say 'SQLSTATE= 'SQLSTATE
+
+  say 'called from line' sigl
+  say ' '
+  say 'code near call to OneLineSql'
+  say ' '
+  prbl = sigl
+
+  syntaxLow = max(prbL-12,1)           /*-12 before (or pgm start */
+  syntaxHigh= min(prbL+4,sourceline()) /* +4 after  (or pgm end   */
+  do syntaxII = syntaxLow to syntaxHigh/* show subset of lines    */
+     if syntaxII <> prbL
+     then say 'line   ' right(syntaxii,length(syntaxHigh))':' ,
+                  sourceline(syntaxII)
+     else say 'line==>' right(syntaxii,length(syntaxHigh))':' ,
+                  sourceline(syntaxII)
+  end
+  say ' '
+
+  pendingRc = 999
+  signal CleanUp /* cleanup and exit w/rc=999 */
+
+ZSQL:
+  /* production subroutine; included with skeleton */
+  /* --------------------------------------------- */
+
+  zsqlSigl = sigl /* helps prtsqlca give us info */
+
+  /* normally:   declare c1 cursor for s1"      */
+  /* but may be: declare c2 cursor for s2", etc */
+  call OneLineSQL "EXECSQL DECLARE C"sqlStmtValue ,
+                          "CURSOR FOR S"sqlStmtValue
+  trace 'n'
+
+  if sqlOption = 'SQL'
+  then do /* "display" sql statement in output */
+     if datatype(zsqlsigl,'W')
+     then do
+        cmd='/* **rexx code generating SQL statement began at' ,
+            sqlstmt.sqlStmtValue.startSQLcaller ,
+            'ended at'                          ,
+            sqlstmt.sqlStmtValue.lastSQLcaller  ,
+            ' */'
+        x=Write2DDvb('SQLSTATS' cmd)
+        x=Write2DDvb('SQLSTATS' ' ')
+        cmd='/*   ** rexx code follows:  */'
+        x=Write2DDvb('SQLSTATS' cmd)
+        iiiStart = sqlstmt.sqlStmtValue.startSQLcaller
+        iiiEnd   = sqlstmt.sqlStmtValue.lastSQLcaller
+        do iii = iiiStart by 1 to iiiEnd
+           cmd= '/*'   iii'-->'sourceline(iii) '*/'
+           x=Write2DDvb('SQLSTATS' cmd)
+        end
+        cmd='/*   ** End of rexx code ** */'
+        x=Write2DDvb('SQLSTATS' cmd)
+        x=Write2DDvb('SQLSTATS' ' ')
+        cmd='/* **resolved rexx SQL code; statement began at' ,
+            sqlstmt.sqlStmtValue.startSQLcaller ,
+            'ended at'                          ,
+            sqlstmt.sqlStmtValue.lastSQLcaller  ,
+            ' */'
+        x=Write2DDvb('SQLSTATS' cmd)
+        x=Write2DDvb('SQLSTATS' ' ')
+        cmd='/*   ** resolved SQL code follows:  */'
+        x=Write2DDvb('SQLSTATS' cmd)
+        iiiStart = sqlstmt.sqlStmtValue.startSQLcaller
+        iiiEnd   = sqlstmt.sqlStmtValue.lastSQLcaller
+        do iii = iiiStart by 1 to iiiEnd
+           /* ex:  SQLSTMT0.iii = 0 */
+           /*   or SQLSTMT1.iii = 0 */
+           /*   or etc.         = 0 */
+           /* --------------------- */
+           if value('sqlStmt'sqlStmtValue'SiglIndx.'iii) = 0
+           then iterate
+           mmm = value('sqlStmt'sqlStmtValue'SiglIndx.'iii)
+           rsql = sqlStmt.sqlStmtValue.mmm
+           do while length(rsql) > 72
+              rsql1 = left(rsql,72)
+              rsql  = substr(rsql,73)
+              cmd= '/*'   iii'-->'rsql1'<-- */'
+              x=Write2DDvb('SQLSTATS' cmd)
+           end
+           cmd= '/*'   iii'-->'left(rsql,72)'<-- */'
+           x=Write2DDvb('SQLSTATS' cmd)
+        end
+        cmd='/*   ** End of resolved SQL code ** */'
+        x=Write2DDvb('SQLSTATS' cmd)
+        x=Write2DDvb('SQLSTATS' ' ')
+
+     end
+  end
+  /* generate "sql" statement from sqlstmt. */
+  GenSql = ''
+  do iii=1 by 1 for sqlstmt.sqlStmtValue.0
+     GenSql = genSql sqlstmt.sqlStmtValue.iii
+  end
+  x = value('GenSql'sqlStmtValue,genSql) /* set GENSQL1, etc */
+  address dsnrexx "EXECSQL PREPARE S"sqlStmtValue /* s# */ ,
+                             "INTO :outsqlca FROM :gensql"
+  If SQLCODE \= 0 Then call prtsqlca 'PREPARE S'sqlStmtValue
+  if sqlOption = 'SQL'
+  then x=Write2DDvb('SQLSTATS' 'Prepare for "S'sqlStmtValue'"; rc=0 ')
+
+  address dsnrexx "EXECSQL OPEN C"sqlStmtValue
+  If SQLCODE \= 0 Then call prtsqlca 'OPEN C'sqlStmtValue
+  if sqlOption = 'SQL'
+  then x=Write2DDvb('SQLSTATS' 'OPEN Cursor "C'sqlStmtValue'"; rc=0 ')
+
+  zsqlSigl = ''   /* zsql no longer active */
+Return  /* zsql */
+
+prtsqlca:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+  trace 'n'
+  say ' '
+  say ' '
+  say ' '
+  say '** --------------------'
+  say '** start error analysis'
+  say '** --------------------'
+  say ' '
+  Say '** Error SQL statement - ' arg(1)
+
+  parse upper arg word1 word2 word3
+  if word1 = 'PREPARE'
+  then parse upper arg . ' S'stmtCursorNum .
+  else parse upper arg . ' C'stmtCursorNum .
+
+  Say '** failing SQL statement follows:'
+  say value('GenSql'stmtCursorNum) /* Gensql1 or GenSql2, etc */
+  say '** end failing SQL statement'
+  say ' '
+  if datatype(zsqlsigl,'W')
+  then do
+     say '** rexx code generating failing statement began at' ,
+         sqlstmt.stmtCursorNum.startSQLcaller ,
+         'ended at'                           ,
+         sqlstmt.stmtCursorNum.lastSQLcaller
+     say ' '
+     say '** rexx code follows:'
+     iiiStart = sqlstmt.stmtCursorNum.StartSQLcaller
+     iiiEnd   = sqlstmt.stmtCursorNum.lastSQLcaller
+     do iii = iiiStart by 1 to iiiEnd
+        say iii'-->'sourceline(iii)
+     end
+     say '** end of rexx code **'
+     say ' '
+     say '/* **resolved rexx SQL code; statement began at' ,
+         sqlstmt.stmtCursorNum.startSQLcaller ,
+         'ended at'                           ,
+         sqlstmt.stmtCursorNum.lastSQLcaller  ,
+         ' */'
+     say ' '
+     say '/*   ** resolved SQL code follows:  */'
+     iiiStart = sqlstmt.stmtCursorNum.StartSQLcaller
+     iiiEnd   = sqlstmt.stmtCursorNum.lastSQLcaller
+     do iii = iiiStart by 1 to iiiEnd
+        if value('sqlStmt'stmtCursorNum'SiglIndx.'iii) = 0
+        then iterate
+        mmm = value('sqlStmt'stmtCursorNum'SiglIndx.'iii)
+        rsql = sqlStmt.stmtCursorNum.mmm
+        do while length(rsql) > 72
+           rsql1 = left(rsql,72)
+           rsql  = substr(rsql,73)
+           say  '/*'   iii'-->'rsql1'<-- */'
+        end
+        say  '/*'   iii'-->'left(rsql,72)'<-- */'
+     end
+     say '/*   ** End of resolved SQL code ** */'
+     say ' '
+  end
+  Say 'SQLCODE = 'SQLCODE
+  Say 'SQLERRMC = 'SQLERRMC
+  Say 'SQLERRP = 'SQLERRP
+  Say 'SQLERRD = 'SQLERRD.1',',
+              || SQLERRD.2',',
+              || SQLERRD.3',',
+              || SQLERRD.4',',
+              || SQLERRD.5',',
+              || SQLERRD.6
+
+  Say 'SQLWARN = 'SQLWARN.1',',
+              || SQLWARN.2',',
+              || SQLWARN.3',',
+              || SQLWARN.4',',
+              || SQLWARN.5',',
+              || SQLWARN.6',',
+              || SQLWARN.7',',
+              || SQLWARN.8',',
+              || SQLWARN.9',',
+              || SQLWARN.10
+
+  Say 'SQLSTATE= 'SQLSTATE
+
+  if zsqlsigl = 'ZSQLSIGL' | zsqlsigl = ''
+  then prbL= sigl
+  else do
+     prbL = zsqlSigl
+     say ' '
+     say 'problem detected in ZSQL: routine'
+  end
+  say ' '
+  say 'code near call to ZSQL: and/or call to PRTSQLCA at' prbL
+  say ' '
+
+  syntaxLow = max(prbL-12,1)           /*-12 before (or pgm start */
+  syntaxHigh= min(prbL+4,sourceline()) /* +4 after  (or pgm end   */
+  do syntaxII = syntaxLow to syntaxHigh/* show subset of lines    */
+     if syntaxII <> prbL
+     then say 'line   ' right(syntaxii,length(syntaxHigh))':' ,
+                  sourceline(syntaxII)
+     else say 'line==>' right(syntaxii,length(syntaxHigh))':' ,
+                  sourceline(syntaxII)
+  end
+  say ' '
+  say '** scroll up to "** start error analysis" to see start of'
+  say '** ... the diagnostic messages for this problem.        '
+
+  pendingRc = 999
+  signal CleanUp /* cleanup and exit w/rc=999 */
+Return
+
+OpenOutputDD:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+  /* function:  rc = openOutputDD('ddname')                  */
+  /*    where ddname = ddname you want to open               */
+  /*                                                         */
+  /* example:   rc = openOutputDD('OUTPUT1')                 */
+  /*                                                         */
+  /* actions:                                                */
+  /*    1)  check to see if already "opened" with OpenOutputDD*/
+  /*           if so, exit now.                              */
+  /*    2)  open output file                                 */
+  /*           if failed to open, write message, set rc +exit*/
+  /*    3)  add +1 to OpenDDS (# of open files)              */
+  /*    4)  set variables for blocking, open status, etc.    */
+  /*    5)  return                                           */
+  arg openDDname .
+  if openDDname = ''
+  then do
+     say 'OpenOutputDD:  Function called without a ddname; exit now'
+     say '  called from line:' sigl
+     pendingRc = 8
+     signal cleanUP
+  end
+  i =openDDindex.openDDname
+  if i > 0
+  then do
+     /* only allow file to be opened once */
+     if openDDsStatus.i = 'OPENED'
+     then return
+
+     say 'OpenOutputDD:  ddname already opened + closed; ddname=' ,
+                 || '"'openDDname'"'
+     say '  OpenOutputDD called from line:' sigl
+     say '  exiting with rc = 8'
+     pendingrc = 8
+     signal cleanUP
+  end
+
+  address 'TSO' "EXECIO 0 DISKW" openDDname '(OPEN'
+  if rc <> 0
+  then do
+     say 'OpenOutputDD:  error opening ddname='openDDname ,
+                                   ||';rc='rc
+     say '  called from line:' sigl
+     pendingRc = 8  /* set bad rc */
+     signal cleanUp /* add end exec now */
+  end
+
+  /* add to open files */
+  openDDs = openDDs + 1
+  openDDs.openDDs      = openDDname /* remember ddname of open file*/
+  openDDsStatus.openDDs = 'OPENED'  /* remember file is open */
+  openDDindex.openDDname = openDDs  /* set index for fast lookup */
+  if debugIO = 1 then say 'OpenOutputDD:  openDDindex.'openDDname'= ' openDDs
+
+  /* initialize output buffer for file */
+  bufferRecs.openDDname.0 = 0
+  return 0
+
+
+CloseDD:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+  /* function:  rc = CloseDD('ddname')                       */
+  /*    where ddname = ddname you want to open               */
+  /*                                                         */
+  /* example:   rc = CloseDD('OUTPUT1')                      */
+  /*                                                         */
+  /* actions:                                                */
+  /*    1)  check to see if already closed, if so, exit now  */
+  /*           if so, exit now.                              */
+  /*    2)  close output file                                */
+  /*           if failed to close,write message, set rc +exit*/
+  /*    3)  set blocking recs to -1 (indicate it's closed)   */
+  /*    5)  return                                           */
+  arg closeDDname .
+  if closeDDname = ''
+  then do
+     say 'CloseDD: Function called without a ddname; exit now'
+     say '  called from line:' sigl'; exiting w/rc=8'
+     pendingRc = 8
+     signal cleanUP
+  end
+
+  i = openDDindex.closeDDname
+  if debugIO = 1 then say 'CloseDD:  openDDindex.'CloseDDname'= ' openDDindex.closeDDname
+
+  if i = 0
+  then do
+     say 'CloseDD:  Function called with a ddname "'closeDDname'"' ,
+           'that was never opened'
+     say '  called from line:' sigl'; exiting w/rc=8'
+     pendingRc = 8
+     signal cleanUP
+  end
+
+  if openDDsStatus.i <> 'OPENED'
+  then return /* ddname was already closed */
+
+  /* time to close this file that was opened */
+  openDDsStatus.i = 'CLOSED'
+
+  say ' '
+  if openDDlrecl.i = 0
+  then say 'closing ddname='CloseDDname
+  else do
+     say 'closing ddname='CloseDDname 'fb='openDDlrecl.i
+     if openDDoverflow.i > 0
+     then say 'note:  'openDDoverflow.i 'records were truncated'
+  end
+
+
+  address 'TSO' "EXECIO" bufferRecs.CloseDDname.0 ,
+       "DISKW" closeDDname '(FINIS STEM BUFFERRECS.'closeDDname'.'
+  if rc <> 0
+  then do
+     say 'CloseDD: error closing/writting to ddname='closeDDname ,
+                                   ||';rc='rc
+     pendingRc = 8
+     signal cleanUP
+  end
+  return 0
+
+write2DDfb80:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+  /* function:  rc = write2DDfb80('ddname' text)             */
+  /*    where ddname = ddname is ddname you want to write to */
+  /*                   followed by a comma.                  */
+  /*          text   = some text you want to write to ddname */
+  /*                   must immediately follow the comma.    */
+  /*                                                         */
+  /*    Note: input text can be any length.  But we will make*/
+  /*       it 80 bytes in length (and truncate excess) or pad*/
+  /*       text to make it 80 bytes.                         */
+  /*    Note: text longer than 80 bytes will generate a      */
+  /*       warning message (the first time).  And we will    */
+  /*       count number of records we had to truncate.       */
+  /*       And we will set the pendingRc to a 4.             */
+  /*                                                         */
+  /*    example:                                             */
+  /*            rc = write2DDfb80('OUTPUT2' sometext)        */
+  /*                                                         */
+  /* actions:                                                */
+  /*    1)  checks to make sure DD name is open.             */
+  /*           if so, exit now.                              */
+  /*                                                         */
+  /*    2)  ensure text is 80 bytes long, and call           */
+  /*           write2dd with info.                           */
+  /*                                                         */
+  /*    3)  then returns                                     */
+  arg write2DDname .
+  parse arg . outputText
+
+  openDDindex = openDDindex.write2DDname
+  if debugIO = 1 then say 'Write2DDfb80:  openDDindex.'write2DDname ,
+                                     || '= ' openDDindex.write2DDname
+  if openDDindex = 0 | openDDsStatus.openDDindex <> 'OPENED'
+  then if write2DDname = 'SQLSTATS'
+     then do
+        if openDDsStatus.openDDindex <> 1
+        then say 'WriteDDfb80: expected output file SQLSTATS to be' ,
+                    'open; writting data to sysprint instead'
+        openDDsStatus.openDDindex = 1 /*print this only once */
+        say 'SQLSTATS:' outputText
+        return 0
+     end
+     else do
+        /* this is what should happen if file is not open */
+        say 'WriteDDfb80: Function called with ddname=' ,
+              ||'"'write2DDname'" but file not open'
+        say '  called from line:' sigl'; exiting w/rc=8'
+        pendingRc = 8
+        signal cleanUP
+     end
+
+  if openDDlrecl.openDDindex = 0 /* first time, this is unset */
+  then openDDlrecl.openDDindex = 80 /* ...remember lrecl is 80 */
+  else if openDDlrecl.openDDindex <> 80 /* set to different lrecl?*/
+  then do                     /* ... yes this is a problem */
+     /* a file can have only one lrecl */
+     say 'WriteDDfb80: Function called with ddname=' ,
+           ||'"'write2DDname'" but file lrecl set to' ,
+                     openDDlrecl.opendDDindex 'not 80'
+     say '  called from line:' sigl'; exiting w/rc=8'
+     pendingRc = 8
+     signal cleanUP
+  end
+
+  if length(outputText) > 80
+  then do
+     openDDoverflow.OpenDDindex = openDDoverflow.OpenDDindex + 1 /* times rec > lrecl */
+     if openDDoverlow.OpenDDindex = 1 /* 1st time, send warning message */
+     then do
+        say 'WriteDDfb80:  called to write 80 byte records to ddname=' ,
+                      || writeDDname
+        say 'WriteDDfb80:  but record larger than 80 bytes, truncated'
+        say 'WriteDDfb80:  called from line:' sigl'; pending rc=4'
+        say 'WriteDDfb80:  1st 80 bytes ="'left(outputText,80)'"'
+        say 'WriteDDfb80:  remaining' length(outputText) - 80 ,
+                      'bytes = "'substr(outputText,81)'"'
+        if pendingRc < 4
+        then pendingRc = 4
+     end
+     outputText = left(outputText,80) /* trunc to 80 byte rec */
+  end
+
+  if length(outputText) < 80
+  then outputText = left(outputText,80) /* pad up to lrecl=80 */
+
+  bufferRecs = bufferRecs.write2DDname.0 + 1
+                                                  /* ----------*/
+  bufferRecs.write2DDname.bufferRecs = outputText /* 80byte rec*/
+                                                  /* ----------*/
+  bufferRecs.write2DDname.0 = bufferRecs
+
+  if bufferRecs.writeDDname.0 > 100
+  then do
+     /* buffer full; write out buffer */
+     /* ----------------------------- */
+     address 'TSO' "EXECIO" bufferRecs.write2DDname.0 ,
+          "DISKW" write2DDname '(STEM BUFFERRECS.'write2DDname'.'
+
+     /* reset number of records in output buffer */
+     /* ---------------------------------------- */
+     bufferRecs.write2DDname.0 = 0
+
+     if rc <> 0 /* check if execio failed */
+     then do
+        say 'WriteDDfb80:  error writting to ddname='write2DDname ,
+                                      ||';rc='rc
+        say '  called from line:' sigl'; exiting w/rc=8'
+        pendingRc = 8
+        signal CleanUp
+     end
+     /* write to write2DDfb80 worked */
+     /* ---------------------------- */
+  end
+  /* either output line buffered, or buffer written out */
+  return 0 /* updated output buffer for outddname */
+
+
+
+Write2DDvb:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+  /* function:  rc = Write2DDvb('ddname' text)               */
+  /*    where ddname = ddname is ddname you want to write to */
+  /*          text   = some text you want to write to ddname */
+  /*                                                         */
+  /* example:                                                */
+  /*            Note:  ddname OUTPUT1 opened via OPENDD function*/
+  /*            rc = Write2DDvb('OUTPUT1 some text to write') */
+  /*                                                         */
+  /* example:                                                */
+  /*            Note:  ddname OUTPUT2 opened via OPENDD function*/
+  /*                                                         */
+  /*            sometext = 'some text to write'              */
+  /*            rc = Write2DDvb('OUTPUT2' sometext)          */
+  /*                                                         */
+  /* actions:                                                */
+  /*    1)  checks to make sure DD name is open.             */
+  /*           if so, exit now.                              */
+  /*                                                         */
+  /*    2)  add text (after ddname) to output buffer for     */
+  /*           this ddname.                                  */
+  /*                                                         */
+  /*    2)  if output buffer full (for this ddname) it then  */
+  /*           writes out buffer to output ddname.  And      */
+  /*           sets the output buffer to empty.              */
+  /*                                                         */
+  /*    5)  then returns                                     */
+  arg write2DDname .
+  parse arg . outputText
+
+  openDDindex = openDDindex.write2DDname
+  if debugIO = 1 then say 'Write2DDvb:  openDDindex.'write2DDname ,
+                                   || '= ' openDDindex.write2DDname
+  if openDDindex = 0 | openDDsStatus.openDDindex <> 'OPENED'
+  then if write2DDname = 'SQLSTATS'
+     then do
+        if openDDsStatus.openDDindex <> 1
+        then say 'Write2DDvb: expected output file SQLSTATS to be' ,
+                    'open; writing data to sysprint instead'
+        openDDsStatus.openDDindex = 1 /* warn us only once */
+        say 'SQLSTATS:' outputText /*send data to sysprint */
+        return 0
+     end
+     else do
+        /* this is what should happen if file is not open */
+        say 'Write2DDvb: Function called with a ddname "'write2DDname'"',
+              'that is not open'
+        say '  called from line:' sigl'; exiting w/rc=8'
+        pendingRc = 8
+        signal cleanUP
+     end
+
+  if openDDlrecl.openDDindex <> 0 /* fixed length records ? */
+  then do                     /* ... yes this is a problem */
+     say 'Write2DDvb:  caller should have called:' ,
+           'WriteDDfb'openDDlrecl.OpenDDindex 'instead of Write2DDvb'
+     say '  called from line:' sigl'; exiting w/rc=8'
+     pendingRc = 8
+     signal cleanUP
+  end
+
+  bufferRecs = bufferRecs.write2DDname.0 + 1
+  bufferRecs.write2DDname.bufferRecs = outputText
+  bufferRecs.write2DDname.0 = bufferRecs
+
+  if bufferRecs.writeDDname.0 > 100
+  then do
+     /* buffer full; write out buffer */
+     /* ----------------------------- */
+     address 'TSO' "EXECIO" bufferRecs.write2DDname.0 ,
+          "DISKW" write2DDname '(STEM BUFFERRECS.'write2DDname'.'
+
+     /* reset number of records in output buffer */
+     /* ---------------------------------------- */
+     bufferRecs.write2DDname.0 = 0
+
+     if rc <> 0 /* check if execio failed */
+     then do
+        say 'Write2DDvb:  error writting to ddname='write2DDname ,
+                                      ||';rc='rc
+        say '  called from line:' sigl'; exiting w/rc=8'
+        pendingRc = 8
+        signal CleanUp
+     end
+     /* write to write2DD worked */
+     /* ------------------------ */
+  end
+  /* either output line buffered, or buffer written out */
+  return 0 /* updated output buffer for outddname */
+
+
+
+
+sql:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+   /* function.  collects sql statement in readable form */
+   /*    ...we'll set (and append) to stem SQLSTMT       */
+   /*    which will be executed later                    */
+   /* if called with argument "new statement" we will    */
+   /*    set stem SQLSTMT.0 = 0                          */
+   /*    set stem SQLSTMT.startSQLcaller = sigl          */
+   /* otherwise                                          */
+   /*    we will increament SQLSTMT.0 and set next line  */
+   /*    SQLSTMT.# to the callers argument               */
+   /*    set stem SQLSTMT.lastSQLcaller = sigl           */
+   parse upper arg sql1 sql2 ';' option '=' value .
+   if sql1 sql2 = 'NEW STATEMENT'
+   then do
+      if option = 'STMT/CURSOR'
+      then do
+         if value = ''
+         then do
+            parse upper arg passedArgs
+            say 'SQL: invalid function call to SQL from' sigl
+            say '   args ='passedArgs
+            say '   but missing # for STMT/CURSOR option'
+
+            pendingRc = 8
+            signal CleanUp  /* cleanup and exit with rc=12*/
+         end
+         if datatype(value,'W') = 0 ,
+          | value < 1 | value > 100
+         then do
+            parse upper arg passedArgs
+            say 'SQL: invalid function call to SQL from' sigl
+            say '   args ='passedArgs
+            say '   but STMT/CURSOR value "'value'" is invalid'
+
+            pendingRc = 8
+            signal CleanUp  /* cleanup and exit with rc=12*/
+         end
+         sqlStmtValue = value
+      end
+      else if option <> ''
+      then do
+         parse upper arg passedArgs
+         say 'SQL: invalid function call to SQL from' sigl
+         say '   args ='passedArgs
+         say '   but option "'option'" after ";" is invalid'
+         say '   expected option "; STMT/CURSOR=#"'
+
+         pendingRc = 8
+         signal CleanUp  /* cleanup and exit with rc=12*/
+      end
+      else do
+         sqlStmtValue = 1 /* default stmt/cursor to use */
+      end
+
+      SQLSTMT.sqlStmtValue.0 = 0
+      SQLSTMT.sqlStmtValue.StartSQLcaller = sigl /* New Statement line*/
+      x = value('sqlStmt'SqlStmtValue'SiglIndx.',0)
+      return 0
+   end
+   sqlstmt = sqlstmt.SqlStmtValue.0 + 1
+   parse arg sqlStmtLine
+   sqlstmt.SqlStmtValue.0 = sqlstmt
+   sqlstmt.SqlStmtValue.sqlstmt = sqlStmtLine /* save sql code*/
+
+      /*Note:                                   */
+      /* sigl = callers line # (in rexx code)   */
+      /* sqlstmt = line # of sql code (1 to n)  */
+      /*                                        */
+      /*Set :                                   */
+      /* sqlStmt||sqlStmtValue||SiglIndx.sigl   = sqlstmt     */
+      /*                                                      */
+      /*Usage:                                                */
+      /* which lines of rexx code actually used in sql stmt.  */
+      /*                                                      */
+
+      /* set it here */
+   x = value('sqlstmt'sqlStmtValue'SiglIndx.'sigl,sqlStmt)
+   sqlstmt.SqlStmtValue.LastSQLCaller = sigl    /* last call to sql: */
+   return 0
+
+
+ShowRowCount:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+   if sqlOption <> 'SQL'
+   then return
+
+   x = Write2DDvb('SQLSTATS' ' ')
+
+   cmd = '    /* rowsReturned =' rowsReturned '*/'
+   x = Write2DDvb('SQLSTATS' cmd)
+
+   cmd = '    /* --------------' RowsReturned '*/'
+   x = Write2DDvb('SQLSTATS' cmd)
+
+   x = Write2DDvb('SQLSTATS' ' ')
+   return
+
+ShowRowCount2:
+   /* production subroutine; included with skeleton */
+   /* --------------------------------------------- */
+
+   if sqlOption <> 'SQL'
+   then return
+
+   x = Write2DDvb('SQLSTATS' ' ')
+
+   cmd = '    /* rowsReturnedC2 =' rowsReturnedC2 '*/'
+   x = Write2DDvb('SQLSTATS' cmd)
+
+   cmd = '    /* ----------------' rowsReturnedC2 '*/'
+   x = Write2DDvb('SQLSTATS' cmd)
+
+   x = Write2DDvb('SQLSTATS' ' ')
+   return
+
+/* add any of your subroutines and/or functions here */
+/* ------------------------------------------------- */

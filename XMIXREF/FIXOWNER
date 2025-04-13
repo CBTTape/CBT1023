@@ -1,0 +1,1319 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(FIXOWNER)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(FIXOWNER)
+   -----------------------------------------
+
+READY
+    FIXOWNER
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.CNTL.RACFDB2(FIXOWNER)"      */
+    Generated scan code/comment:   /*      -----------------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:                  */
+    Generated scan code/comment:   /*     20231217 23:05:44                    */
+    Generated scan code/comment:   /*      -----------------------------       */
+     1 *-* /*Rexx*/
+     2 *-* /*   argument passed to exec:                                      */
+     3 *-* /*      ssid function                                              */
+     4 *-* /*      where:                                                     */
+     5 *-* /*         ssid = db2 ssid (like DSN1, DSN5, etc)                  */
+     6 *-* /*         function = 'GENERATE'                                   */
+     7 *-* /*            And we generate drops/rebinds but return rc=2;       */
+     8 *-* /*            so that seceeding step won't actually do any         */
+     9 *-* /*            drops and/or rebinds.                                */
+    10 *-* /*         function = 'EXECUTE'                                    */
+    11 *-* /*            And we generate drops/rebinds and return rc=0;       */
+    12 *-* /*            so that seceeding step will do the drops/rebinds.    */
+    13 *-* /*         Of course, bigger problems will return other rc's.      */
+    14 *-* /*                                                                 */
+    15 *-* /*      example:  FIXOWNER DSN0 GENERATE                           */
+    16 *-* /*      example:  FIXOWNER DSN0 EXECUTE                            */
+    17 *-* /*                                                                 */
+    18 *-* /*                                                                 */
+    19 *-* /*   Intention:                                                    */
+    20 *-* /*      1)  there are plans and/or packages we may want to drop.   */
+    21 *-* /*          a)  read in FREEPKG for a where clause to identify     */
+    22 *-* /*          these packages.  If null (or ddname FREEPKG) fails     */
+    23 *-* /*          to open, ignore package drops.                         */
+    24 *-* /*                                                                 */
+    25 *-* /*          b)  read in FREEPLAN for a where clause to identify    */
+    26 *-* /*          these plans.  If null (or ddname FREEPLAN) fails       */
+    27 *-* /*          to open, ignore plan drops.                            */
+    28 *-* /*                                                                 */
+    29 *-* /*          c)  requirement:  a where clause is providing          */
+    30 *-* /*          that uses columns in sysibm.syspackage and/or          */
+    31 *-* /*          sysibm.sysplan that identify packages (or plans)       */
+    32 *-* /*          that should be dropped.                                */
+    33 *-* /*                                                                 */
+    34 *-* /*             example FREEPKG input:                              */
+    35 *-* /*             ----------------------                              */
+    36 *-* /*     where pdsname in (                                          */
+    37 *-* /*                 'SFRDBMDS.DB2V81.T0.DBRMLIB.DATA'               */
+    38 *-* /*                ,'SFRDBMDS.DB2V81.T0.SDSNDBRM'                   */
+    39 *-* /*                ,'SFRDBMDS.DB2V81.T0.SDSNSAMP'                   */
+    40 *-* /*                ,'SFRDBMDS.DB2V81.T0.SDSQDBRM'                   */
+    41 *-* /*                ,'SFRDBMDS.DB2V91.T0.AOCDBRM'                    */
+    42 *-* /*                ,'SFRDBMDS.DB2V91.T0.DBRMLIB.DATA'               */
+    43 *-* /*                ,'SFRDBMDS.DB2V91.T0.SDSNDBRM'                   */
+    44 *-* /*                ,'SFRDBMDS.DB2V91.T0.SDSNSAMP'                   */
+    45 *-* /*                ,'SFRDBMDS.DB2V91.T0.SDSQDBRM'                   */
+    46 *-* /*                ,'SFRMVSDS.TMON.DB241.TDBSAMP'                   */
+    47 *-* /*                      )                                          */
+    48 *-* /*                                                                 */
+    49 *-* /*                                                                 */
+    50 *-* /*      2)  fix owners of packages and/or plans from some indiv.   */
+    51 *-* /*   userid to a group ownerid by rebinding packages and/or plans. */
+    52 *-* /*   Therefore, this exec is expected to identify what needs to    */
+    53 *-* /*   be rebound and to generate the rebind commands.               */
+    54 *-* /*          a)  read in dataset CHNGEUID in format:                */
+    55 *-* /*                uid1 uid2                                        */
+    56 *-* /*                where uid1 = existing ownerid                    */
+    57 *-* /*                      uid2 = new ownerid to use                  */
+    58 *-* /*                                                                 */
+    59 *-* /*          b)  then group changes by uid2 (select statement       */
+    60 *-* /*              will be generated per (distinct) uid2 union'ed     */
+    61 *-* /*              with each other.  Uid2 will be part of generated   */
+    62 *-* /*              rebind, where clause will have the uid1's for      */
+    63 *-* /*              associated uid2.                                   */
+    64 *-* /*                                                                 */
+    65 *-* /*          c)  generate rebind statements; but exclude any plans  */
+    66 *-* /*              and/or packages we are dropping.                   */
+    67 *-* /*                                                                 */
+    68 *-* /*          example CHNGEUID input:                                */
+    69 *-* /*          -----------------------                                */
+    70 *-* /*                                 (note: new uid does not have    */
+    71 *-* /*                                   to be in sorted order)        */
+    72 *-* /*                                 (Note: indentation shown to     */
+    73 *-* /*                                   more easily see different     */
+    74 *-* /*                                   uid2's.  extra blanks don't   */
+    75 *-* /*                                   matter; use if you want).     */
+    76 *-* /*              SFR609  DB2ENGNR                                   */
+    77 *-* /*              WEA115 WEADB2DV                                    */
+    78 *-* /*              WEA116 WEADB2DV                                    */
+    79 *-* /*              SFRH66  DB2ENGNR                                   */
+    80 *-* /*              WEA199    WEADBAFS                                 */
+    81 *-* /*              WEA114 WEADB2DV                                    */
+    82 *-* /*              WEA117 WEADB2DV                                    */
+    83 *-* /*              WEA118 WEADB2DV                                    */
+    84 *-* /*              WEA119 WEADB2DV                                    */
+    85 *-* /*                                                                 */
+    86 *-* /*      3)  output all FREE PLAN, FREE PACKAGE and/or REBINDS      */
+    87 *-* /*     out to file COMMANDS                                        */
+    88 *-* /*                                                                 */
+    89 *-* /*      4)  write any information out to file INFO                 */
+    90 *-* /*                                                                 */
+    91 *-* /*  */
+    92 *-* Arg ssid function .
+    93 *-* address 'TSO' 'EXECIO 0 DISKW INFO (OPEN'
+    94 *-* infoRc = rc
+    95 *-* info = 0
+    97 *-* address 'TSO' 'EXECIO 0 DISKW COMMANDS (OPEN'
+    98 *-* commandRc = rc
+    99 *-* command = 0
+   101 *-* address 'TSO' 'EXECIO * DISKR FREEPKG   (STEM PKG. OPEN FINIS'
+   102 *-* if rc <> 0
+   103 *-*  then
+       *-*  pkg.0 = 0
+   105 *-* address 'TSO' 'EXECIO * DISKR FREEPLAN (STEM PLAN. OPEN FINIS'
+   106 *-* if rc <> 0
+   107 *-*  then
+       *-*  plan.0 = 0
+   109 *-* address 'TSO' 'EXECIO * DISKR CHNGEUID (STEM CUID. OPEN FINIS'
+   110 *-* if rc <> 0
+   111 *-*  then
+       *-*  chngeUid.0 = 0
+   113 *-* dropCuidRc = rc
+   115 *-* pendingRc = 0
+   116 *-* if function = 'EXECUTE'
+   117 *-*  then
+       *-*  defaultRc = 0
+   118 *-* else
+       *-*  if function = 'GENERATE'
+   119 *-*   then
+       *-*   defaultRc = 2
+   120 *-*  else
+       *-*   do
+   121 *-*    if ssid = ''
+   122 *-*     then
+       *-*     do
+   123 *-*      call infomsg 'exec FIXOWNER invoked w/o arguements'
+   124 *-*      call infomsg 'needs to be invoked with "ssid function"'
+   125 *-*      call infomsg ' '
+   126 *-*      call infomsg 'like:  FIXOWNER DSN5 GENERATE'
+   127 *-*      call infomsg '  or:  FIXOWNER DSN2 EXECUTE'
+   128 *-*      call infomsg ' '
+   129 *-*      call infomsg 'where ssid = db2 subsystem like DSN5'
+   130 *-*      call infomsg 'where function needs to be either:'
+   131 *-*      call infomsg '   "GENERATE" and generates cmds w/rc=2'
+   132 *-*      call infomsg '   "EXECUTE"  and generates cmds w/rc=0'
+   133 *-*     end
+   134 *-*    if function <> ''
+   135 *-*     then
+       *-*     do
+   136 *-*      call infomsg 'function specified: "'function'" is invalid'
+   137 *-*      call infomsg '   allowed functions are "GENERATE" or' ,                           '"EXECUTE"'
+   139 *-*     end
+   140 *-*    else
+       *-*     do
+   141 *-*      call infomsg 'function not specified.'
+   142 *-*      call infomsg '   allowed functions are "GENERATE" or' ,                           '"EXECUTE"'
+   144 *-*     end
+   145 *-*    pendingRc = 8
+   146 *-*    call infomsg '===> pending rc=8'
+   147 *-*    call infomsg ' '
+   148 *-*   end
+   150 *-* uid1Indx. = 0
+   151 *-* uid1      = 0
+   152 *-* uid1.     = 0
+   153 *-* if cuid.0 > 0
+   154 *-*  then
+       *-*  do
+   155 *-*   call infomsg ' '
+   156 *-*   call infomsg 'Processing chngeuid input'
+   157 *-*   call infomsg '-------------------------'
+   158 *-*   do i = 1 by 1 for cuid.0
+   159 *-*    cuid.i = left(cuid.i,72) /* strip off seq number, if any */
+   160 *-*    call infomsg '   'strip(cuid.i)
+   161 *-*    parse upper var cuid.i user1 user2 .
+   162 *-*    if user1 = ''
+       *-*     then
+       *-*     iterate i
+   163 *-*    if left(user1,1) = '*'
+       *-*     then
+       *-*     iterate i
+   164 *-*    if user2 = ''
+   165 *-*     then
+       *-*     do
+   166 *-*      call infomsg 'Userids need to specified in pairs like:'
+   167 *-*      call infomsg '   oldUserid newUserid'
+   168 *-*      call infomsg '2nd userid is missing, pending rc=8'
+   169 *-*      call infomsg ' '
+   170 *-*      pendingRc = 8
+   171 *-*     end
+   173 *-*     /* user1 should not be able to be changed to multiple */
+   174 *-*     /*    new groups.                                     */
+   175 *-*    if uid1Indx.user1 = 0
+   176 *-*     then
+       *-*     do /* need to add userid/group info */
+   177 *-*      uid1 = uid1 + 1
+   178 *-*      uid1.uid1.User = user1    /* add to sequential list */
+   179 *-*      uid1.uid1.NewUser = user2 /* who new user is        */
+   180 *-*      uid1Indx.user1 = uid1  /* add to quick index     */
+   181 *-*     end
+   182 *-*    else
+       *-*     do /* verify it's a duplicate or an error */
+   183 *-*      x = uid1Indx.user1 /* get index */
+   184 *-*      if user2 = uid1.x.NewUser/*duplicate (same group)?*/
+   185 *-*       then
+       *-*       nop /* just ignore it then */
+   186 *-*      else
+       *-*       do
+   187 *-*        pendingRc = 8
+   188 *-*        call infomsg 'user "'user1'" can''t be changed to' ,                       'both "'user2'" and "'uid1.x.NewUser'"
+'
+   190 *-*        call infomsg 'Set pending rc=8'
+   191 *-*        call infomsg ' '
+   192 *-*       end
+   193 *-*     end
+   194 *-*   end
+   195 *-*   call infomsg ' '
+   196 *-*   call infomsg 'Finished looking at chngeuid input'
+   197 *-*   call infomsg '----------------------------------'
+   198 *-*  end
+   200 *-* pkg = '' /* assume no pkg processing */
+   201 *-* wherepkg = 0
+   202 *-* if pkg.0 > 0
+   203 *-*  then
+       *-*  do
+   204 *-*   call infomsg ' '
+   205 *-*   call infomsg 'Processing FREEPKG input'
+   206 *-*   call infomsg '------------------------'
+   207 *-*   do i = 1 by 1 for pkg.0
+   208 *-*    pkg.i  = left(pkg.I,72) /* strip off seq number, if any */
+   209 *-*    pkgLine = strip(pkg.i)
+   210 *-*    call infomsg '   'pkgline
+   211 *-*    if pkgline = ''
+       *-*     then
+       *-*     iterate i
+   212 *-*    if left(pkgline,1) = '*'
+       *-*     then
+       *-*     iterate i
+   213 *-*    if pkg = ''
+   214 *-*     then
+       *-*     if translate(left(pkgline,6)) <> 'WHERE '
+   215 *-*      then
+       *-*      do
+   216 *-*       call infomsg 'FREEPKG sql must begin with a' ,                              '"WHERE" clause found "'word(pkgline,1
+)'"'
+   218 *-*       pendingRc = 8
+   219 *-*       call infomsg 'Set pending rc=8'
+   220 *-*       call infomsg ' '
+   221 *-*       leave
+   222 *-*      end
+   223 *-*    wherepkg = wherepkg + 1
+   224 *-*    wherepkg.wherepkg = strip(pkg.i,'T')
+   225 *-*    pkg = pkg pkgline
+   226 *-*   end
+   227 *-*   call infomsg ' '
+   228 *-*   call infomsg 'Finished looking at FREEPKG input'
+   229 *-*   call infomsg '---------------------------------'
+   230 *-*  end
+   232 *-* plan = '' /* assume no plan processing */
+   233 *-* whereplan = 0
+   234 *-* if plan.0 > 0
+   235 *-*  then
+       *-*  do
+   236 *-*   call infomsg ' '
+   237 *-*   call infomsg 'Processing FREEPLAN input'
+   238 *-*   call infomsg '------------------------'
+   239 *-*   do i = 1 by 1 for plan.0
+   240 *-*    plan.i = left(plan.i,72) /* strip off seq number, if any*/
+   241 *-*    planLine = strip(plan.i)
+   242 *-*    call infomsg '   'planline
+   243 *-*    if planline = ''
+       *-*     then
+       *-*     iterate i
+   244 *-*    if left(planline,1) = '*'
+       *-*     then
+       *-*     iterate i
+   245 *-*    if plan = ''
+   246 *-*     then
+       *-*     if translate(left(planline,6)) <> 'WHERE '
+   247 *-*      then
+       *-*      do
+   248 *-*       call infomsg 'FREEPLAN sql must begin with a' ,                             '"WHERE" clause found "'word(planline,
+1)'"'
+   250 *-*       pendingRc = 8
+   251 *-*       call infomsg 'Set pending rc=8'
+   252 *-*       call infomsg ' '
+   253 *-*       leave
+   254 *-*      end
+   255 *-*    whereplan = whereplan + 1
+   256 *-*    whereplan.whereplan = strip(plan.i,'T')
+   257 *-*    plan = plan planline
+   258 *-*   end
+   259 *-*   call infomsg ' '
+   260 *-*   call infomsg 'Finished looking at FREEPLAN input'
+   261 *-*   call infomsg '----------------------------------'
+   262 *-*  end
+   264 *-* if pkg  = '' , /* no where clause */                                     & plan = '' , /* no where clause */
+                         & uid2 = 0    /* no rebind needed*/
+   267 *-*  then
+       *-*  do
+   268 *-*   call infoMsg ' '
+   269 *-*   call infomsg 'All input files (FREEPKG, FREEPLAN and/or CHNGEUID)'
+   270 *-*   call infomsg '   either didn''t open properly and/or contain no'
+   271 *-*   pendingrc = 8
+   272 *-*   call infomsg '   work to do.  Now pending rc=8'
+   273 *-*  end
+   275 *-* if infoRc <> 0 | commandRc <> 0
+   276 *-*  then
+       *-*  do
+   277 *-*   if infoRc <> 0
+   278 *-*    then
+       *-*    call infomsg 'ddname=INFO failed to open w/rc='infoRc
+   279 *-*   if commandRc <> 0
+   280 *-*    then
+       *-*    call infomsg 'ddname=COMMANDS failed to open w/rc=' ,                 || commandRc
+   282 *-*   call infoMsg 'exiting with rc=8, now'
+   283 *-*   signal forceRc8Exit
+   284 *-*  end
+   286 *-* if pendingRc > 2
+   287 *-*  then
+       *-*  signal DefaultRcExit
+   289 *-* signal startUp  /* now start processing input */
+   291 *-* /* -------------------- */
+   292 *-* /* exit routines follow */
+   293 *-* /* exit routines follow */
+   294 *-* /* -------------------- */
+   295 *-* ForceRc8Exit:
+       *-* /* close output files; exit with rc=8 */
+   296 *-* address 'TSO' 'EXECIO' info 'DISKW INFO (STEM INFO. FINIS'
+   297 *-* address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND.  FINIS'
+   298 *-* exit 8
+   300 *-* DefaultRcExit:
+       *-* /* close output files; exit with defaultRc */
+   301 *-* address 'TSO' 'EXECIO' info 'DISKW INFO (STEM INFO. FINIS'
+   302 *-* address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND.  FINIS'
+   303 *-* exit max(defaultRc,pendingRc)
+   305 *-* /* -------- */
+   306 *-* /* startUp: */
+   307 *-* /* -------- */
+   308 *-* startUp:
+   309 *-* /* Set addressability to DB2 Rexx function */
+   310 *-* if info > 50
+   311 *-*  then
+       *-*  call writeInfo
+   313 *-* ADDRESS TSO "SUBCOM DSNREXX"
+   314 *-* If RC = 1
+       *-*  Then
+       *-*  S_RC = RXSUBCOM('ADD','DSNREXX','DSNREXX')
+   315 *-* Else
+       *-*  Do
+   316 *-*   call infoMsg 'Can not access DB2 Rexx Function.  Ending...'
+   317 *-*   signal ForceRc8Exit
+   318 *-*  End
+   321 *-* ADDRESS DSNREXX
+   322 *-* "CONNECT "ssid
+   323 *-* if rc <> 0
+   324 *-*  then
+       *-*  do
+   325 *-*   call infoMsg '"CONNECT' ssid'" failed with rc='rc
+   326 *-*   call infoMsg 'returning rc=8'
+   327 *-*   signal ForceRc8Exit
+   328 *-*  End
+   331 *-*  /*---------------------------------------------------*/
+   332 *-*  /* Start processing DB2 authorization tables         */
+   333 *-*  /*---------------------------------------------------*/
+   334 *-* FreePkgIndx.  = 0        /* default not freeing any pkgs */
+   335 *-* call GenerateFreePackage /* ...and update FreePkgIndx too*/
+   337 *-* FreePlanIndx. = 0     /* default not freeing any plans*/
+   338 *-* call GenerateFreePlan /* and update FreePlanIndx. too */
+   340 *-* call GenerateRebindPackage
+   342 *-* call GenerateRebindPlan
+   344 *-* "DISCONNECT"
+   345 *-* address 'TSO' 'EXECIO' info 'DISKW INFO (STEM INFO. FINIS'
+   346 *-* address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND. FINIS'
+   347 *-* Exit
+   349 *-* GenerateFreePackage:
+   350 *-* /*-------------------*/
+   351 *-* /*-------------------*/
+   352 *-* if pkg = ''
+   353 *-*  then
+       *-*  return /* if nothing to do, return */
+   355 *-* call infomsg '  GenerateFreePackage sql'
+   356 *-* call infomsg '  -----------------------'
+   357 *-* sql = ''
+   358 *-* call BuildSql 'Select NAME'
+   359 *-* call BuildSql '      ,COLLID'
+   360 *-* call BuildSql '      ,VERSION'
+   361 *-* call BuildSql '      ,OWNER'
+   362 *-* call BuildSql '      ,VALID'
+   363 *-* call BuildSql '      ,OPERATIVE'
+   364 *-* call BuildSql '      ,LASTUSED'
+   365 *-* call BuildSql '      ,PCTIMESTAMP'
+   366 *-* call BuildSql '      ,TIMESTAMP'
+   367 *-* call BuildSql '      ,PDSNAME'
+   368 *-* call BuildSql '  from sysibm.syspackage'
+   369 *-* do x = 1 by 1 for wherePkg
+   370 *-*  /* '  where clause added here ' */
+   371 *-*  call BuildSql wherePkg.x
+   372 *-* end
+   373 *-* call BuildSql '  order by name, collid, version'
+   374 *-* call infomsg '  -----------------------'
+   376 *-* call ZSQL  /* do prepare, etc */
+   378 *-* call infomsg '  Generating FREE PACKAGE commands'
+   379 *-* call infomsg '  --------------------------------'
+   380 *-* call infomsg '   Lu    is LastUsed'
+   381 *-* call infomsg '   v/o   is valid/operative'
+   382 *-* call infomsg '   pcTS  is pcTimeStamp'
+   383 *-* call infomsg '   TS    is TimeStamp'
+   384 *-* call infomsg '   PDS   is PDSname'
+   385 *-* Do Until SQLCODE \= 0
+   386 *-*  "EXECSQL FETCH C1 INTO :name,"       ,                                                        ":COLLID,"     ,
+                                               ":VERSION,"    ,                                                        ":OWNER,"
+   ,                                                        ":VALID,"      ,
+ ":OPERATIVE,"  ,                                                        ":LASTUSED,"   ,
+              ":PCTIMESTAMP,",                                                        ":TIMESTAMP,"  ,
+                           ":PDSNAME"
+   396 *-*  If SQLCODE = 0
+   397 *-*   then
+       *-*   do
+   398 *-*    version = '('strip(version)')'
+   399 *-*    name    = strip(name)
+   400 *-*    collid  = strip(collid)
+   401 *-*    owner   = strip(owner)
+   402 *-*    pdsname = strip(pdsname)
+   404 *-*    FreePkgIndx.name.collid.version = 1 /* indicate free */
+   405 *-*    freecmd = 'FREE PACKAGE('collid"."name"."version')'
+   406 *-*    call addCommand freecmd
+   407 *-*    call infoMsg freecmd 'Lu='lastused';' ,                                    'v/o='valid'/'operative';' ,
+                              'pcTS='pctimestamp';' ,                                                 'TS='timestamp';' ,
+                                           'Owner='left(owner,max(8,length(owner)))';',                            'PDSname='pdsnam
+e
+   413 *-*   end
+   414 *-* End /* do until */
+   415 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   416 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   417 *-* "EXECSQL CLOSE C1"
+   418 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   420 *-* Return
+   423 *-* GenerateFreePlan:
+   424 *-* /*----------------*/
+   425 *-* /*----------------*/
+   426 *-* if plan = ''
+   427 *-*  then
+       *-*  return /* if nothing to do, return */
+   429 *-* call infomsg '  GenerateFreePlan sql'
+   430 *-* call infomsg '  --------------------'
+   431 *-* sql = ''
+   432 *-* call BuildSql '  Select NAME'
+   433 *-* call BuildSql '        ,CREATOR'
+   434 *-* call BuildSql '        ,VALID'
+   435 *-* call BuildSql '        ,OPERATIVE'
+   436 *-* call BuildSql '        ,BOUNDTS'
+   437 *-* call BuildSql '    from sysibm.sysplan'
+   438 *-* do x = 1 by 1 for wherePlan
+   439 *-*  /* '  where clause added here ' */
+   440 *-*  call BuildSql '  'wherePlan.x
+   441 *-* end
+   442 *-* call BuildSql 'UNION'
+   443 *-* call BuildSql '  Select a.NAME'
+   444 *-* call BuildSql '        ,a.CREATOR'
+   445 *-* call BuildSql '        ,a.VALID'
+   446 *-* call BuildSql '        ,a.OPERATIVE'
+   447 *-* call BuildSql '        ,a.BOUNDTS'
+   448 *-* call BuildSql '    from sysibm.sysplan     as a'
+   449 *-* call BuildSql '    where'
+   450 *-* call BuildSql '         strip(a.name) not in'
+   451 *-* call BuildSql '           (select distinct strip(b.planname)'
+   452 *-* call BuildSql '              from sysibm.syspacklist as b,'
+   453 *-* call BuildSql '                   sysibm.syspackage  as c'
+   454 *-* call BuildSql '              where strip(b.collid) = strip(c.collid)'
+   455 *-* call BuildSql '           )'
+   456 *-* call BuildSql '  order by name'
+   457 *-* call infomsg  '  -------------'
+   459 *-* call ZSQL  /* do prepare, etc */
+   461 *-* call infomsg '  Generating FREE PLAN commands'
+   462 *-* call infomsg '  -----------------------------'
+   463 *-* call infomsg '   Cr    is Creator'
+   464 *-* call infomsg '   v/o   is valid/operative'
+   465 *-* call infomsg '   BTS   is BoundTS'
+   466 *-* previousName = ''
+   467 *-* Do Until SQLCODE \= 0
+   468 *-*  "EXECSQL FETCH C1 INTO :name,"        ,                                                       ":CREATOR,"     ,
+                                               ":VALID,"       ,                                                       ":OPERATIVE,
+"   ,                                                       ":BOUNDTS"
+   473 *-*  If SQLCODE = 0
+   474 *-*   then
+       *-*   do
+   475 *-*    name    = strip(name)
+   476 *-*    if previousName = name
+   477 *-*     then
+       *-*     iterate
+   478 *-*    previousName = name
+   479 *-*    collid  = strip(collid)
+   480 *-*    creator = strip(creator)
+   482 *-*    FreePlanIndx.name = 1 /* indicate free */
+   483 *-*    freecmd = 'FREE PLAN('name')'
+   484 *-*    call addCommand freecmd
+   485 *-*    call infoMsg freecmd 'Cr='creator';' ,                                     'v/o='valid'/'operative';' ,
+                              'BTS='boundTS
+   488 *-*   end
+   489 *-* End /* do until */
+   490 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   491 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   492 *-* "EXECSQL CLOSE C1"
+   493 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   495 *-* Return
+   498 *-* GenerateReBindPackage:
+   499 *-* /*---------------------*/
+   500 *-* /*---------------------*/
+   501 *-* if uid1 = 0
+   502 *-*  then
+       *-*  return /* if nothing to do, return */
+   505 *-* vocnt  = ''
+   506 *-* vocnt. = 0
+   507 *-* sql = ''
+   508 *-* call BuildSql 'Select NAME'
+   509 *-* call BuildSql '      ,COLLID'
+   510 *-* call BuildSql '      ,VERSION'
+   511 *-* call BuildSql '      ,OWNER'
+   512 *-* call BuildSql '      ,VALID'
+   513 *-* call BuildSql '      ,OPERATIVE'
+   514 *-* call BuildSql '      ,LASTUSED'
+   515 *-* call BuildSql '      ,PCTIMESTAMP'
+   516 *-* call BuildSql '      ,TIMESTAMP'
+   517 *-* call BuildSql '      ,PDSNAME'
+   518 *-* call BuildSql '      ,TYPE'
+   519 *-* call BuildSql '  from sysibm.syspackage'
+   520 *-* call BuildSql "  where owner in ('"uid1.1.User"'"
+   521 *-* do x = 2 by 1 while x <= uid1
+   522 *-*  /* '  in list continued here ' */
+   523 *-*  call BuildSql "                ,'"uid1.x.User"'"
+   524 *-* end
+   525 *-* call BuildSql "                 )"
+   526 *-* call BuildSql '  order by name, collid, version'
+   527 *-* call infomsg '  -------------------------'
+   529 *-* call ZSQL  /* do prepare, etc */
+   531 *-* call infomsg '  Generating ReBind PACKAGE commands'
+   532 *-* call infomsg '  ----------------------------------'
+   533 *-* call infomsg '   Lu    is LastUsed'
+   534 *-* call infomsg '   v/o   is valid/operative'
+   535 *-* call infomsg '   pcTS  is pcTimeStamp'
+   536 *-* call infomsg '   TS    is TimeStamp'
+   537 *-* call infomsg '   Ou    is Old Owner'
+   538 *-* call infomsg '   Nu    is New Owner'
+   539 *-* call infomsg '   PDS   is PDSname'
+   540 *-* command2 = 0 /* prep for addcommand2 */
+   541 *-* command3 = 0 /* prep for addcommand3 */
+   542 *-* Do Until SQLCODE \= 0
+   543 *-*  "EXECSQL FETCH C1 INTO :NAME,"        ,                                                       ":COLLID,"      ,
+                                               ":VERSION,"     ,                                                       ":OWNER,"
+    ,                                                       ":VALID,"       ,
+ ":OPERATIVE,"   ,                                                       ":LASTUSED,"    ,
+              ":PCTIMESTAMP," ,                                                       ":TIMESTAMP,"   ,
+                           ":PDSNAME,"     ,                                                       ":TYPE"
+   554 *-*  If SQLCODE = 0
+   555 *-*   then
+       *-*   do
+   556 *-*    version = '('strip(version)')'
+   557 *-*    name    = strip(name)
+   558 *-*    collid  = strip(collid)
+   559 *-*    owner   = strip(owner)
+   560 *-*    pdsname = strip(pdsname)
+   561 *-*    y = uid1Indx.owner
+   562 *-*    newUid = uid1.y.NewUser
+   564 *-*    if FreePkgIndx.name.collid.version = 0 ,                                 & (type = ' ' | type = 'T')
+   566 *-*     then
+       *-*     do /* we didn't free it, so rebind it */
+   567 *-*      if type = ' '
+   568 *-*       then
+       *-*       rebindcmd1 ='REBIND PACKAGE('collid"."name"."version') +'
+   569 *-*      else
+       *-*       rebindcmd1 = 'REBIND TRIGGER' ,                                                            'PACKAGE('collid"."name
+"."version') +'
+   571 *-*      rebindcmd2 = '         OWNER('newUid') +'
+   572 *-*      rebindcmd3 = '         ACTION(REPLACE) +'
+   573 *-*      rebindcmd4 = '         /* valid/operative was "'valid'/' ,                                        ||operative'" */'
+   575 *-*      xyz = valid||'/'||operative
+   576 *-*      if wordpos(xyz,vocnt) = 0
+   577 *-*       then
+       *-*       vocnt = vocnt xyz
+   578 *-*      vocnt.xyz = vocnt.xyz + 1
+   579 *-*      if xyz = 'Y/Y' | xyz = 'A/Y'
+   580 *-*       then
+       *-*       do
+   581 *-*        /* rebind packages for...                  */
+   582 *-*        /* valid/operative ='y/y' will appear first*/
+   583 *-*        call addCommand2 rebindcmd1
+   584 *-*        call addCommand2 rebindcmd2
+   585 *-*        call addCommand2 rebindcmd3
+   586 *-*        call addCommand2 rebindcmd4
+   587 *-*       end
+   588 *-*      else
+       *-*       do
+   589 *-*        /* rebind packages for...                  */
+   590 *-*        /* valid/operative ='?/?' will appear later*/
+   591 *-*        call addCommand3 rebindcmd1
+   592 *-*        call addCommand3 rebindcmd2
+   593 *-*        call addCommand3 rebindcmd3
+   594 *-*        call addCommand3 rebindcmd4
+   595 *-*       end
+   596 *-*      call infoMsg rebindcmd1 'Lu='lastused';' ,                                 'v/o='valid'/'operative';' ,
+                                'pcTS='pctimestamp';' ,                                                 'TS='timestamp';' ,
+                                             'Ou='left(owner,max(8,length(owner)))';',                               'Nu='left(newU
+id,max(8,length(newuid)))';',                             'PDS='pdsname
+   603 *-*     end
+   604 *-*   end
+   605 *-* End /* do until */
+   606 *-* address 'TSO' 'EXECIO' command2 'DISKW COMMANDS (STEM COMMAND2.'
+   607 *-* address 'TSO' 'EXECIO' command3 'DISKW COMMANDS (STEM COMMAND3.'
+   608 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   609 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   610 *-* "EXECSQL CLOSE C1"
+   611 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   612 *-* call Infomsg ' '
+   613 *-* do while vocnt <> ''
+   614 *-*  parse var vocnt xyz vocnt
+   615 *-*  call Infomsg 'rebind packages v/o='xyz 'has' vocnt.xyz 'rebinds'
+   616 *-* end
+   618 *-* Return
+   620 *-* GenerateReBindPlan:
+   621 *-* /*---------------------*/
+   622 *-* /*---------------------*/
+   623 *-* if uid1 = 0
+   624 *-*  then
+       *-*  return /* if nothing to do, return */
+   626 *-* call infomsg '  GenerateRebindPlan sql'
+   627 *-* call infomsg '  ---------------==-----'
+   628 *-* sql = ''
+   629 *-* call BuildSql 'Select NAME'
+   630 *-* call BuildSql '      ,CREATOR'
+   631 *-* call BuildSql '      ,VALID'
+   632 *-* call BuildSql '      ,OPERATIVE'
+   633 *-* call BuildSql '      ,BOUNDTS'
+   634 *-* call BuildSql '  from sysibm.sysplan'
+   635 *-* call BuildSql "  where creator in ('"uid1.1.User"'"
+   636 *-* do x = 2 by 1 while x <= uid1
+   637 *-*  /* '  in list continued here ' */
+   638 *-*  call BuildSql "                   ,'"uid1.x.User"'"
+   639 *-* end
+   640 *-* call BuildSql "                   )"
+   641 *-* call BuildSql '  order by name'
+   642 *-* call infomsg '  --------------'
+   644 *-* call ZSQL  /* do prepare, etc */
+   646 *-* call infomsg '  Generating ReBind PLAN commands'
+   647 *-* call infomsg '  -------------------------------'
+   648 *-* call infomsg '   Ou    is OldUserid/Creator'
+   649 *-* call infomsg '   Nu    is NewUserid/Creator'
+   650 *-* call infomsg '   v/o   is valid/operative'
+   651 *-* call infomsg '   BTS   is BoundTS'
+   652 *-* Do Until SQLCODE \= 0
+   653 *-*  "EXECSQL FETCH C1 INTO :name,"        ,                                                       ":CREATOR,"     ,
+                                               ":VALID,"       ,                                                       ":OPERATIVE,
+"   ,                                                       ":BOUNDTS"
+   658 *-*  If SQLCODE = 0
+   659 *-*   then
+       *-*   do
+   660 *-*    name    = strip(name)
+   661 *-*    creator = strip(creator)
+   662 *-*    y = uid1Indx.creator
+   663 *-*    newUid = uid1.y.NewUser
+   665 *-*    if FreePlanIndx.name = 0
+   666 *-*     then
+       *-*     do /* we didn't free it, so rebind it */
+   667 *-*      rebindcmd1 = 'REBIND PLAN('name')' ,                                                   'OWNER('newUid') ACTION(REPL
+ACE) RETAIN'
+   669 *-*      call addCommand rebindcmd1
+   670 *-*      call infoMsg rebindcmd1 ,                                                  'v/o='valid'/'operative';' ,
+                                'BTS='boundts';' ,                                                      'Ou='left(creator,max(8,len
+gth(creator)))';',                           'Nu='left(newUid,max(8,length(newuid)))';'
+   675 *-*     end
+   676 *-*   end
+   677 *-* End /* do until */
+   678 *-* If SQLCODE=0 | SQLCODE=100
+       *-*  Then
+       *-*  nop
+   679 *-* Else
+       *-*  call prtsqlca 'FETCH C1'
+   680 *-* "EXECSQL CLOSE C1"
+   681 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'CLOSE C1'
+   683 *-* Return
+   687 *-* ZSQL:
+   688 *-* err_sw = "0"
+   689 *-* "EXECSQL DECLARE C1 CURSOR FOR S1"
+   690 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'DECLARE C1 CURSOR'
+   691 *-* "EXECSQL PREPARE S1 INTO :outsqlca FROM :sql"
+   692 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'PREPARE S1'
+   693 *-* "EXECSQL OPEN C1"
+   694 *-* If SQLCODE \= 0
+       *-*  Then
+       *-*  call prtsqlca 'OPEN C1 '
+   695 *-* Return  /* zsql */
+   697 *-* prtsqlca:
+   698 *-* err_sw = "1"
+   699 *-* call infomsg '** Error SQL statement - ' arg(1)
+   700 *-* call infomsg '** failing SQL statement - ' sql
+   701 *-* call infomsg 'SQLCODE = 'SQLCODE
+   702 *-* call infomsg 'SQLERRMC = 'SQLERRMC
+   703 *-* call infomsg 'SQLERRP = 'SQLERRP
+   704 *-* call infomsg 'SQLERRD = 'SQLERRD.1',',                                              || SQLERRD.2',',
+                                    || SQLERRD.3',',                                                        || SQLERRD.4',',
+                                                 || SQLERRD.5',',                                                        || SQLERRD
+.6
+   711 *-* call infomsg 'SQLWARN = 'SQLWARN.1',',                                              || SQLWARN.2',',
+                                    || SQLWARN.3',',                                                        || SQLWARN.4',',
+                                                 || SQLWARN.5',',                                                        || SQLWARN
+.6',',                                                        || SQLWARN.7',',
+   || SQLWARN.8',',                                                        || SQLWARN.9',',
+                || SQLWARN.10
+   722 *-* call infomsg 'SQLSTATE= 'SQLSTATE
+   723 *-* /* we want to exit ... signal to controlled error exit*/
+   724 *-* signal ForceRc8Exit
+   726 *-* infoMsg:
+   727 *-* parse arg infomsgX
+   728 *-* if info > 50
+   729 *-*  then
+       *-*  do
+   730 *-*   /* if info > 50, infoRc must be 0 */
+   731 *-*   /* ... and time to empty buffer   */
+   732 *-*   address 'TSO' 'EXECIO' info 'DISKW INFO (STEM INFO.'
+   733 *-*   infoRc = rc
+   734 *-*   info = 0
+   735 *-*  end
+   736 *-* if infoRc = 0
+   737 *-*  then
+       *-*  do
+   738 *-*   /* we can write to INFO, add to buffer  */
+   739 *-*   info = info + 1
+   740 *-*   info.info = infomsgX
+   741 *-*  end
+   742 *-* say infomsgX /* with or w/o buffer, send output somewhere*/
+   743 *-* return
+   745 *-* writeInfo:
+   746 *-* /* empty buffer, reset rc and buffer size */
+   747 *-* address 'TSO' 'EXECIO' info 'DISKW INFO (STEM INFO.'
+   748 *-* infoRc = rc
+   749 *-* info = 0
+   750 *-* return
+   752 *-* buildSql:
+   753 *-* /* append to variable SQL (for dsnrexx) */
+   754 *-* /* ...but setup for output to INFO for human use*/
+   755 *-* parse arg buildSQLline
+   756 *-* sql = sql strip(buildSQLline)
+   757 *-* call infomsg buildSQLline
+   758 *-* return
+   760 *-* addCommand:
+   761 *-* parse arg commandX
+   762 *-* if command > 50
+   763 *-*  then
+       *-*  do
+   764 *-*   /* time to empty buffer   */
+   765 *-*   address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND.'
+   766 *-*   commandRc = rc
+   767 *-*   command = 0
+   768 *-*  end
+   769 *-* if commandRc = 0
+   770 *-*  then
+       *-*  do
+   771 *-*   /* we can write to Command buffer  */
+   772 *-*   command = command + 1
+   773 *-*   command.command = left(commandX,80) /* must be fixed 80 */
+   774 *-*  end
+   775 *-* else
+       *-*  do
+   776 *-*   call infoMsg 'write to DDNAME COMMANDS, got rc='commandrc
+   777 *-*   call infoMsg 'exit rc=8'
+   778 *-*   signal ForceRc8Exit
+   779 *-*  end
+   780 *-* return
+   782 *-* addCommand2:
+   783 *-* parse arg commandX
+   784 *-* if command > 0 /* empty previous buffer (one time) */
+   785 *-*  then
+       *-*  do
+   786 *-*   /* time to empty buffer   */
+   787 *-*   address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND.'
+   788 *-*   commandRc = rc
+   789 *-*   command = 0
+   790 *-*  end
+   791 *-* if commandRc = 0
+   792 *-*  then
+       *-*  do
+   793 *-*   /* we can write to Command buffer  */
+   794 *-*   command2 = command2 + 1
+   795 *-*   command2.command2 = left(commandX,80) /* must be fixed 80 */
+   796 *-*  end
+   797 *-* else
+       *-*  do
+   798 *-*   call infoMsg 'write to DDNAME COMMANDS, got rc='commandrc
+   799 *-*   call infoMsg 'exit rc=8'
+   800 *-*   signal ForceRc8Exit
+   801 *-*  end
+   802 *-* return
+   804 *-* addCommand3:
+   805 *-* parse arg commandX
+   806 *-* if command > 0 /* empty previous buffer (one time) */
+   807 *-*  then
+       *-*  do
+   808 *-*   /* time to empty buffer   */
+   809 *-*   address 'TSO' 'EXECIO' command 'DISKW COMMANDS (STEM COMMAND.'
+   810 *-*   commandRc = rc
+   811 *-*   command = 0
+   812 *-*  end
+   813 *-* if commandRc = 0
+   814 *-*  then
+       *-*  do
+   815 *-*   /* we can write to Command buffer  */
+   816 *-*   command3 = command3 + 1
+   817 *-*   command3.command3 = left(commandX,80) /* must be fixed 80 */
+   818 *-*  end
+   819 *-* else
+       *-*  do
+   820 *-*   call infoMsg 'write to DDNAME COMMANDS, got rc='commandrc
+   821 *-*   call infoMsg 'exit rc=8'
+   822 *-*   signal ForceRc8Exit
+   823 *-*  end
+   824 *-* return
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Label (internal label)  ADDCOMMAND                 Defined  : 760
+Label (int. label ref)  ADDCOMMAND                 Reference: C(406) C(484) C(669)
+
+Label (internal label)  ADDCOMMAND2                Defined  : 782
+Label (int. label ref)  ADDCOMMAND2                Reference: C(583) C(584) C(585) C(586)
+
+Label (internal label)  ADDCOMMAND3                Defined  : 804
+Label (int. label ref)  ADDCOMMAND3                Reference: C(591) C(592) C(593) C(594)
+
+Address Envir.Constant: ADDRESS 'DSNREXX'          Reference: 321
+
+Address Envir.Constant: ADDRESS 'TSO' <cmd>        Reference: 93 97 101 105 109 296 297 301 302 313 345 346 606 607 732 747 765 787 809
+
+Built-In+/External use  ARG                        Reference: F(699)
+
+Variable (NEVER SET)    BOUNDTS                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) BOUNDTS                    Reference: 485 670
+
+Label (internal label)  BUILDSQL                   Defined  : 752
+Label (int. label ref)  BUILDSQL                   Reference: C(358) C(359) C(360) C(361) C(362) C(363) C(364) C(365) C(366) C(367) C(368) C(371)
+                        ...                                   C(373) C(432) C(433) C(434) C(435) C(436) C(437) C(440) C(442) C(443) C(444) C(445)
+                        ...                                   C(446) C(447) C(448) C(449) C(450) C(451) C(452) C(453) C(454) C(455) C(456) C(508)
+                        ...                                   C(509) C(510) C(511) C(512) C(513) C(514) C(515) C(516) C(517) C(518) C(519) C(520)
+                        ...                                   C(523) C(525) C(526) C(629) C(630) C(631) C(632) C(633) C(634) C(635) C(638) C(640)
+                        ...                                   C(641)
+
+Variable (set w/rexx)   buildsqlline               Assigned : 755
+Variable (used in/rexx) buildsqlline               Reference: 756 757
+
+Variable (set w/rexx)   collid                     Assigned : 400 479 558
+Variable (used in/rexx) collid                     Reference: 400 405 479 558 568 569
+Variable (in Stem Set)  collid                     Assigned : 404
+Variable (in Stem Ref)  collid                     Reference: 564
+
+Variable (set w/rexx)   command                    Assigned : 99 767 772 789 811
+Variable (used in/rexx) command                    Reference: 297 302 346 762 765 772 784 787 806 809
+Variable (in Stem Set)  command                    Assigned : 773
+
+Variable (set w/rexx)   command2                   Assigned : 540 794
+Variable (used in/rexx) command2                   Reference: 606 794
+Variable (in Stem Set)  command2                   Assigned : 795
+
+Variable (set w/rexx)   command3                   Assigned : 541 816
+Variable (used in/rexx) command3                   Reference: 607 816
+Variable (in Stem Set)  command3                   Assigned : 817
+
+Variable (set w/rexx)   commandrc                  Assigned : 98 766 788 810
+Variable (used in/rexx) commandrc                  Reference: 275 279 280 769 776 791 798 813 820
+
+Variable (set w/rexx)   commandx                   Assigned : 761 783 805
+Variable (used in/rexx) commandx                   Reference: 773 795 817
+
+Variable (set w/rexx)   creator                    Assigned : 480 661
+Variable (used in/rexx) creator                    Reference: 480 485 661 670
+Variable (in Stem Ref)  creator                    Reference: 662
+
+Variable (set w/rexx)   defaultrc                  Assigned : 117 119
+Variable (used in/rexx) defaultrc                  Reference: 303
+
+Label (internal label)  DEFAULTRCEXIT              Defined  : 300
+Label (int. label ref)  DEFAULTRCEXIT              Reference: S(287)
+
+Variable (set w/rexx)   dropcuidrc                 Assigned : 113
+Variable (NEVER USED)   dropcuidrc                 No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   err_sw                     Assigned : 688 698
+Variable (NEVER USED)   err_sw                     No Ref.  : If actually referenced, it must be via a cmd.
+
+Label (internal label)  FORCERC8EXIT               Defined  : 295
+Label (int. label ref)  FORCERC8EXIT               Reference: S(283) S(317) S(327) S(724) S(778) S(800) S(822)
+
+Variable (set w/rexx)   freecmd                    Assigned : 405 483
+Variable (used in/rexx) freecmd                    Reference: 406 407 484 485
+
+Variable (set w/rexx)   function                   Assigned : 92
+Variable (used in/rexx) function                   Reference: 116 118 134 136
+
+Label (internal label)  GENERATEFREEPACKAGE        Defined  : 349
+Label (int. label ref)  GENERATEFREEPACKAGE        Reference: C(335)
+
+Label (internal label)  GENERATEFREEPLAN           Defined  : 423
+Label (int. label ref)  GENERATEFREEPLAN           Reference: C(338)
+
+Label (internal label)  GENERATEREBINDPACKAGE      Defined  : 498
+Label (int. label ref)  GENERATEREBINDPACKAGE      Reference: C(340)
+
+Label (internal label)  GENERATEREBINDPLAN         Defined  : 620
+Label (int. label ref)  GENERATEREBINDPLAN         Reference: C(342)
+
+Variable (set w/rexx)   i                          Assigned : 158 207 239
+Variable (used in/rexx) i                          Reference: 162 163 211 212 243 244
+Variable (in Stem Set)  i                          Assigned : 159 208 240
+Variable (in Stem Ref)  i                          Reference: 159 160 161 208 209 224 240 241 256
+
+Variable (set w/rexx)   info                       Assigned : 95 734 739 749
+Variable (used in/rexx) info                       Reference: 296 301 310 345 728 732 739 747
+Variable (in Stem Set)  info                       Assigned : 740
+
+Label (internal label)  INFOMSG                    Defined  : 726
+Label (int. label ref)  INFOMSG                    Reference: C(123) C(124) C(125) C(126) C(127) C(128) C(129) C(130) C(131) C(132) C(136) C(137)
+                        ...                                   C(141) C(142) C(146) C(147) C(155) C(156) C(157) C(160) C(166) C(167) C(168) C(169)
+                        ...                                   C(188) C(190) C(191) C(195) C(196) C(197) C(204) C(205) C(206) C(210) C(216) C(219)
+                        ...                                   C(220) C(227) C(228) C(229) C(236) C(237) C(238) C(242) C(248) C(251) C(252) C(259)
+                        ...                                   C(260) C(261) C(268) C(269) C(270) C(272) C(278) C(280) C(282) C(316) C(325) C(326)
+                        ...                                   C(355) C(356) C(374) C(378) C(379) C(380) C(381) C(382) C(383) C(384) C(407) C(429)
+                        ...                                   C(430) C(457) C(461) C(462) C(463) C(464) C(465) C(485) C(527) C(531) C(532) C(533)
+                        ...                                   C(534) C(535) C(536) C(537) C(538) C(539) C(596) C(612) C(615) C(626) C(627) C(642)
+                        ...                                   C(646) C(647) C(648) C(649) C(650) C(651) C(670) C(699) C(700) C(701) C(702) C(703)
+                        ...                                   C(704) C(711) C(722) C(757) C(776) C(777) C(798) C(799) C(820) C(821)
+
+Variable (set w/rexx)   infomsgx                   Assigned : 727
+Variable (used in/rexx) infomsgx                   Reference: 740 742
+
+Variable (set w/rexx)   inforc                     Assigned : 94 733 748
+Variable (used in/rexx) inforc                     Reference: 275 277 278 736
+
+Variable (NEVER SET)    LASTUSED                   Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) LASTUSED                   Reference: 407 596
+
+Built-In+/External use  LEFT                       Reference: F(159) F(163) F(208) F(212) F(214) F(240) F(244) F(246) F(407) F(596) F(670) F(773)
+                        ...                                   F(795) F(817)
+
+Built-In+/External use  LENGTH                     Reference: F(407) F(596) F(670)
+
+Built-In+/External use  MAX                        Reference: F(303) F(407) F(596) F(670)
+
+Variable (set w/rexx)   name                       Assigned : 399 475 557 660
+Variable (used in/rexx) name                       Reference: 399 405 475 476 478 483 557 568 569 660 667
+Variable (in Stem Set)  name                       Assigned : 404 482
+Variable (in Stem Ref)  name                       Reference: 564 665
+
+Variable (set w/rexx)   newuid                     Assigned : 562 663
+Variable (used in/rexx) newuid                     Reference: 571 596 667 670
+
+Variable (NEVER SET)    NEWUSER                    Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  NEWUSER                    Assigned : 179
+Variable (in Stem Ref)  NEWUSER                    Reference: 184 188 562 663
+
+Variable (NEVER SET)    OPERATIVE                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) OPERATIVE                  Reference: 407 485 573 575 596 670
+
+Variable (set w/rexx)   owner                      Assigned : 401 559
+Variable (used in/rexx) owner                      Reference: 401 407 559 596
+Variable (in Stem Ref)  owner                      Reference: 561
+
+Variable (NEVER SET)    PCTIMESTAMP                Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) PCTIMESTAMP                Reference: 407 596
+
+Variable (set w/rexx)   pdsname                    Assigned : 402 560
+Variable (used in/rexx) pdsname                    Reference: 402 407 560 596
+
+Variable (set w/rexx)   pendingrc                  Assigned : 115 145 170 187 218 250 271
+Variable (used in/rexx) pendingrc                  Reference: 286 303
+
+Variable (set w/rexx)   pkg                        Assigned : 200 225
+Variable (used in/rexx) pkg                        Reference: 213 225 264 352
+
+Variable (set w/rexx)   pkgline                    Assigned : 209
+Variable (used in/rexx) pkgline                    Reference: 210 211 212 214 216 225
+
+Variable (set w/rexx)   plan                       Assigned : 232 257
+Variable (used in/rexx) plan                       Reference: 245 257 264 426
+
+Variable (set w/rexx)   planline                   Assigned : 241
+Variable (used in/rexx) planline                   Reference: 242 243 244 246 248 257
+
+Variable (set w/rexx)   previousname               Assigned : 466 478
+Variable (used in/rexx) previousname               Reference: 476
+
+Label (internal label)  PRTSQLCA                   Defined  : 697
+Label (int. label ref)  PRTSQLCA                   Reference: C(416) C(418) C(491) C(493) C(609) C(611) C(679) C(681) C(690) C(692) C(694)
+
+SpecialVar(set no-XREF) RC                          *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) RC                         Reference: 94 98 102 106 110 113 314 323 325 733 748 766 788 810
+
+Variable (set w/rexx)   rebindcmd1                 Assigned : 568 569 667
+Variable (used in/rexx) rebindcmd1                 Reference: 583 591 596 669 670
+
+Variable (set w/rexx)   rebindcmd2                 Assigned : 571
+Variable (used in/rexx) rebindcmd2                 Reference: 584 592
+
+Variable (set w/rexx)   rebindcmd3                 Assigned : 572
+Variable (used in/rexx) rebindcmd3                 Reference: 585 593
+
+Variable (set w/rexx)   rebindcmd4                 Assigned : 573
+Variable (used in/rexx) rebindcmd4                 Reference: 586 594
+
+Built-In+/External use  RXSUBCOM                   Reference: F(314)
+
+Variable (set w/rexx)   sql                        Assigned : 357 431 507 628 756
+Variable (used in/rexx) sql                        Reference: 700 756
+
+SpecialVar(set no-XREF) SQLCODE                     *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLCODE                    Reference: 385 396 415 418 467 473 490 493 542 554 608 611 652 658 678 681 690 692 694 701
+
+SpecialVar(set no-XREF) SQLERRMC                    *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLERRMC                   Reference: 702
+
+SpecialVar(set no-XREF) SQLERRP                     *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLERRP                    Reference: 703
+
+SpecialVar(set no-XREF) SQLSTATE                    *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(used w/rexx) SQLSTATE                   Reference: 722
+
+Variable (set w/rexx)   ssid                       Assigned : 92
+Variable (used in/rexx) ssid                       Reference: 121 322 325
+
+Label (internal label)  STARTUP                    Defined  : 308
+Label (int. label ref)  STARTUP                    Reference: S(289)
+
+Built-In+/External use  STRIP                      Reference: F(160) F(209) F(224) F(241) F(256) F(398) F(399) F(400) F(401) F(402) F(475) F(479)
+                        ...                                   F(480) F(556) F(557) F(558) F(559) F(560) F(660) F(661) F(756)
+
+Variable (set w/rexx)   s_rc                       Assigned : 314
+Variable (NEVER USED)   s_rc                       No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (NEVER SET)    TIMESTAMP                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) TIMESTAMP                  Reference: 407 596
+
+Built-In+/External use  TRANSLATE                  Reference: F(214) F(246)
+
+Variable (NEVER SET)    TYPE                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) TYPE                       Reference: 564 567
+
+Variable (set w/rexx)   uid1                       Assigned : 151 177
+Variable (used in/rexx) uid1                       Reference: 177 180 501 521 623 636
+Variable (in Stem Set)  uid1                       Assigned : 178 179
+
+Variable (NEVER SET)    UID2                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) UID2                       Reference: 264
+
+Variable (NEVER SET)    USER                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (in Stem Set)  USER                       Assigned : 178
+Variable (in Stem Ref)  USER                       Reference: 520 523 635 638
+
+Variable (set w/rexx)   user1                      Assigned : 161
+Variable (used in/rexx) user1                      Reference: 162 163 178 188
+Variable (in Stem Set)  user1                      Assigned : 180
+Variable (in Stem Ref)  user1                      Reference: 175 183
+
+Variable (set w/rexx)   user2                      Assigned : 161
+Variable (used in/rexx) user2                      Reference: 164 179 184 188
+
+Variable (NEVER SET)    VALID                      Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) VALID                      Reference: 407 485 573 575 596 670
+
+Variable (set w/rexx)   version                    Assigned : 398 556
+Variable (used in/rexx) version                    Reference: 398 405 556 568 569
+Variable (in Stem Set)  version                    Assigned : 404
+Variable (in Stem Ref)  version                    Reference: 564
+
+Variable (set w/rexx)   vocnt                      Assigned : 505 577 614
+Variable (used in/rexx) vocnt                      Reference: 576 577 613 614
+
+Variable (set w/rexx)   wherepkg                   Assigned : 201 223
+Variable (used in/rexx) wherepkg                   Reference: 223 369
+Variable (in Stem Set)  wherepkg                   Assigned : 224
+
+Variable (set w/rexx)   whereplan                  Assigned : 233 255
+Variable (used in/rexx) whereplan                  Reference: 255 438
+Variable (in Stem Set)  whereplan                  Assigned : 256
+
+Built-In+/External use  WORD                       Reference: F(216) F(248)
+
+Built-In+/External use  WORDPOS                    Reference: F(576)
+
+Label (internal label)  WRITEINFO                  Defined  : 745
+Label (int. label ref)  WRITEINFO                  Reference: C(311)
+
+Variable (set w/rexx)   x                          Assigned : 183 369 438 521 636
+Variable (used in/rexx) x                          Reference: 521 636
+Variable (in Stem Ref)  x                          Reference: 184 188 371 440 523 638
+
+Variable (set w/rexx)   xyz                        Assigned : 575 614
+Variable (used in/rexx) xyz                        Reference: 576 577 579 615
+Variable (in Stem Set)  xyz                        Assigned : 578
+Variable (in Stem Ref)  xyz                        Reference: 578 615
+
+Variable (set w/rexx)   y                          Assigned : 561 662
+Variable (in Stem Ref)  y                          Reference: 562 663
+
+Label (internal label)  ZSQL                       Defined  : 687
+Label (int. label ref)  ZSQL                       Reference: C(376) C(459) C(529) C(644)
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 CHNGEUID.0                           Assigned : 111
+
+Stem-1 COMMAND.command                      Assigned : 773
+
+Stem-1 COMMAND2.command2                    Assigned : 795
+
+Stem-1 COMMAND3.command3                    Assigned : 817
+
+Stem-1 CUID.0                               Reference: 153 158
+Stem-1 CUID.i                               Assigned : 159
+Stem-1 CUID.i                               Reference: 159 160 161
+
+Stem-1 FREEPKGINDX.                         Assigned : 334
+Stem-3 FREEPKGINDX.name.collid.version      Assigned : 404
+Stem-3 FREEPKGINDX.name.collid.version      Reference: 564
+
+Stem-1 FREEPLANINDX.                        Assigned : 337
+Stem-1 FREEPLANINDX.name                    Assigned : 482
+Stem-1 FREEPLANINDX.name                    Reference: 665
+
+Stem-1 INFO.info                            Assigned : 740
+
+Stem-1 PKG.0                                Assigned : 103
+Stem-1 PKG.0                                Reference: 202 207
+Stem-1 PKG.i                                Assigned : 208
+Stem-1 PKG.i                                Reference: 208 209 224
+
+Stem-1 PLAN.0                               Assigned : 107
+Stem-1 PLAN.0                               Reference: 234 239
+Stem-1 PLAN.i                               Assigned : 240
+Stem-1 PLAN.i                               Reference: 240 241 256
+
+Stem-1 SQLERRD.#                             *Special: Assigned via an ADDR env cmd and/or REXX itself
+Stem-1 SQLERRD.#                            Reference: 704
+
+Stem-1 SQLWARN.#                             *Special: Assigned via an ADDR env cmd and/or REXX itself
+Stem-1 SQLWARN.#                            Reference: 711
+
+Stem-1 UID1.                                Assigned : 152
+Stem-2 UID1.#.USER                          Reference: 520 635
+Stem-2 UID1.uid1.NEWUSER                    Assigned : 179
+Stem-2 UID1.uid1.USER                       Assigned : 178
+Stem-2 UID1.x.NEWUSER                       Reference: 184 188
+Stem-2 UID1.x.USER                          Reference: 523 638
+Stem-2 UID1.y.NEWUSER                       Reference: 562 663
+
+Stem-1 UID1INDX.                            Assigned : 150
+Stem-1 UID1INDX.creator                     Reference: 662
+Stem-1 UID1INDX.owner                       Reference: 561
+Stem-1 UID1INDX.user1                       Assigned : 180
+Stem-1 UID1INDX.user1                       Reference: 175 183
+
+Stem-1 VOCNT.                               Assigned : 506
+Stem-1 VOCNT.xyz                            Assigned : 578
+Stem-1 VOCNT.xyz                            Reference: 578 615
+
+Stem-1 WHEREPKG.wherepkg                    Assigned : 224
+Stem-1 WHEREPKG.x                           Reference: 371
+
+Stem-1 WHEREPLAN.whereplan                  Assigned : 256
+Stem-1 WHEREPLAN.x                          Reference: 440
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

@@ -1,0 +1,18 @@
+Technical documents to help explain REXXXREF code.
+   TECH01 - how "fast" variable lookup's work
+            ... critical to understanding code in REXXXREF.
+
+   TECH02 - how some of the "data structures" are related in REXXXREF
+            - data structures for variables/labels
+            - data structures for stem variabls
+            - data structures for special variables
+            - data structures for special stem variables
+            - data structures for rexx statement we handle
+
+   TECH03 - Logic + "data structures" in pass 1 (looking at user rexx code)
+
+   TECH04 - Logic + "data structures" in c9900OutputResults (creating xref 1 + 2)
+
+   TECH05 - Options available when invoking REXXXREF code.
+
+   TECH06 - Restrictions ... what rexxxref will ignore

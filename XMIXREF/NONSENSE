@@ -1,0 +1,315 @@
+   ==> Scan of exec succeeded (rc <= 4)
+   -------------------------------------------------
+    1) See trace 's' exec in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.SCAN(NONSENSE)
+
+    2) Trace listing + XREF listing in:
+          SFRH66.PUBLIC.REXXXREF.SAMPLE.XREF(NONSENSE)
+   -----------------------------------------
+
+READY
+    NONSENSE
+    Generated scan code/comment:   trace 's'
+    Generated scan code/comment:   /*  rexx member for scan/xref was: */
+    Generated scan code/comment:   /*     "SFRH66.REXX(NONSENSE)"      */
+    Generated scan code/comment:   /*      ---------------------       */
+    Generated scan code/comment:   /*  date/time of XREF was:          */
+    Generated scan code/comment:   /*     20231217 23:02:44            */
+    Generated scan code/comment:   /*      ---------------------       */
+     1 *-* /* rexx */
+     2 *-* /* nonsense but legal code */
+     3 *-* /*  */
+     4 *-* /* NO ONE ... should ever write code that looks like this */
+     5 *-* /* ------------------------------------------------------ */
+     7 *-* /* nested /* comment */ */ 'execio whatever' b /* another nested /* comment */ */
+     8 *-* /* what */ /* 2nd comm */ label1:
+       *-* /* more */ address tso /* more */ 'execio whatever'
+     9 *-* if x=1
+       *-*  then
+       *-*  y=2 then y=3
+    10 *-* call ' x y z'
+    11 *-* rc = 'we can set a special variable'
+    12 *-* say rc /* and, of course, reference it */
+    13 *-* Select
+    14 *-* when balance > 0
+       *-*  then
+    15 *-*  say 'Congratulations! You still have' balance 'dollars left.'
+    16 *-* when balance = 0
+       *-*  then
+       *-*  do
+    17 *-*   say 'Attention, Balance is now zero! STOP all spending.'
+    18 *-*   say "You cut it close this month! Hope you do not have any"
+    19 *-*   say "checks left outstanding."
+    20 *-*  end
+    21 *-* Otherwise
+    22 *-*  say "You have just overdrawn your account."
+    23 *-*  say "Your balance now shows" balance "dollars."
+    24 *-*  say "Oops! Hope the bank does not close your account."
+    25 *-* end /* Select */
+    26 *-* select when a = 2  then xx = 2
+    27 *-* when a = 3
+       *-*  then
+       *-*  xx = 2
+    28 *-* when a = 4
+       *-*  then
+       *-*  xx = 2
+    29 *-* otherwise
+       *-*  a=6
+    30 *-* end
+    32 *-* /* following is one "long" assignment statement */
+    33 *-* a = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' ,    'xxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' ,    'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxx' ,    'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' ,    'xxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' ,    b
+    40 *-* /* following is 4 rexx assignment statements on one line */
+    41 *-* /* bad, but not "so bad" as later statement              */
+    42 *-* a =1
+       *-* b=2
+       *-* c=3
+       *-* d = 4
+    44 *-* /* following 1s basically 3 rexx statements: assignment; if exp then stmt; assignment stmt */
+    45 *-* /* bad, but not "so bad" as later statement                                                */
+    46 *-* e =5
+       *-* if a = 1
+       *-*  then
+       *-*  b =2
+       *-* f=6
+    48 *-* /* following might LOOK like multiple rexx statements                 */
+    49 *-* /* BUT if you look closely, is really just "one" assignment statement */
+    50 *-* /* This is really TERRIBLE rexx code (in my opinion)                  */
+    51 *-* /*                                                                    */
+    52 *-* /* The rexx:  TRACE 's' instruction will illustrate this.             */
+    53 *-* /*                                                                    */
+    54 *-* /* Note:  IF, THEN and ELSE are all variables in this assignment stmt */
+    56 *-* e =5  if a = 1 then if b =2 then c =3 else d =4 f=6 /* this looks simple but is terrible rexx code*/
+    58 *-* /* better rexx code follows */
+    59 *-* if a = 1
+    60 *-*  then
+       *-*  if b = 2
+    61 *-*   then
+       *-*   c =3
+    62 *-*  else
+       *-*   d =4
+    64 *-* a = 3
+    65 *-* b = 2
+    66 *-* doit() rats(e)
+    67 *-* /* this code is almost reasonable */
+    68 *-* x = 0
+    69 *-* x = x+1
+       *-* x.x = 'filling stems'
+    70 *-* x = x+1
+       *-* x.x = 'sequentially'
+    71 *-* x = x+1
+       *-* x.x = 'so this looks'
+    72 *-* x = x+1
+       *-* x.x = 'reasonable'
+    74 *-* exit
+    76 *-* doit:
+    77 *-* say 'something' a b
+    78 *-* return 'somecmd'
+    80 *-* rats:
+    81 *-* return 'rat'
+    82 *-* syntax:
+    83 *-* say 'syntax here'
+    84 *-* exit
+    85 *-* on:
+    86 *-* say 'ON' here
+    87 *-* exit
+READY
+END
+
+
+ ------------ now xreference begins -----------------------
+ ------------ now xreference begins -----------------------
+
+
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    xref (1 of 2) section 1 is for variables (not stem.'s)
+    ----------------------------------------------------------
+
+       variables/labels are in "upperCase" if variable was never
+                       assigned a value.
+
+                        they are in "lowercase", otherwise.
+
+       variables/stems set via a command, like EXECIO for
+                       example, where the stem is within quotes
+                       will not be shown in the xref as either
+                       an assignment or a reference.
+
+       Note special variables like:  RC, SIGL, can be assigned
+                       values explictly.  But rexx can set them
+                       as well implicitly.  Implicit assignments
+                       are not in the xref.
+    ----------------------------------------------------------
+
+
+
+Built-In+/External use  ' X Y Z'                 Reference: C(10)
+
+Variable (set w/rexx)   a                        Assigned : 29 33 42 64
+Variable (used in/rexx) a                        Reference: 26 27 28 46 56 59 77
+
+Address Envir.Constant: ADDRESS 'TSO' <cmd>      Reference: 8
+
+Variable (set w/rexx)   b                        Assigned : 42 46 65
+Variable (used in/rexx) b                        Reference: 7 33 56 60 77
+
+Variable (NEVER SET)    BALANCE                  Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) BALANCE                  Reference: 14 15 16 23
+
+Variable (set w/rexx)   c                        Assigned : 42 61
+Variable (used in/rexx) c                        Reference: 56
+
+Variable (set w/rexx)   d                        Assigned : 42 62
+Variable (used in/rexx) d                        Reference: 56
+
+Label (internal label)  DOIT                     Defined  : 76
+Label (int. label ref)  DOIT                     Reference: F(66)
+
+Variable (set w/rexx)   e                        Assigned : 46 56
+Variable (used in/rexx) e                        Reference: 66
+
+Variable (NEVER SET)    ELSE                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) ELSE                     Reference: 56
+
+Variable (set w/rexx)   f                        Assigned : 46
+Variable (used in/rexx) f                        Reference: 56
+
+Variable (NEVER SET)    HERE                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) HERE                     Reference: 86
+
+Variable (NEVER SET)    IF                       Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) IF                       Reference: 56
+
+Label (internal label)  LABEL1                   Defined  : 8
+Label (int. label ref)  LABEL1                   Reference:
+
+Label (internal label)  ON                       Defined  : 85
+Label (int. label ref)  ON                       Reference:
+
+Label (internal label)  RATS                     Defined  : 80
+Label (int. label ref)  RATS                     Reference: F(66)
+
+SpecialVar(set no-XREF) rc                        *Special: No xref; set w/ADDR env cmd and/or REXX itself
+SpecialVar(set w/ code) rc                       Assigned : 11
+SpecialVar(used w/rexx) rc                       Reference: 12
+
+Label (internal label)  SYNTAX                   Defined  : 82
+Label (int. label ref)  SYNTAX                   Reference:
+
+Variable (NEVER SET)    THEN                     Not Assgn: EITHER used as upper case value OR set via cmd
+Variable (used in/rexx) THEN                     Reference: 9 56
+
+Variable (set w/rexx)   x                        Assigned : 68 69 70 71 72
+Variable (used in/rexx) x                        Reference: 9 69 70 71 72
+Variable (in Stem Set)  x                        Assigned : 69 70 71 72
+
+Variable (set w/rexx)   xx                       Assigned : 26 27 28
+Variable (NEVER USED)   xx                       No Ref.  : If actually referenced, it must be via a cmd.
+
+Variable (set w/rexx)   y                        Assigned : 9
+Variable (used in/rexx) y                        Reference: 9
+    xref (1 of 2) ends here
+    xref (1 of 2) ends here
+    -----------------------
+
+    xref (2 of 2) section 2 is for stem variable xreference.
+    xref (2 of 2) section 2 is for stem variable xreference.
+    ----------------------------------------------------------
+       note:     Assignments/references to rexx stems
+              is only for stem references in rexx code
+              itself.
+
+                 Therefore, references to stem variables
+              that are made INSIDE of quotes, say as
+              part of an EXECIO command, will NOT show
+              up in the XREF as they are part of a "string
+              constant" and not used as a rexx variable or
+              rexx stem directly.
+
+                 This is because it often may not be obvious
+              which address environment a command may (or may
+              not) be valid in.  Or for us to know all the
+              ways a rexx stem might be used.
+
+    ----------------------------------------------------------
+
+
+
+
+
+
+
+Stem-1 X.x      Assigned : 69 70 71 72
+    xref (2 of 2) ends here
+    xref (2 of 2) ends here
+    -----------------------
+
+
+ ------------ tips for label references ----------------------------
+ ------------ tips for label references ----------------------------
+     tip:  c# is a ref to CALL stmt to this   internal/external name
+     tip:  f# is a ref to FUNCTION call to    internal/external function
+     tip:  s# is a ref to SIGNAL stmt to this internal label
+
+
+ ------------ now xreference for stem variables (tips) -------------
+ ------------ now xreference for stem variables (tips) -------------
+     tip:     Note:- stem variables (after 1st period) are in lower case
+     tip:          - stem "constants" (will be shown in UPPER case)
+     tip:          - stem "constants" that are whole numbers (and not 0)
+     tip:               will be summarized as a # sign (in place of
+     tip:               individual digits/numbers) so it summarizes them.
+     tip:     What XREF for stems can help you fix:
+     tip:     -------------------------------------
+     tip:      - seeing a variable (lower case) used in a stem where you
+     tip:       EXPECTED it to always be a constant.
+     tip:      - seeing a constant (upper case) used in a stem where you
+     tip:       EXPECTED it to be a variable (maybe it was misspelled).
+     tip:                                              )
+     tip:line sample rexx code (followed by sample xref)
+     tip:---- ------------
+     tip:  1     x = "Richard"
+     tip:  2     firstName.y.x.1 = "Hi"
+     tip:  3     firstName.y.x.2 = "Buddy"
+     tip:  4     firstName.y.x.0 = 2
+     tip:
+     tip:sample xref listing
+     tip:-----------
+     tip:  --xref section 1 (variables)
+     tip:  --xref section 1 (variables)
+     tip:
+     tip:Variable (set)         X               Assigned : 1
+     tip:Variable(w/ stem use): X               Reference: 2 3 4
+     tip:Constant(w/ stem use): Y               Reference: 2 3 4
+     tip:
+     tip:  --xref section 2 (stem variables)
+     tip:  --xref section 2 (stem variables)
+     tip:
+     tip:Stem-3 FIRSTNAME.Y.x.#                 Assigned : 2 3
+     tip:Stem-3 FIRSTNAME.Y.x.0                 Assigned : 4
+     tip:                                       Reference: 2 3 4
+     tip:     note:  Stem-3 refers to # of periods in the stem.
+     tip:
+     tip:  rexx tip: remember stem value on the right is "tricky":
+     tip:        Given following rexx code:
+     tip:             x = "RICHARD.HUMPHRIS"
+     tip:             y = "RICHARD"
+     tip:             z = "HUMPHRIS"
+     tip:        References to a stem variable, as shown below, are
+     tip:          referring to the SAME stem variable:
+     tip:             stem.x     refers to STEM.RICHARD.HUMPHRIS
+     tip:             stem.y.z   refers to STEM.RICHARD.HUMPHRIS
+     tip:        This is because x contains a period.  And because
+     tip:          everything to the right of the first period is evaluated
+     tip:          first.  Then the stem variable is "looked up".
+     tip:
+     tip:   rexx tip:  referencing pgm above, if you set variable "a"
+     tip:         to a upper/lower case value.  The stem will NOT upper
+     tip:         case it.
+     tip:        So if assignment statement set "a" to "richard"
+     tip:         then stem.y is NOT the same as stem.a
+     tip:        Because stem.y    refers to STEM.RICHARD
+     tip:        and     stem.a    refers to STEM.richard
+     tip:

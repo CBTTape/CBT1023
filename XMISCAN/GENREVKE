@@ -1,0 +1,1345 @@
+/* rexx */
+  trace 's'
+
+/*  rexx member for scan/xref was: */
+/*     "SFRH66.CNTL.RACFDB2(GENREVKE)"      */
+/*      -----------------------------       */
+/*  date/time of XREF was:                  */
+/*     20231217 23:05:59                    */
+/*      -----------------------------       */
+
+/*Rexx*/
+/*  look at racf information to find dead users */
+/*     build revoke commands (to rid us of dead users */
+/*  */
+/*                                                    */
+/* -------------------------------------------------- */
+/*   change1-(part a)                                 */
+/*-Will try to reorder privs to be revoked... so that */
+/* revoke ADMIN = ADMIN and NONADMIN.                 */
+/* ... see GENREVK@ for prior code.                   */
+/*-This means ADMIN or NONADMIN have the same function*/
+/*                                                    */
+/*   change1-(part b)                                 */
+/*-For revoking package priv... if "*" is specified   */
+/* in the "name"... then comment out explicit names   */
+/* if specified for same grantee.                     */
+/*                                                    */
+/* -------------------------------------------------- */
+/*                                                    */
+/* invoke with:                                       */
+/*    GENREVKE ssid ADMIN                             */
+/* or GENREVKE ssid NONADMIN                          */
+/*                                                    */
+/*    (see change1-(part a)... admin/nonadmin are     */
+/* now the same.                                      */
+/*    Too  difficult to predict what other privs      */
+/* when we revoke SYSADM or DBADM ... so after the    */
+/* ADMIN invokation is make (and all those privs have */
+/* been revoked.... then you can call this again      */
+/* with the NONADMIN option to generate more revokes. */
+/*                                                    */
+/*  */
+/*  */
+Arg ssid adminOption .
+if wordpos(ssid,'DSN0 DSN1 DSN2 DSN5 DSN6 DSNQ) = 0
+then do
+   say 'illegal ssid specified was "'ssid'" aborting now'
+   exit 8
+end
+if wordpos(adminOption,'ADMIN NONADMIN) = 0
+then do
+   say 'ADMIN or NONADMIN was not specified'
+   say 'found "'adminOption'" instead, aborting now'
+   exit 8
+end
+
+  /* Set addressability to DB2 Rexx function */
+ADDRESS TSO "SUBCOM DSNREXX"
+If RC = 1 Then S_RC = RXSUBCOM('ADD','DSNREXX','DSNREXX')
+Else Do
+  Say 'Can not access DB2 Rexx Function.  Ending...'
+  Exit
+End
+
+/* read in our RACF summary */
+address TSO 'EXECIO 100 DISKR RACFSMRY (STEM RACFSMRY.'
+if rc <> 0
+then do
+   say 'RACFSMRY dd not available; rc='rc
+   say 'we will just exit now with rc=8'
+   address tso 'EXECIO 0 DISKR RACFSMRY (FINIS'
+   exit 8
+end
+cntPermit = 0
+cntPermitClass. = ''
+cntPermitObs. = 0
+cntPermitIndex. = 0
+
+racfsmryRc = 0
+racfsmry = 0 /* logical ptr into the RACFSMRY. buffer */
+group = 0
+groupIndx. = 0
+groupName. = ''
+groupDesc. = ''
+groupRef.  = 0
+userid = 0
+useridIndx. = 0
+userId.   = ''
+userRef.  = 0
+dateS = date('s')
+parse var dateS 1 yyyy 5 mm 7 dd
+currentDate = yyyy'-'mm'-'dd
+ /* table info */
+rphTable = 0
+rphtable. = ''            /* .# = creator.tablename */
+rphTableIndx. = 0         /* .creator.tablename = # */
+rphTableCreator = 0
+rphTableCreator. = ''     /* .#       = creator */
+rphTableCreatorIndx. = 0  /* .creator = list of table numbers*/
+rphTablePriv. = ''   /* .tableindx = list of userids */
+rphTableWGrant. = '' /* .tableindx = list of userids */
+ /* end table info */
+do forever /* process all logical recs in RACFSMRY. buffers */
+   racfsmry = racfsmry + 1 /* get next logical record */
+   if racfsmry > racfsmry.0 /* need another buffer? */
+   then do /* yes, get another buffer */
+      if racfsmryRc <> 0
+      then leave /* either we working on last buffer, or bad rc */
+      address tso 'EXECIO 100 DISKR RACFSMRY (STEM RACFSMRY.'
+      racfsmryRc = rc
+      racfsmry = 0 /* reset logical buffer pointer */
+      iterate
+   end
+   /* we have a good racfsmry pointer into the buffer */
+   parse var racfsmry.racfsmry ,
+      1 racftype ,
+      5 .
+   if racftype = '0100' /* we need to look at a racf group */
+   then do
+      parse var racfsmry.racfsmry ,
+         . /* ignore first word, it's 0100 */ ,
+         groupName superGrpName createDate groupOwner groupUacc . ,
+         58 groupDesc 313 . 314 groupModel groupUniversal .
+      if groupIndx.groupname = 0 /* they are all unique, but check */
+      then do /* unknown, add to rexx stems */
+
+         /* now remember some information about the group */
+         group = group + 1 /* it's a new group */
+         groupIndx.groupName = group /* update index, to find us */
+         groupName.group = groupName /* name saved in index, and in ta*/
+         /* save details, in case we want to know later */
+         superGrpName.group = SuperGrpname
+         groupCreateDate.group = createDate
+         groupOwner.group      = groupOwner
+         groupUacc.group       = groupUacc
+         groupDesc.group       = strip(groupDesc)
+         groupModel.group      = strip(groupModel)
+         groupUniversal.group  = groupUniversal
+         groupMembers.group    = ''
+         groupMembersStatus.group = ''
+      end
+      else nop /* this will never happen, just documenting */
+   end
+
+   else if racftype = '0200' /* we are looking at a user record */
+   then do /* handle type 0200 "user basic data record (0200)   */
+      /* these are really big... here we will just ignore a lot */
+      /* of the 0200 record                                     */
+      parse var racfsmry.racfsmry ,
+         . /* ignore first word, it's 0200 */ ,
+         racfUserid ,
+         userCreateDate ,
+         UseridOwner    ,
+         . /* let's ignore stuff for a while */ ,
+         50 revoke ,
+         54 . /* ignore some more */ ,
+         75 usersName ,
+         96 UsersDefaultGroup ,
+        105 UsersLastTime ,
+            UsersLastDate ,
+        124 . /* ignore some more */ ,
+        458 usersRevokeDate ,
+        469 usersResumedate ,
+        480 .
+      if racfUserid = 'DBAJOB'
+      then trace 'i'
+      else trace 'n'
+
+      /* according to RACF, revoke setting is meaningless */
+      /* ... and dates are what is important.             */
+      if      usersRevokeDate = ''
+      then revoke = 'No' /* no revoke date = no revoke */
+
+
+      else if usersResumeDate = '' /* no intention to resume */
+      then do /* either Revoke "pending" or Revoked "now"   */
+         if currentDate < usersRevokeDate
+         then revoke = 'Pending'
+         else revoke = 'Yes'
+      end
+
+      else do
+         /* dates are NOT null, figure it out */
+
+         /* we have two dates (revoke and resume) */
+         if currentDate >= usersResumedate
+         then ResumeNow = 1 /* resume time has come */
+         else ResumeNow = 0 /* ... not yet          */
+
+         if currentDate >= usersRevokeDate
+         then RevokeNow = 1 /* revoke time has come */
+         else revokeNow = 0 /* ...not yet           */
+
+         /* check resumedNow and RevokeNow and dates */
+         /* ---------------------------------------- */
+         if revokeNow = 0        /* revoke in future? */
+         then revoke = 'Pending' /* yes, revoke is pending */
+
+         else if revokeNow = 1 ,  /* revoke now            */
+               & resumeNow = 0    /* but resume in future? */
+         then revoke = 'Yes'      /* ...yeah, we're revoked*/
+
+         else do /* revokeNow = 1 and resumeNow = 1*/
+            /* time to revoke or resume user, check dates */
+            if usersResumeDate > usersRevokeDate
+            then revoke = 'No' /* resumed... (revoke meaningless)*/
+            else revoke = 'Yes'/* revoked... (resume meaningless)*/
+         end
+
+      end
+      /* revoke has been set to "Yes", "No" or "Pending" */
+
+      /* now remember some information about the user */
+      userid = userid + 1
+      useridIndx.racfUserid = userid
+      userid.userid = racfUserid
+      revoked.userid= revoke
+      usersName.userid = usersName
+      usersDGroup.userid = usersDefaultGroup
+      usersGroups.userid = 0  /* collect user groups with 0205's*/
+   end
+
+   else if racftype = '0205' /* looking at user (group) connect */
+   then do
+      /* these are really big... here we will just ignore a lot */
+      /* of the 0200 record                                     */
+      parse var racfsmry.racfsmry ,
+         . /* ignore first word, it's 0200 */ ,
+         racfUserid ,
+         racfGroup ,
+         racfConnectedDate ,
+         racfGroupOwner ,
+         . ,
+         racfLastConnectDate ,
+         . ,
+         109 . ,
+         racfGroupRevokeDate ,
+         racfGroupResumeDate ,
+         .
+
+      uidx = useridIndx.racfUserid
+      /* according to RACF, revoke setting is meaningless */
+      /* ... and dates are what is important.             */
+      if      racfGroupRevokeDate = ''
+      then revoke = 'No' /* no revoke date = no revoke */
+
+
+      else if racfGroupResumeDate = '' /* no intention to resume */
+      then do /* either Revoke "pending" or Revoked "now"   */
+         if currentDate < racfGroupRevokeDate
+         then revoke = 'Pending'
+         else revoke = 'Yes'
+      end
+
+      else do
+         /* dates are NOT null, figure it out */
+
+         /* we have two dates (revoke and resume) */
+         if currentDate >= racfGroupResumeDate
+         then ResumeNow = 1 /* resume time has come */
+         else ResumeNow = 0 /* ... not yet          */
+
+         if currentDate >= racfGroupRevokeDate
+         then RevokeNow = 1 /* revoke time has come */
+         else revokeNow = 0 /* ...not yet           */
+
+         /* check resumedNow and RevokeNow and dates */
+         /* ---------------------------------------- */
+         if revokeNow = 0        /* revoke in future? */
+         then revoke = 'Pending' /* yes, revoke is pending */
+
+         else if revokeNow = 1 ,  /* revoke now            */
+               & resumeNow = 0    /* but resume in future? */
+         then revoke = 'Yes'      /* ...yeah, we're revoked*/
+
+         else do /* revokeNow = 1 and resumeNow = 1*/
+            /* time to revoke or resume user, check dates */
+            if racfGroupResumeDate > racfGroupRevokeDate
+            then revoke = 'No' /* resumed... (revoke meaningless)*/
+            else revoke = 'Yes'/* revoked... (resume meaningless)*/
+         end
+
+      end
+      /* revoke has been set to "Yes", "No" or "Pending" */
+
+      /* now add user to this group */
+      groupIndx = groupIndx.racfGroup /* find index to group */
+      if groupIndx <> 0
+      then do /* if group exists, add member info */
+         groupMembers.groupIndx = groupMembers.GroupIndx racfUserid
+         groupMembersStatus.groupIndx = ,
+                                groupMembersStatus.groupIndx revoke
+      end
+   end
+end
+
+if racfsmryRc <> 2
+then do
+   say 'EXECIO to read from RACFSMRY failed with rc='rc
+   say 'will exit rc=8'
+   address 'TSO' 'EXECIO 0 DISKR RACFSMRY (FINIS'
+   exit 8
+end
+address 'TSO' 'EXECIO 0 DISKR RACFSMRY (FINIS'
+userid.0 = userid
+say 'userid = 'userid
+say 'group  = 'group
+
+ADDRESS DSNREXX
+"CONNECT "ssid
+
+   /* create exclude list */
+exclude. = 0 /* default, don't exclude anyone */
+exclude  = 0 /* list of userid's to exclude */
+excludeIndx. = 0 /* default, don't exclude anyone */
+replace.     = ''/* default, replace group */
+deleteId.    = 0 /* default, don't delete anyone */
+ /* DB2ENGNR is a sysadm with these userids ??? */
+address 'TSO' 'EXECIO * DISKR EXCLIST (OPEN FINIS STEM EXCLIST.'
+if rc <> 0
+then exclist.0 = 0
+do exclist = 1 by 1 for exclist.0
+   parse var exclist.exclist word1 .
+   if word1 = '' then iterate
+   if left(word1,1) = '*' | left(word1,2) = '/*' then iterate
+   x = addExclude(strip(exclist.exclist))
+   /* examples:
+     x = addExclude('SFR609  *DELETE') /* exclude list: delete SFR609 */
+     x = addExclude('KEA406  DWS000MT') /*exclude list: replace KEA406*/
+   */
+end
+
+databaseOwner. = 'DBAGROUP'      /* make almost all databases DBAGROUP*/
+databaseOwner.DSNDB01 = 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNDB04 = 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNDB06 = 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNDB07 = 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNADMDB= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNATPDB= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNMDCDB= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNMQDB = 'DB2ENGNR'  /* ...except for these */
+  /* DSN8* is db2engnr */
+databaseOwner.SYSDEFLT= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.AOCEPDB = 'DB2ENGNR'  /* ...except for these */
+databaseOwner.AOCQTDB = 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNMDCDB= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNMQDB = 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNOPTDB= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNRGFDB= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNRLST = 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSNXSR  = 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSQ1STBB= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSQDBCTL= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.DSQDBDEF= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.JWB@DB01= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.SYSIBMTA= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.SYSIBMTS= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.SYSIBMTS= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.SYSIBMTS= 'DB2ENGNR'  /* ...except for these */
+databaseOwner.SYSIBMTS= 'DB2ENGNR'  /* ...except for these */
+creatorOwner. = 'DBAGROUP'       /* make almost all creators DBAGROUP */
+creatorOwner.ASN      = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.BP2      = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DB2ENGNR = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DB2OE    = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DB2OSC   = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DB2OSCA  = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DBAA07   = 'DBAGROUP'  /* ...except for these */
+creatorOwner.DBAJOB   = 'DBAGROUP'  /* ...except for these */
+creatorOwner.DRL      = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DRLSYS   = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN1OSCA = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN2OSCA = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN5OSCA = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN6OSCA = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN0OSCA = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSNQOSCA = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN8     = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN81010 = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN81110 = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN8510  = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN8610  = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN8710  = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN871SA = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN8810  = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN8910  = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN891SA = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSN8BQRY   'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSNACC     'DB2ENGNR'  /* ...except for these */
+creatorOwner.DSNRGCOL   'DB2ENGNR'  /* ...except for these */
+creatorOwner.FADB2    = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.FMNDB2   = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.LANDMARK = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.PTI      = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.Q        = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.SFR225   = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.SFRH21   = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.SFRH66   = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.SFRSTC   = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.SFR609   = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.SYSIBM   = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.SYSIBMTS = 'DB2ENGNR'  /* ...except for these */
+creatorOwner.SYSTOOLS = 'DB2ENGNR'  /* ...except for these */
+
+   /* Set basic header */
+hdr.0 = 6
+hdr.1 = "/* DB2 to RACF conversion CLIST */"
+hdr.2 = "/* input agruments              */"
+hdr.3 = "/*     owner = " owner ", ssid = " ssid  "*/"
+hdr.4 = "/*     classmnt = " classmnt  ", model= " model  "*/"
+hdr.5 = "/*     charopt = " charopt      "*/"
+hdr.6 = "/* date=" DATE() "time=" TIME() "*/"
+hdr.7 = " "
+do ii =1 by 1 for exclude
+   hdr = ii + 7
+   hdr.hdr = '  /* exclude userid: ' exclude.ii '*/'
+end
+Address TSO "EXECIO * DISKW CLIST (STEM hdr."
+
+   /* Set Optional header (relies on hdr. above) */
+hdr.1 = "/* Optional DB2 to RACF conversion CLIST */"
+Address TSO "EXECIO * DISKW OPTCLST (STEM hdr."
+
+uid      = 0 /* number of unique userids */
+uidIndx. = 0 /* index to userids         */
+clistx   = 0 /*      buffer CLIST   output */
+optclstx = 0 /* also buffer OPTCLST output */
+If owner="" Then Do
+  Say "Owner must be specified"
+  Exit
+End
+If ssid="" Then Do
+  Say "SSID must be specified"
+  Exit
+End
+If classmnt="" Then classmnt="DSN"
+If model="" Then model=2
+
+   /* Set class based on 'Classification Model' */
+   /* If an invalid model, we default to II     */
+If model=1 Then class=Strip(ssid)"ADM"charopt
+Else class=classmnt"ADM"charopt
+
+  /*---------------------------------------------------*/
+  /* Start processing DB2 authorization tables         */
+  /*---------------------------------------------------*/
+lastgrantor = ''
+
+   /* revoke Plan privileges */
+call def_priv "PN","BIND","BINDAUTH","PLAN"
+call def_priv "PN","EXECUTE","EXECUTEAUTH","PLAN"
+
+   /* revoke Package privileges */
+call pack_priv "BIND","BINDAUTH"
+call pack_priv "EXECUTE","EXECUTEAUTH"
+call pack_priv "COPY","COPYAUTH"
+
+   /* Collection privileges */
+/*
+call cltn_priv "CREATEIN"
+*/
+
+/* revoke all these admin privs                   */
+/* ---------------------------------------------- */
+   call db_attr   /* database privs */
+   call sys_attr /* system privs   */
+
+/* end "ADMIN"  */
+/* -----------  */
+
+Address TSO "EXECIO"   clistx "DISKW CLIST   (FINIS STEM CLISTX."
+/* userid's found were */
+say 'userid''s we created racf cmds for were:'
+optclstx = optclstx + 1
+optclstx.optclstx = '   '
+optclstx = optclstx + 1
+optclstx.optclstx = ' /* userid''s we created racf cmds for were: */'
+optclstx = optclstx + 1
+optclstx.optclstx = '    /* userid''s in RACF database were:       */'
+do ii = 1 by 1 for uid
+   xxx = uid.ii
+   if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   then iterate          /* ...must be a group, iterate */
+   if excludeIndx.xxx > 0 /* if excluded, */
+   then iterate           /* ...iterate      */
+
+   uidx  = useridIndx.xxx
+   if revoked.uidx <> 'No' /* if revoked */
+   then iterate            /* ...iterate    */
+   if revoked.uidx =  '?'  /* unknown?       */
+   then iterate           /* ...iterate     */
+   comm = userGroupInfo(xxx) /* Normal userid, give info */
+   optclstx = optclstx + 1
+   optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+end
+do ii = 1 by 1 for uid
+   xxx = uid.ii
+   if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   then iterate          /* must be a group, iterate */
+   if excludeIndx.xxx > 0 /* if excluded, */
+   then iterate           /* ...iterate      */
+
+   uidx  = useridIndx.xxx
+   if revoked.uidx =  'No' /* if not revoked */
+   then iterate            /* ...iterate     */
+   if revoked.uidx =  '?'  /* unknown?       */
+   then iterate            /* ...iterate     */
+   comm = userGroupInfo(xxx) /* Revoked userid, give info */
+   optclstx = optclstx + 1
+   optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+end
+optclstx = optclstx + 1
+optclstx.optclstx = '    /* userid''s in RACF database but excluded: */'
+do ii = 1 by 1 for uid
+   xxx = uid.ii
+   if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   then iterate          /* must be a group, iterate */
+   if excludeIndx.xxx = 0 /* if not excluded, */
+   then iterate           /* ...iterate       */
+
+   uidx  = useridIndx.xxx
+   if revoked.uidx <> 'No' /* if revoked */
+   then iterate            /* ...iterate     */
+   if revoked.uidx =  '?'  /* unknown?       */
+   then iterate            /* ...iterate     */
+   comm = userGroupInfo(xxx) /* excluded, not revoked, give info */
+   optclstx = optclstx + 1
+   optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+end
+do ii = 1 by 1 for uid
+   xxx = uid.ii
+   if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   then iterate          /* must be a group, iterate */
+   if excludeIndx.xxx = 0 /* if not excluded, */
+   then iterate           /* ...iterate       */
+
+   uidx  = useridIndx.xxx
+   if revoked.uidx=  'No' /* if NOT revoked */
+   then iterate           /* ...iterate     */
+   if revoked.uidx=  '?'  /* unknown?       */
+   then iterate           /* ...iterate     */
+   comm = userGroupInfo(xxx) /* excluded, Revoked userid, give info */
+   optclstx = optclstx + 1
+   optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+end
+do ii = 1 by 1 for uid
+   xxx = uid.ii
+   if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   then iterate          /* must be a group, iterate */
+   if excludeIndx.xxx = 0 /* if not excluded, */
+   then iterate           /* ...iterate       */
+
+   uidx  = useridIndx.xxx
+   if revoked.uidx<> '?'  /* unknown?       */
+   then iterate           /* ...iterate     */
+   comm = userGroupInfo(xxx) /* excluded, Revoked userid, give info */
+   optclstx = optclstx + 1
+   optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+end
+optclstx = optclstx + 1
+optclstx.optclstx = '    /* unknown userids */'
+do ii = 1 by 1 for uid
+   xxx = uid.ii
+   if useridIndx.xxx = 0 /* if useridIndx is zero... */
+   then iterate          /* must be a group, iterate */
+   if excludeIndx.xxx = 1 /* if excluded, */
+   then iterate           /* ...iterate   */
+
+   uidx  = useridIndx.xxx
+   if revoked.uidx<> '?'
+   then iterate
+   comm = userGroupInfo(xxx)
+   optclstx = optclstx + 1
+   optclstx.optclstx = '   /* 'left(uid.ii,8) left(comm,70) '*/'
+end
+optclstx = optclstx + 1
+optclstx.optclstx = '    /* groups used */'
+do ii = 1 by 1 for uid
+   xxx = uid.ii
+   if useridIndx.xxx <> 0 /* if useridIndx is nonzero... */
+   then iterate           /* must be a userid, iterate */
+
+   comm = userGroupInfo(xxx) /* get group info, and output*/
+   optclstx = optclstx + 1
+   optclstx.optclstx = '   /* 'left(xxx,8) left(comm,70) '*/'
+
+   /* set up to look at group membership */
+   gix = groupIndx.xxx  /* get the index to group info */
+   members = groupMembers.gix
+   gstatus = groupMembersStatus.gix
+   if members <> ''
+   then do
+      optclstx = optclstx + 1
+      optclstx.optclstx = '     /* ---members of group are--- */'
+   end
+   do while members <> ''
+      /* output membership details */
+      parse var members member members /* strip off a member*/
+      parse var gstatus stat   gstatus /* and a status */
+      comm = userGroupInfo(member)
+      optclstx = optclstx + 1
+      if stat = 'No' | stat = '?'
+      then optclstx.optclstx = '     /* 'left(member,8)'; 'comm '*/'
+      else optclstx.optclstx = '     /* 'left(member,8) ,
+                           'GroupRevokeStatus=' || stat'; 'comm' */'
+   end
+end
+optclstx = optclstx + 1
+optclstx.optclstx = ' '
+optclstx = optclstx + 1
+optclstx.optclstx = 'Unique table creators are:'
+optclstx = optclstx + 1
+optclstx.optclstx = '--------------------------'
+optclstx = optclstx + 1
+optclstx.optclstx = '  creator / racf owner    '
+optclstx = optclstx + 1
+optclstx.optclstx = '--------------------------'
+do x = 1 by 1 for rphTableCreator
+   creator = word(rphtablecreator.x,1)
+   racfowner = creatorOwner.creator
+   optclstx = optclstx + 1
+   optclstx.optclstx = '   ' left(creator,max(length(creator),8)) ,
+                         '/' racfowner
+end
+optclstx = optclstx + 1
+optclstx.optclstx = ' '
+say ' '
+Address TSO "EXECIO" optClstx "DISKW OPTCLST (FINIS STEM OPTCLSTX."
+
+"DISCONNECT"
+Exit
+
+def_priv:
+/*****************************************************************/
+/* Get DB2 Default privileges (plans, db, etc.)                  */
+/*****************************************************************/
+  Arg type,auth,col,tab
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT NAME, GRANTEE, GRANTOR",
+      "FROM SYSIBM.SYS"tab"AUTH",
+    "WHERE "col"<>' '" ,
+      "AND GRANTEE <> GRANTOR" ,
+    "ORDER BY GRANTOR"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee, :grantor"
+    If SQLCODE = 0 Then Do
+      if grantor = 'PUBLIC*' then grantor = 'PUBLIC'
+
+      if checkRevoke() = 0  then iterate
+      /* userid/group not known; or it's revoked */
+
+      if lastGrantor <> grantor ,
+      then do
+         lastGrantor = grantor
+         cmd = "SET CURRENT SQLID = '"grantor"';"
+         x = clistcard(cmd)
+      end
+      if type = 'DB'
+      then on = 'ON DATABASE' name
+      else if type ='PN'
+      then on = 'ON PLAN' name
+      else on = 'ON WHAT?' name
+      cmd="REVOKE" auth on "FROM" grantee';'
+      x = clistCard(cmd)
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+Return    /* def_priv */
+
+
+use_priv:
+/*****************************************************************/
+/* Get DB2 USE privileges (bufferpool, stogroup, tablespace)     */
+/*****************************************************************/
+  Arg auth,obtype,type
+  If model=1 Then class="M"Strip(ssid)||type||charopt
+  Else class="M"classmnt||type||charopt
+
+  if      obtype = 'B'
+  then extra = "DATA('DB2-"ssid "use priv for ssid.bufferpool')" /*rph*/
+  else if obtype = 'S'
+  then extra = "DATA('DB2-"ssid "use priv for ssid.stogroup')" /* rph */
+  else if obtype = 'R'
+  then extra = "DATA('DB2-"ssid "use priv for ssid.tablespace')" /*rph*/
+  else extra = ''
+
+      /* Find all objects, and make commands to create profiles */
+      /* for 'auth'. Then remove executor from access list.     */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",
+      "WHERE OBTYPE='"obtype"'"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      prof= left(prof,max(20,length(prof)))
+      cmd="RDEF "class prof" UACC(NONE) AUDIT(ALL(READ))",
+          "OWNER("owner")" ,
+          extra /* rph */
+      x = clistCard(cmd)
+
+      cmd="PERMIT "prof" CLASS("class") RESET"
+      x = clistCard(cmd)
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* If any of those were PUBLIC, change UACC to READ */
+  sql="SELECT DISTINCT NAME FROM SYSIBM.SYSRESAUTH",
+      "WHERE OBTYPE='"obtype"' AND USEAUTH¬=' '",
+      "AND GRANTEE IN ('PUBLIC','PUBLIC*')"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      prof= left(prof,max(35,length(prof)))
+      cmd="RALT "class prof" UACC(READ)"
+      x = clistCard(cmd)
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+     /* Get all ids (except PUBLIC) for access list */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",
+      "WHERE OBTYPE='"obtype"' AND USEAUTH='Y'",
+      "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*')"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      prof= left(prof,max(35,length(prof)))
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Translate(Strip(grantee))")"
+      x = clistCard(cmd)
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+    /* With Grants */
+  sql="SELECT DISTINCT NAME, GRANTEE FROM SYSIBM.SYSRESAUTH",
+      "WHERE OBTYPE='"obtype"' AND USEAUTH='G'",
+      "AND GRANTEE NOT IN ('PUBLIC','PUBLIC*')"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee"
+    If SQLCODE = 0 Then Do
+      If model=1 Then prof=Strip(name)'.'auth
+      Else prof=ssid'.'Strip(name)'.'auth
+      prof= left(prof,max(35,length(prof)))
+      cmd="PERMIT "prof" CLASS("class") ACC(READ)",
+        "ID("Translate(Strip(grantee))")"
+      x = clistCard(cmd)
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+Return    /* use_priv */
+
+pack_priv:
+/*****************************************************************/
+/* Get DB2 Package privileges                                    */
+/*    This gets tricky, because SYSPACKAUTH has COLLID and       */
+/* can have * for NAME (Package ID).  We must define all the     */
+/* permits with * first, then PERMIT FROM(xx.*) as well as the   */
+/* normal permits.                                               */
+/*    We also ignore any row where GRANTEETYPE='P' (for access)  */
+/*****************************************************************/
+  Arg auth,col
+
+     /* Get all ids (except PUBLIC) for access list to '*' packs */
+  sql="SELECT DISTINCT COLLID, GRANTEE, NAME, GRANTOR" ,
+    "FROM SYSIBM.SYSPACKAUTH",
+    "WHERE "col"<>' '",
+      "AND GRANTEETYPE=' '" ,
+      "AND GRANTEE <> GRANTOR" ,
+    "ORDER BY GRANTOR, GRANTEE, COLLID, NAME"
+  call ZSQL
+  nameAsterisk = ''
+  lastGrantee  = ''
+  lastCollid   = ''
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :collid, :grantee, :name, :grantor"
+    If SQLCODE = 0 Then Do
+      if grantor = 'PUBLIC*' then grantor = 'PUBLIC'
+
+      if checkRevoke() = 0  then iterate
+      /* userid/group not known; or it's revoked */
+
+      if lastgrantor <> grantor
+      then do
+         lastgrantor = grantor
+         lastgrantee = grantee
+         nameAsterisk = ''
+         cmd = "SET CURRENT SQLID = '"grantor"';"
+         x = clistcard(cmd)
+      end
+      else if lastgrantee <> grantee ,
+            | lastcollid  <> collid
+      then do
+         lastGrantee = grantee
+         lastCollid  = collid
+         nameAsterisk= ''
+      end
+      if nameAsterisk = '*'
+      then ,
+         cmd = '--REVOKE' auth 'ON PACKAGE' collid'.'name ,
+                   'FROM' grantee';'
+      else ,
+         cmd = 'REVOKE' auth 'ON PACKAGE' collid'.'name ,
+                   'FROM' grantee';'
+      if name = '*'
+      then nameAsterisk = '*'
+      x = clistcard(cmd)
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1'
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1'
+
+Return     /* pack_priv */
+
+
+sys_attr:
+/*****************************************************************/
+/* Get DB2 system administrative authorities                     */
+/*****************************************************************/
+  Arg auth,col
+  sysauth = 0
+  sysauth = sysauth +1; sysauth.sysauth = 'AccessCtrlauth AccessCtrl'
+  sysauth = sysauth +1; sysauth.sysauth = 'ArchiveAuth   Archive'
+  sysauth = sysauth +1; sysauth.sysauth = 'BindAddAuth   BindAdd'
+  sysauth = sysauth +1; sysauth.sysauth = 'BindAgentAuth BindAgent'
+  sysauth = sysauth +1; sysauth.sysauth = 'BSDSauth      BSDS'
+  sysauth = sysauth +1; sysauth.sysauth = 'CreateAliasAuth CreateAlias'
+  sysauth = sysauth +1; sysauth.sysauth = 'createDBAauth CreateDBA'
+  sysauth = sysauth +1; sysauth.sysauth = 'createDBCauth CreateDBC'
+  sysauth = sysauth +1; sysauth.sysauth = 'createSGauth  CreateSG'
+  sysauth = sysauth +1; sysauth.sysauth = 'createTMTABauth CreateTMTAB'
+  sysauth=sysauth+1; sysauth.sysauth='createSecureAuth Create_Secure',
+                                              || '_Object'
+  sysauth = sysauth +1; sysauth.sysauth = 'DataAccessAuth DataAccess'
+  sysauth = sysauth +1; sysauth.sysauth = 'sDBAdmAuth    DBADM'
+  sysauth=sysauth+1; sysauth.sysauth = 'DebugSessionAuth DebugSession'
+  sysauth = sysauth +1; sysauth.sysauth = 'DISPLAYauth   Display'
+  sysauth = sysauth +1; sysauth.sysauth = 'ExplainAuth   Explain'
+  sysauth = sysauth +1; sysauth.sysauth = 'mon1Auth      Monitor1'
+  sysauth = sysauth +1; sysauth.sysauth = 'mon2Auth      Monitor2'
+  sysauth = sysauth +1; sysauth.sysauth = 'recoverAuth   Recover'
+  sysauth = sysauth +1; sysauth.sysauth = 'sqladmAuth    SQLadm'
+  sysauth = sysauth +1; sysauth.sysauth = 'stopAllAuth   StopAll'
+  sysauth = sysauth +1; sysauth.sysauth = 'StoSpaceAuth  StoSpace'
+  sysauth = sysauth +1; sysauth.sysauth = 'sysAdmAuth    SYSADM'
+  sysauth = sysauth +1; sysauth.sysauth = 'sysCtrlAuth   SYSCTRL'
+  sysauth = sysauth +1; sysauth.sysauth = 'sysOprAuth    SYSOPR'
+  sysauth = sysauth +1; sysauth.sysauth = 'traceAuth     Trace'
+  sysauth.0 = sysauth
+
+  /* now create case statements (for part of select) */
+  /* and create fetch statements(for part of fetch)  */
+  CaseStmts4select   = ''
+  Variables4fetch    = ''
+  do i = 1 by 1 for sysauth.0
+     parse var sysauth.i column .
+     booleanColumn = column||'Boolean'
+
+     /* have select create a boolean column for auth */
+     caseStmts4select = caseStmts4select ,
+         ',case when' column "= 'Y' then '1'" ,
+               'when' column "= 'G' then '1'" ,
+                                   "else '0'" ,
+             'end as' booleanColumn
+
+     /* have fetch, fetch the boolean variable */
+     variables4Fetch = variables4fetch || ', :' || booleanColumn
+  end
+  say ' '
+  say '    looking at sysibm.sysuserauth '
+  say 'case='casestmts4select
+  say ' '
+  say 'fetch='variables4fetch
+
+  sql="SELECT DISTINCT" ,
+         " grantee" ,
+         ",grantor" ,
+         caseStmts4select , /* transform columns to boolean variables*/
+    "FROM SYSIBM.SYSUSERAUTH",
+    "WHERE GRANTEE¬='PUBLIC'" ,
+      "AND GRANTEE <> GRANTOR" ,
+    "ORDER BY sysAdmAuthBoolean" ,
+           ", sDBAdmAuthBoolean" ,
+           ", SysoprAuthBoolean" ,
+           ", GRANTOR, GRANTEE"
+
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :grantee, :grantor" ,
+                           variables4Fetch
+    If SQLCODE = 0 Then Do
+      /* if row has all authorization = 0, we have a prob*/
+      do i = 1 by 1 for sysauth.0
+         parse var sysauth.i authColumn .
+         if value(authColumn'Boolean') = 0 then iterate
+         leave
+      end
+      if i > sysauth.0
+      then do
+         say 'grantee='grantee
+         say 'grantor='grantor
+         say 'logic error3... some new authorization must be',
+            'unaccounted for in SYSIBM.SYSUSERAUTH'
+         say 'can''t be all be blank (or via boolean vars, all 0)'
+         say 'exit 8 now'
+         exit 8
+      end
+      if grantor = 'PUBLIC*' then grantor = 'PUBLIC'
+
+      if checkRevoke() = 0  then iterate
+      /* userid/group not known; or it's revoked */
+
+      if lastGrantor <> grantor
+      then do
+         lastGrantor = grantor
+         cmd = "SET CURRENT SQLID = '"grantor"';"
+         x = clistcard(cmd)
+      end
+      auth = ''
+      if sysoprAuthBoolean = 1
+      then do  /* multiple authorities are automatic */
+         auth = ', SYSOPR'
+         /* if sysopr priv on, all these will have been on */
+         sysoprAuthBoolean = 0
+         displayAuthBoolean = 0
+         recoverAuthBoolean = 0
+         stopAllAuthBoolean = 0
+         TraceAuthBoolean = 0
+      end
+
+      /* find other privs to revoke */
+      do i = 1 by 1 for sysauth.0
+         parse var sysauth.i authColumn grantName .
+         if value(authColumn'Boolean') = 0 then iterate
+         auth = auth || ',' grantName
+      end
+      auth = substr(auth,3) /* strip leading ', ' */
+      if auth = ''
+      then do
+         say 'logic error4... some new authorization must be',
+            'unaccounted for in SYSIBM.SYSUSERAUTH'
+         say 'can''t be all be blank (or case zero)'
+         say 'exit 8 now'
+         exit 8
+      end
+      cmd = 'REVOKE'
+      cmdrest = 'FROM' grantee';'
+      if length(cmd auth cmdrest) <= 72
+      then do
+         cmd = cmd auth cmdrest
+         x = clistCard(cmd)
+      end
+      else do
+         do i = 1 by 1 while i <= words(auth) ,
+                           & length(cmd subword(auth,1,i) < 72)
+         end
+         cmd = cmd subword(auth,1,i)
+         x = clistCard(cmd)
+         if i < words(auth)
+         then do
+            cmd = '   'subword(auth,i+1)
+            x = clistCard(cmd)
+         end
+         cmd = '   'cmdrest
+         x = clistCard(cmd)
+      end
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE \= 0 Then call prtsqlca 'CLOSE C1 '
+
+Return     /* sys_attr */
+
+
+db_attr:
+/*****************************************************************/
+/* Get DB2 database administrative authorities                   */
+/*****************************************************************/
+  Arg auth,col
+
+     /* Get all ids (except PUBLIC) for access list */
+  dbauth = 0
+  dbauth = dbauth +1; dbauth.dbauth = 'CREATETABauth CREATETAB'
+  dbauth = dbauth +1; dbauth.dbauth = 'CREATETSauth  CREATETS'
+  dbauth = dbauth +1; dbauth.dbauth = 'DBADMauth     DBADM'
+  dbauth = dbauth +1; dbauth.dbauth = 'DBCTRLauth    DBCTRL'
+  dbauth = dbauth +1; dbauth.dbauth = 'DBMAINTauth   DBMAINT'
+  dbauth = dbauth +1; dbauth.dbauth = 'DROPauth      DROP'
+  dbauth = dbauth +1; dbauth.dbauth = 'IMAGCOPYauth  IMAGCOPY'
+  dbauth = dbauth +1; dbauth.dbauth = 'LOADauth      LOAD'
+  dbauth = dbauth +1; dbauth.dbauth = 'RECOVERDBauth RECOVERDB'
+  dbauth = dbauth +1; dbauth.dbauth = 'REORGauth     REORG'
+  dbauth = dbauth +1; dbauth.dbauth = 'REPAIRauth    REPAIR'
+  dbauth = dbauth +1; dbauth.dbauth = 'STARTDBauth   STARTDB'
+  dbauth = dbauth +1; dbauth.dbauth = 'STATSauth     STATS'
+  dbauth = dbauth +1; dbauth.dbauth = 'STOPauth      STOPDB'
+  dbauth = dbauth +1; dbauth.dbauth = 'DISPLAYDBauth DISPLAYDB'
+  dbauth.0 = dbauth
+
+  /* now create case statements (for part of select) */
+  /* and create fetch statements(for part of fetch)  */
+  CaseStmts4select   = ''
+  Variables4fetch    = ''
+  do i = 1 by 1 for dbauth.0
+     parse var dbauth.i column .
+     booleanColumn = column||'Boolean'
+
+     /* have select create a boolean column for auth */
+     caseStmts4select = caseStmts4select ,
+         ',case when' column "= 'Y' then '1'" ,
+               'when' column "= 'G' then '1'" ,
+                                   "else '0'" ,
+             'end as' booleanColumn
+
+     /* have fetch, fetch the boolean variable */
+     variables4Fetch = variables4fetch || ', :' || booleanColumn
+  end
+  say ' '
+  say '    looking at sysibm.sysdbauth '
+  say 'case='casestmts4select
+  say ' '
+  say 'fetch='variables4fetch
+
+  sql="SELECT DISTINCT" ,
+         " name" ,
+         ",grantee" ,
+         ",grantor" ,
+         caseStmts4select , /* transform columns to boolean variables*/
+    "FROM SYSIBM.SYSDBAUTH",
+    "WHERE GRANTEE¬='PUBLIC'" ,
+      "AND GRANTEE <> GRANTOR" ,
+    "ORDER BY GRANTOR, GRANTEE"
+  call ZSQL
+  Do Until SQLCODE \= 0
+    "EXECSQL FETCH C1 INTO :name, :grantee, :grantor" ,
+                           variables4Fetch /* get boolean variables*/
+    If SQLCODE = 0 Then Do
+      /* if row has all authorization = 0, we have a prob*/
+      do i = 1 by 1 for dbauth.0
+         parse var dbauth.i authColumn .
+         if value(authColumn'Boolean') = 0 then iterate
+         leave
+      end
+      if i > dbauth.0
+      then do
+         say 'name='name
+         say 'grantee='grantee
+         say 'grantor='grantor
+         say 'dbadmauthBoolean='dbadmauthBoolean
+         say 'logic error1... some new authorization must be',
+            'unaccounted for in SYSIBM.SYSDBAUTH'
+         say 'can''t be all be blank (or via boolean vars, all 0)'
+         say 'exit 8 now'
+         exit 8
+      end
+      if grantor = 'PUBLIC*' then grantor = 'PUBLIC'
+
+      if checkRevoke() = 0  then iterate
+      /* userid/group not known; or it's revoked */
+
+      if lastGrantor <> grantor
+      then do
+         lastGrantor = grantor
+         cmd = "SET CURRENT SQLID = '"grantor"';"
+         x = clistcard(cmd)
+      end
+      if dbadmAuthBoolean
+      then auth = 'DBADM'
+      else if dbctrlAuthBoolean
+      then auth = 'DBCTRL'
+      else do
+         auth = ''
+         if dbMaintAuthBoolean
+         then do
+            auth = ', DBMAINT'
+            /* because not DBADM or DBCTRL ... we don't have */
+            /* ...worry about those bits.                    */
+            /* ...BUT dbmaint automatically turned on these  */
+            /*    bits... so we will turn them off to see if */
+            /*            any other authorities were also    */
+            /*            turned on with DBMAINT             */
+            CREATETABauthBoolean = 0
+            CREATETSauthBoolean = 0
+            DBADMauthBoolean = 0
+            DBCTRLauthBoolean = 0
+            DBMAINTauthBoolean = 0
+            IMAGCOPYauthBoolean = 0
+            STARTDBauthBoolean = 0
+            STATSauthBoolean = 0
+            STOPauthBoolean = 0
+            DISPLAYDBauthBoolean = 0
+         end
+         /* now for dbmaint (or anything else) see what else */
+         /* ...was granted at the same time.                 */
+         do i = 1 by 1 for dbauth.0
+            parse var dbauth.i authColumn grantName .
+            if value(authColumn'Boolean') = 0 then iterate
+            auth = auth || ',' grantName
+         end
+         auth = substr(auth,3) /* strip leading ', ' */
+         if auth = ''
+         then do
+            say 'logic error2... some new authorization must be',
+               'unaccounted for in SYSIBM.SYSDBAUTH'
+            say 'can''t be all be blank (or case zero)'
+            say 'exit 8 now'
+            exit 8
+         end
+      end
+      cmd = 'REVOKE'
+      cmdrest = 'ON DATABASE' name 'FROM' grantee';'
+      if length(cmd auth cmdrest) <= 72
+      then do
+         cmd = cmd auth cmdrest
+         x = clistCard(cmd)
+      end
+      else do
+         do i = 1 by 1 while i <= words(auth) ,
+                           & length(cmd subword(auth,1,i) < 72)
+         end
+         cmd = cmd subword(auth,1,i)
+         x = clistCard(cmd)
+         if i < words(auth)
+         then do
+            cmd = '   'subword(auth,i+1)
+            x = clistCard(cmd)
+         end
+         cmd = '   'cmdrest
+         x = clistCard(cmd)
+      end
+    End
+  End /* do until */
+  If SQLCODE=0 | SQLCODE=100 Then nop
+  Else call prtsqlca 'FETCH C1 '
+  "EXECSQL CLOSE C1"
+  If SQLCODE\=0 Then call prtsqlca 'CLOSE C1'
+
+Return
+
+
+
+ZSQL:
+  err_sw = "0"
+  "EXECSQL DECLARE C1 CURSOR FOR S1"
+  If SQLCODE \= 0 Then call prtsqlca 'DECLARE C1 CURSOR'
+  "EXECSQL PREPARE S1 INTO :outsqlca FROM :sql"
+  If SQLCODE \= 0 Then call prtsqlca 'PREPARE S1'
+  "EXECSQL OPEN C1"
+  If SQLCODE \= 0 Then call prtsqlca 'OPEN C1 '
+Return  /* zsql */
+
+prtsqlca:
+  err_sw = "1"
+  Say '** Error SQL statement - ' arg(1)
+  Say '** failing SQL statement - ' sql
+  Say 'SQLCODE = 'SQLCODE
+  Say 'SQLERRMC = 'SQLERRMC
+  Say 'SQLERRP = 'SQLERRP
+  Say 'SQLERRD = 'SQLERRD.1',',
+              || SQLERRD.2',',
+              || SQLERRD.3',',
+              || SQLERRD.4',',
+              || SQLERRD.5',',
+              || SQLERRD.6
+
+  Say 'SQLWARN = 'SQLWARN.1',',
+              || SQLWARN.2',',
+              || SQLWARN.3',',
+              || SQLWARN.4',',
+              || SQLWARN.5',',
+              || SQLWARN.6',',
+              || SQLWARN.7',',
+              || SQLWARN.8',',
+              || SQLWARN.9',',
+              || SQLWARN.10
+
+  Say 'SQLSTATE= 'SQLSTATE
+  Exit 999
+Return
+
+clistcard:
+  parse arg clistcard
+  data = ''
+  clistx = clistx + 1
+  if word(clistcard,1) = 'SET'
+  then clistx.clistx = clistcard
+  else clistx.clistx = '   'clistcard
+
+  if clistx > 100
+  then do /* need to start writting out some of the buffer */
+     Address TSO "EXECIO" clistx "DISKW CLIST (STEM CLISTX."
+     clistx = 0 /* reset number of recs in buffer to zero */
+  end
+  return 0
+
+optClstCard:
+  parse arg clistcard
+  data = ''
+  if pos(' ID(',clistcard) > 0
+  then do /* keep track of unique userid's */
+     parse var clistcard frontHalf 'ID(' uidx ')' backhalf
+     uidx = strip(uidx)
+
+     if deleteId.uidx = 1
+     then return 0 /* we want this userid deleted */
+
+     if excludeIndx.uidx > 0
+     then do
+        /* userid is excluded; replace w/the replacement id/group */
+        replace = excludeIndx.uidx
+        uidx    = replace.replace
+        clistcard = frontHalf 'ID('uidx')' backhalf
+     end
+
+     /* while we are here, add to # of unique userid's we know about */
+     if uidIndx.uidx = 0
+     then do /* this is an unknown userid, add to our list */
+        uid = uid + 1  /* we got another one */
+        uid.uid = uidx /* add to list of sequential userid's */
+        uidIndx.uidx = uid /* now add quick lookup for this userid */
+     end
+     if (  word(clistcard,1) = 'PERMIT' ,
+         | word(clistcard,1) = 'PE'     ,
+        )                               ,
+        & pos(' DATA(',clistcard) = 0
+     then do
+        data = userGroupInfo(uidx)
+        data = "DATA('"data"')"
+     end
+  end
+  else uidx = ''
+  optClstx = optClstx + 1
+  if left(word(clistcard,1),2) = '/*' | clistcard = ''
+  then optClstx.optClstx = clistcard
+  else if word(clistcard,1) = 'RDEF'
+  then do
+     optClstx.optClstx = ' ' /* insert blank line */
+     optClstx = optClstx + 1 /* now add RDEF card */
+     optClstx.optClstx = left(word(clistcard,1),10) subword(clistcard,2)
+  end
+  else do                    /* add permit card, etc*/
+     optClstx.optClstx = left('   'word(clistcard,1),length(class)+11) ,
+                           subword(clistcard,2) data
+  end
+  return 0
+
+addExclude:
+  parse upper arg excludeId groupid .
+  exclude = exclude + 1
+  exclude.exclude = excludeId
+  excludeIndx.excludeId = exclude
+  return 0
+
+
+userGroupInfo:
+  parse upper arg userORgroup .
+  if useridIndx.userORgroup > 0
+  then do
+     /* we have user info */
+     uix = useridIndx.userORgroup
+     userRef.uix = 1
+     userORgroup = left(userORgroup,max(8,length(userorGroup)))
+     if revoked.uix = 'No'
+     then return 'User='userOrGroup'; d-grp='left(usersDgroup.uix,8) ,
+                ||'; name='strip(usersName.uix)
+     return 'User='userOrGroup'; d-grp='left(usersDgroup.uix,8) ,
+                ||'; revoke='revoked.uix'; name='strip(usersName.uix)
+  end
+  else if groupIndx.userORgroup > 0
+  then do
+     /* we have group info */
+     gix = groupIndx.userORgroup
+     groupRef.gix = 1
+     userORgroup = left(userORgroup,max(8,length(userorGroup)))
+     return 'Group='userORgroup'; desc='groupdesc.gix
+  end
+  else do
+     /* we have no info */
+      /* now remember some information about the user */
+     userid = userid.0
+     userid = userid + 1
+     userid.0 = userid
+     useridIndx.UserORgroup = userid
+     userid.userid = UserORgroup
+     revoked.userid= '?'
+     usersName.userid = 'Not in Racf'
+     usersDGroup.userid = '?'
+     usersGroups.userid = 0  /* collect user groups with 0205's*/
+
+     uix = userid
+     userRef.uix = 1
+     userORgroup = left(userORgroup,max(8,length(userorGroup)))
+     return 'User='userOrGroup'; d-grp='left(usersDgroup.uix,8)';',
+                    'revoke='revoked.uix'; name='strip(usersName.uix)
+  end
+
+checkRevoke:
+  parse upper var grantor grantor . /* strip and upper case */
+  parse upper var grantee grantee . /* strip and upper case */
+  if grantee = 'SYSIBM' then return 0
+  if grantee = 'SYSOPR' then return 0
+  if excludeIndx.grantee > 0 then return 0
+  uidx = useridIndx.grantee
+  gidx =  groupIndx.grantee
+
+  /* if unknown userid/group,,, it's revoked */
+  if uidx = 0 & gidx = 0 then return 1
+
+  if uidx > 0
+  then do
+     /* if known userid, see if it's revoked */
+     if revoked.uidx = 'Yes' then return 1
+     return 0
+  end
+  return 0 /* known group, is not revoked */
